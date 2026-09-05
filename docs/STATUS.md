@@ -1,0 +1,17 @@
+# Team status
+
+Initial statuses mean “not reported”, not that nobody has started. Each teammate updates her own row while active. Rina/Uliana coordinate cross-module blockers through September 11; Polina takes over final integration on September 12.
+
+| Owner | Status / updated on | PR / Figma / handoff | Next output and date | Blocker: needed output and owner |
+|---|---|---|---|---|
+| Katia | Not reported | — | Draft Figma 6th, final 7th | — |
+| Ksiusha | Not reported | — | Input flow on mocks 7th | — |
+| Alina | Not reported | — | Result flow on mocks 7th | — |
+| Arina | Not reported | — | MCP/OAuth access check 6th | — |
+| Rina | Not reported | — | Contract/setup 6th, mock HTTP 7th | — |
+| Uliana | Not reported | — | Mock agent pipeline 7th | — |
+| Sofiia | Not reported | — | Edamam access check 6th | — |
+| Vika | Not reported | — | Algorithm fixtures 7th | — |
+| Polina | Scheduled; starts September 12 | — | Intake and final integration 12th | Requires complete September 11 handoff |
+
+Use: in progress / ready to connect / verified / blocked / delivered. For blockers, say what independent work continues.
