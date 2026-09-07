@@ -41,6 +41,10 @@ A web page where users set a budget, planning period, household size, food prefe
 
 ## Repository status
 
-This repository currently contains **development instructions, not an implemented application**. Code directories, endpoints and launch commands described here are work to be added by the team.
+Rina's **Python demo API is implemented** with mock planning, product matching,
+cart preview/confirmation and FatSecret export outcomes. Start with the
+[backend launch guide](services/api/README.md), [synthetic examples](fixtures/README.md)
+and [Rina's handoff](docs/handoffs/rina.md). The frontend and live provider/AI modules
+are still pending their owners. No external credentials are required for the demo.
 
 Names, roles, the Next.js + Python stack, final deadlines and Polina's start date come from the team's current request. Intermediate milestones, folder layout and contract v0.1 are working defaults introduced by this guide. Rina, Ksiusha and Uliana finalize the remaining setup details by September 6 without waiting for Polina.

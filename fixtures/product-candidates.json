@@ -1,0 +1,104 @@
+[
+  {
+    "id": "demo-oats",
+    "name": "Demo dry oats, 500 g",
+    "requirementIds": [
+      "oats"
+    ],
+    "priceMinor": 6000,
+    "sellingUnit": "package",
+    "quantityStep": 1.0,
+    "contentQuantity": 500.0,
+    "contentUnit": "g",
+    "available": true,
+    "restrictionCheck": "pass",
+    "regularPriceMinor": null,
+    "source": "synthetic",
+    "checkedAt": "2026-09-07T12:00:00+00:00"
+  },
+  {
+    "id": "demo-oats-unavailable",
+    "name": "Demo dry oats, 500 g",
+    "requirementIds": [
+      "oats"
+    ],
+    "priceMinor": 6000,
+    "sellingUnit": "package",
+    "quantityStep": 1.0,
+    "contentQuantity": 500.0,
+    "contentUnit": "g",
+    "available": false,
+    "restrictionCheck": "pass",
+    "regularPriceMinor": null,
+    "source": "synthetic",
+    "checkedAt": "2026-09-07T12:00:00+00:00"
+  },
+  {
+    "id": "demo-oats-unknown",
+    "name": "Demo dry oats, 500 g",
+    "requirementIds": [
+      "oats"
+    ],
+    "priceMinor": 6000,
+    "sellingUnit": "package",
+    "quantityStep": 1.0,
+    "contentQuantity": 500.0,
+    "contentUnit": "g",
+    "available": true,
+    "restrictionCheck": "unknown",
+    "regularPriceMinor": null,
+    "source": "synthetic",
+    "checkedAt": "2026-09-07T12:00:00+00:00"
+  },
+  {
+    "id": "demo-oats-no-size",
+    "name": "Demo dry oats, 500 g",
+    "requirementIds": [
+      "oats"
+    ],
+    "priceMinor": 6000,
+    "sellingUnit": "package",
+    "quantityStep": 1.0,
+    "contentQuantity": null,
+    "contentUnit": null,
+    "available": true,
+    "restrictionCheck": "pass",
+    "regularPriceMinor": null,
+    "source": "synthetic",
+    "checkedAt": "2026-09-07T12:00:00+00:00"
+  },
+  {
+    "id": "demo-rice",
+    "name": "Demo dry rice, 1000 g",
+    "requirementIds": [
+      "rice"
+    ],
+    "priceMinor": 8000,
+    "sellingUnit": "package",
+    "quantityStep": 1.0,
+    "contentQuantity": 1000.0,
+    "contentUnit": "g",
+    "available": true,
+    "restrictionCheck": "pass",
+    "regularPriceMinor": null,
+    "source": "synthetic",
+    "checkedAt": "2026-09-07T12:00:00+00:00"
+  },
+  {
+    "id": "demo-lentils",
+    "name": "Demo dry lentils, 500 g",
+    "requirementIds": [
+      "lentils"
+    ],
+    "priceMinor": 7000,
+    "sellingUnit": "package",
+    "quantityStep": 1.0,
+    "contentQuantity": 500.0,
+    "contentUnit": "g",
+    "available": true,
+    "restrictionCheck": "pass",
+    "regularPriceMinor": null,
+    "source": "synthetic",
+    "checkedAt": "2026-09-07T12:00:00+00:00"
+  }
+]

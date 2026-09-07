@@ -1,0 +1,31 @@
+{
+  "previewId": "demo-cart-preview-003",
+  "status": "success",
+  "items": [
+    {
+      "productId": "demo-oats",
+      "status": "success",
+      "requestedQuantity": 2.0,
+      "actualQuantity": 2.0,
+      "message": "Demo quantity read back."
+    },
+    {
+      "productId": "demo-rice",
+      "status": "success",
+      "requestedQuantity": 1.0,
+      "actualQuantity": 1.0,
+      "message": "Demo quantity read back."
+    },
+    {
+      "productId": "demo-lentils",
+      "status": "success",
+      "requestedQuantity": 2.0,
+      "actualQuantity": 2.0,
+      "message": "Demo quantity read back."
+    }
+  ],
+  "verifiedCartTotalMinor": 37500,
+  "warnings": [
+    "DEMO: synthetic data; no provider account, cart or Saved Meal is changed."
+  ]
+}
