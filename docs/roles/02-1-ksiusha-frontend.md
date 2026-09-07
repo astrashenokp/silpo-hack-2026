@@ -47,3 +47,7 @@ You can implement every form and loading/error behavior with fixtures. Only fina
 - [ ] Layout works on desktop/mobile and can be operated with the keyboard.
 
 Alina owns result presentation; Rina owns server validation/API; Arina owns OAuth. Do not implement provider secrets or direct MCP calls in the browser.
+
+## Added scope: Edamam + FatSecret
+
+Add FatSecret connection status and the Connect action to Next.js, using Arina's separate authorization flow. Coordinate export client types with Alina and Rina. Mock the v0.2 connection/preview contracts by September 8; finish by September 11. A disconnected FatSecret account must not block planning or the Silpo flow. Follow [the combined workflow](../FATSECRET.md).

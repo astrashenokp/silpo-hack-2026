@@ -44,3 +44,7 @@ Start immediately from the product and contracts guides. You do not need MCP, Ed
 - [ ] A short product-story note is available for the September 14 video.
 
 Your completion test: Ksiusha and Alina can implement their assigned screens from Figma plus your notes, without inventing missing states.
+
+## Added scope: Edamam + FatSecret
+
+Add the save/connect/preview/success/partial/error states to the September 7 Figma handoff. The action saves selected meals as reusable Saved Meals, each for one personal portion; it does not record food as eaten. Give the frames to Ksiusha and Alina. Follow [the combined workflow](../FATSECRET.md).

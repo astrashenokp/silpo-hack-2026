@@ -1,4 +1,6 @@
-# Shared contracts v0.1
+# Shared contracts v0.2
+
+Version 0.2 retains the base planning/cart contract and adds the [FatSecret export contract](FATSECRET.md#contract-addition-v02): per-meal ingredient quantities, separate account status, export preview/confirmation and operation results. Rina coordinates these additions with their consumers by September 8. The September 6 dates below refer to the original base contract.
 
 These are proposed **internal application contracts**, not official Silpo or Edamam schemas and not implemented endpoints. Rina coordinates language-neutral JSON schemas in `packages/contracts/` by September 6 with Ksiusha, Alina and Uliana. Provider field mappings are Arina's and Sofiia's responsibility. Keep the same contracts in mock and live modes.
 
@@ -62,7 +64,7 @@ Example main demo request:
 | `UserContext` | `preferences`, `restrictions`, `pets`, `historyAvailable`, `cartContextReady`, `warnings`; optional household size; no unnecessary contact data | Arina → Ksiusha, Uliana |
 | `Purchase` | `receiptId`, `purchasedAt`, `channel` (online/offline), `productId`, `name`, `category`, `quantity`, `unit`; documented deduplication key | Arina → Vika |
 | `IngredientRequirement` | `id`, `name`, `searchTerms`, `quantity`, `unit`, `mealIds`, `restrictions` | Sofiia → Rina, Vika |
-| `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `ingredientIds`, `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina |
+| `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `ingredientIds`, `ingredientAmounts` (per-meal quantities as defined in v0.2), `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina/Rina |
 | `ProductCandidate` | `id`, `name`, `requirementIds`, `priceMinor` per selling unit, `sellingUnit`, `quantityStep`, `contentQuantity`, `contentUnit`, `available`, `restrictionCheck` (pass/fail/unknown), `regularPriceMinor` (nullable), `source` (silpo/synthetic), `checkedAt` | Rina using Arina's reads → Vika |
 | `RecurringSuggestion` | `id`, `productName`, `productId` (nullable), `category`, `species` (nullable), `suggestedQuantity`, `unit`, `averageIntervalDays`, `daysSinceLastPurchase`, `confidence` (0–1), `reason`, `selected` | Vika → Uliana → Alina |
 | `ProductSelection` | `productId`, `name`, `requirementIds`, `recurringSuggestionIds`, `quantity`, `sellingUnit`, `unitPriceMinor`, `lineTotalMinor`, `source`, `reason`, `restrictionCheck` | Vika → Uliana → Alina/Rina |

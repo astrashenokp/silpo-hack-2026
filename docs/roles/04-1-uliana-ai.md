@@ -54,3 +54,7 @@ You can start immediately with injected mock functions. Only a full live pass de
 - [ ] Optimization/replanning limits work and infeasibility is visible.
 - [ ] Rina's API serves the result and Alina can render it before September 11 ends.
 - [ ] Handoff distinguishes working live steps from mocks and explains how to reproduce both.
+
+## Added scope: Edamam + FatSecret
+
+Keep Edamam in the planning pipeline. Preserve Sofiia's per-meal quantities and plan versions so Rina can build a separate export preview. Coordinate the handoff/check by September 9; finish by September 11. FatSecret saving runs only after the user's separate confirmation, outside automatic planning. Expose availability/errors without failing the main plan when FatSecret is unavailable. Follow [the combined workflow](../FATSECRET.md).

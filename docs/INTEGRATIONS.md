@@ -6,6 +6,8 @@ The team supplied `PROJECT_CONTEXT.md`, two text files linking to the hackathon 
 
 The source context calls Edamam both the primary meal-planning service and a nice-to-have. This guide resolves that ambiguity as a **project planning decision**: implement the Edamam route, keep a clearly labeled synthetic fallback for development/outage demos, and disclose any missing live integration.
 
+The team subsequently confirmed **Edamam and FatSecret together**. Edamam remains the meal-planning source. FatSecret adds a separate confirmed save action. See [FatSecret implementation, contracts, sources and ownership](FATSECRET.md); this addition does not replace the existing providers.
+
 ## Official hackathon requirements
 
 The official page requires use of Silpo's official MCP and an agent scenario with a concrete user/business problem and demonstrable value. It lists September 14 as the submission deadline and displays 23:59:59. The page does not explicitly establish the timezone in the visible deadline text; verify the submission portal rather than relying on a last-minute upload. [Official hackathon page](https://ai-factory.silpo.ua/)
@@ -37,6 +39,8 @@ Sofiia's September 6 spike must establish: credentials work; the selected reques
 ## Configuration handoff
 
 Rina gathers `.env.example` by September 11 using variable names actually consumed by the code. Arina contributes MCP/OAuth/session settings; Sofiia contributes Edamam settings; Uliana contributes model-provider settings; Ksiusha contributes the frontend API base URL. No live secret values belong in this file.
+
+Arina also supplies FatSecret consumer credentials and OAuth callback/session setting names. Keep each user's FatSecret authorization separate from their Silpo authorization. Rina documents export capability status and the first verified saved-meal/app check in the combined handoff.
 
 The Python service holds MCP, Edamam and model-provider credentials and implements their calls. The Next.js app receives only the application data and public configuration it needs. Keep each user's MCP session isolated. Rina/Ksiusha document how `/api/...` reaches Python, and Arina verifies the public OAuth callback/session flow. For the hackathon demo, document the authorized demo-account procedure and required preconfigured cart context.
 

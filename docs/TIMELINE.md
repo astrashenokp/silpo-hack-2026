@@ -2,6 +2,8 @@
 
 All dates are September 2026, Kyiv time. Final deadlines and Polina's September 12 start are team requirements. Earlier checkpoints below are the proposed implementation schedule.
 
+The Edamam + FatSecret addition starts September 7. Its [role-specific handoffs](FATSECRET.md#who-adds-what) extend this schedule; base milestones remain unchanged.
+
 ## Milestones
 
 | Date | Owners | Concrete output |
@@ -14,6 +16,8 @@ All dates are September 2026, Kyiv time. Final deadlines and Polina's September 
 | 7 | Katia | Final Figma: desktop/mobile, reusable components, all states and accessible handoff |
 | 7 | Arina + Rina + Uliana + Sofiia + Vika | Module signatures and synthetic input/output fixtures |
 | 7 | Ksiusha + Alina + Rina | Form-to-result flow against mock HTTP API; documented local launch |
+| 7–8 | Katia + both frontend developers + Arina + Rina + Sofiia | FatSecret UI states, connection check, per-meal quantities, v0.2 export contract and fixtures; no dependency on Polina |
+| 9 | Arina + Rina + Sofiia + Vika + Uliana | First FatSecret saved meal with correct personal portion, read-back and real-app visibility check; disclose source/data-use limitations |
 | 8–9 | Arina + Rina | Live reads, candidate products and verified cart operations |
 | 8–9 | Uliana + Sofiia + Vika | Working agent pipeline; replace mock modules one at a time |
 | 9 | Rina + Uliana + both frontend developers | Developer compatibility check across the main flow; list bugs and owners |
@@ -49,6 +53,9 @@ Sofiia -- meals/ingredients --> Uliana --> Rina (product candidates)
 Vika -- restocking/optimized selection --> Uliana
 Uliana -- PlanningResult --> Rina (HTTP) --> Alina
 Alina -- confirmed proposal --> Rina --> real Silpo cart
+Sofiia -- per-meal quantities --> Rina (FatSecret matching and preview)
+Arina -- FatSecret user authorization --> Rina + Ksiusha
+Alina -- confirmed meal selection --> Rina --> FatSecret Saved Meals
 September 12: Polina takes the complete handoff for final integration and QA.
 ```
 

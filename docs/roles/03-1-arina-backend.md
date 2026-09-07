@@ -45,3 +45,7 @@ Start normalization, mocks and error behavior independently. Real provider verif
 - [ ] Expired-session and timeout paths have been checked; logs and fixtures contain no personal secrets.
 
 You supply purchase data, not recurrence predictions. You supply catalog reads, not the product-matching or budget algorithm.
+
+## Added scope: Edamam + FatSecret
+
+Own `services/api/src/smart_basket/fatsecret/auth.py` and `client.py`: OAuth 1.0 authorization for the existing user account, isolated token storage and signed provider transport. Check account access by September 8 and give Rina a usable client; finish by September 11. Give Ksiusha the connection status/start/callback contract. Record actual app-account linkage, not merely creation of an API-only profile. Follow [the combined workflow](../FATSECRET.md).

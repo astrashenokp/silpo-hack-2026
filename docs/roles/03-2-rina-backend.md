@@ -45,3 +45,7 @@ Read [Contracts](../CONTRACTS.md), [Workflow](../WORKFLOW.md) and [Integrations]
 - [ ] Synthetic IDs cannot reach live writes; unrelated existing cart items are preserved.
 - [ ] Both frontend developers and Uliana can exercise their interfaces before your final handoff.
 - [ ] Polina can start the delivered revision from written instructions without needing you to invent missing setup steps.
+
+## Added scope: Edamam + FatSecret
+
+Own `services/api/src/smart_basket/fatsecret/matching.py` and `export.py`, plus the v0.2 HTTP/schema additions. Reuse Arina's FatSecret client; map Sofiia's per-meal quantities to FatSecret food/serving IDs, preview one personal portion and save only confirmed complete matches. Track remote meal/item progress, read back writes and prevent duplicates after partial or uncertain results. Deliver synthetic previews/receipts by September 8, demonstrate one saved meal with Arina by September 9 and finish by September 11. Include source/data-use and app-visibility evidence in the combined handoff. Follow [the export specification](../FATSECRET.md).

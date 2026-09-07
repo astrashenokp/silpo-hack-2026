@@ -15,3 +15,7 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Polina | Scheduled; starts September 12 | — | Intake and final integration 12th | Requires complete September 11 handoff |
 
 Use: in progress / ready to connect / verified / blocked / delivered. For blockers, say what independent work continues.
+
+## Edamam + FatSecret addition
+
+Scope confirmed by the team; implementation/access status has not yet been reported. Each owner adds her export progress to the row above using [the additional tasks and dates](FATSECRET.md#who-adds-what). First access/contract handoff: September 8; first saved-meal/app check: September 9; developer delivery: September 11; Polina's checks: September 12–13.

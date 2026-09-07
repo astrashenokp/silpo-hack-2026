@@ -47,3 +47,7 @@ Do not wait for real prices or completed AI to build the UI. Final live verifica
 - [ ] Components work inside Ksiusha's page on desktop and mobile.
 
 Rina/Vika own numerical truth and cart operations. Your responsibility is accurate rendering and user actions, not duplicating the optimizer in the frontend.
+
+## Added scope: Edamam + FatSecret
+
+Add Save to FatSecret to meal cards, selected-meal preview, explicit confirmation and per-meal progress/outcomes. Show the destination account and one personal portion per meal. Use mocks by September 8, connect with Rina by September 9 and finish by September 11. Show unresolved matches, stale previews and partial failure; reuse the operation for repeated clicks. Do not present Saved Meals as dated diary entries. Follow [the combined workflow and contract](../FATSECRET.md).

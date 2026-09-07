@@ -57,3 +57,7 @@ Coordinate the team to record the stable flow, inspect video playback and link p
 - [ ] Cart changes require review/confirmation and correctly report failures.
 - [ ] Another teammate can launch/recover the demo from the written guide.
 - [ ] Demo revision is frozen, backup is ready and September 14 recording/submission responsibilities are named.
+
+## Added scope: Edamam + FatSecret
+
+Starting September 12, verify the delivered Edamam → per-meal quantities → FatSecret preview/confirmation path. Check authorization in deployment, correct personal portions, repeated/partial saves, and visibility of the saved meal in the same account's app. The main menu/Silpo flow must remain usable when export fails. Record which source/data-use checks and live paths passed by September 13; demonstrate the verified export in the September 14 video. No earlier work is assigned to you. Follow [the combined workflow and acceptance checks](../FATSECRET.md).

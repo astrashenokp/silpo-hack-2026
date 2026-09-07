@@ -51,3 +51,7 @@ No live MCP or Edamam access is needed to begin. Actual product optimization wai
 - [ ] All required quantities/restrictions remain satisfied after replacements.
 - [ ] Unavailable/unknown/over-budget cases remain explicit, with defensible explanations.
 - [ ] Uliana can invoke both modules; Rina/Alina can consume the resulting selections without interpreting prose.
+
+## Added scope: Edamam + FatSecret
+
+With Sofiia/Rina, verify personal-portion conversion and compare available nutrition values without overwriting one provider's numbers with the other's. Deliver a hand-checked example by September 9; finish checks by September 11. A meal for three people exports one person's portion; pet food, household goods and shopping-package surplus are excluded. Rina owns provider matching and writes. Follow [the combined workflow](../FATSECRET.md).

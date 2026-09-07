@@ -46,3 +46,7 @@ Start adapter design, scaling and synthetic fixtures without backend/AI completi
 - [ ] Uliana can call the module with mocks and the real provider using the same interface.
 
 You own meals and ingredient demand. Rina finds purchasable products; Vika computes their cost and budget fit.
+
+## Added scope: Edamam + FatSecret
+
+Keep Edamam as the meal-planning source. Add `Meal.ingredientAmounts` alongside the aggregate shopping list: quantities for that specific meal's `servings`, with reliable units and preparation basis. Give Rina/Vika an example and schema by September 8 so they can calculate one personal portion correctly; finish by September 11. Document which Edamam-derived fields the actual plan permits exporting/persisting before enabling the live export, and preserve required attribution. Use original synthetic recipes for fixtures. Follow [the combined workflow and v0.2 contract](../FATSECRET.md).

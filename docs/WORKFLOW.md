@@ -13,6 +13,7 @@ Browser → Next.js page → JSON over HTTP → Python API
                                           ├─ MCP connection and cart actions
                                           ├─ agent orchestration
                                           ├─ Edamam and meal normalization
+                                          ├─ FatSecret connection and confirmed meal saving
                                           └─ recurrence and budget optimization
 ```
 
@@ -36,6 +37,7 @@ services/api/src/smart_basket/ Python package; Rina owns the application entry p
   routes/                   Rina: HTTP routes; Arina: auth routes
   agent/                    Uliana: orchestration, state and prompts
   meals/                    Sofiia: Edamam, recipes and ingredients
+  fatsecret/                Arina: auth/client; Rina: matching/export (see FATSECRET.md)
   optimization/             Vika: recurrence and budget calculations
 services/api/pyproject.toml  Rina: Python dependencies and package configuration
 packages/contracts/         Language-neutral JSON schemas; Rina coordinates with Ksiusha
@@ -67,6 +69,8 @@ Mocks/fixtures are invented examples with the same fields as a future service re
 | UI layout and behavior | Katia | Ksiusha, Alina |
 | HTTP and shared types | Rina | Ksiusha, Alina, Uliana |
 | MCP and authentication | Arina | Rina |
+| FatSecret authorization and transport | Arina | Rina, Ksiusha |
+| FatSecret matching and confirmed export | Rina | Sofiia, Vika, Uliana, Alina |
 | Agent steps and result assembly | Uliana | Sofiia, Vika, Rina |
 | Meals, portions and ingredient units | Sofiia | Vika, Rina |
 | Budget arithmetic | Vika | Sofiia, Rina, Alina |

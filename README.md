@@ -4,6 +4,8 @@ A web page where users set a budget, planning period, household size, food prefe
 
 **Confirmed stack: Next.js frontend + Python backend and AI modules.** The frontend communicates with the Python HTTP API using JSON. MCP, Edamam, agent orchestration and budget calculations run in Python. See [architecture and folder ownership](docs/WORKFLOW.md#confirmed-stack-and-planned-folders).
 
+**Confirmed integrations: Edamam + FatSecret + Silpo MCP.** Edamam helps create the menu; FatSecret saves selected meals to the connected user's account; Silpo MCP supplies products and cart actions. Start with [the combined workflow and additional role tasks](docs/FATSECRET.md). The initial FatSecret scope is reusable Saved Meals for one personal portion, with explicit preview/confirmation.
+
 ## Start here
 
 1. Read [the product scope](docs/PRODUCT.md).
@@ -32,6 +34,7 @@ A web page where users set a budget, planning period, household size, food prefe
 - [Workflow](docs/WORKFLOW.md): proposed folders, ownership, PRs and completion rules.
 - [Contracts](docs/CONTRACTS.md): shared inputs, outputs and calculation rules.
 - [Integrations and sources](docs/INTEGRATIONS.md): MCP, Edamam and source clarifications.
+- [Edamam + FatSecret](docs/FATSECRET.md): saving meals, account connection, per-role additions, September 8–11 handoffs and contract v0.2 additions.
 - [QA and video](docs/QA_DEMO.md): acceptance scenarios and submission checklist.
 - [Team status](docs/STATUS.md): update your own row.
 - [Handoff template](docs/templates/HANDOFF.md): copy to `docs/handoffs/<name>.md` when delivering.

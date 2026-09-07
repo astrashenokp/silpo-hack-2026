@@ -27,6 +27,11 @@ Module owners perform their checks through September 11. Polina starts final end
 | Price/cart changes after preview | Require updated preview and confirmation | Rina + Alina |
 | Partial cart failure | Per-item result; no false success or blind full retry | Rina + Alina |
 | Demo/live separation | Clear data-source label; no synthetic IDs sent to live cart | Rina + Uliana |
+| FatSecret personal-portion export | Saved meal has correct food/serving quantities for one person, not all household purchases | Sofiia + Rina + Vika |
+| FatSecret account and app visibility | Save to the authorized existing account; verify read-back and appearance in the same account's app | Arina + Rina |
+| FatSecret unknown match / stale preview | Block affected export and explain; never fabricate food IDs or silently switch account/version | Rina + Alina |
+| FatSecret repeated / partial export | No duplicated meals or ingredients; per-meal outcome and recoverable progress | Rina + Alina |
+| FatSecret unavailable | Planning and Silpo cart stay usable; no false saved-state or automatic diary entry | Arina + Rina + Uliana + frontend |
 | Desktop, narrow screen and keyboard | Form, results, errors and confirmation remain usable | Ksiusha + Alina |
 | Clean setup and hosted run | Documented commands work; live connection works on deployment origin | Rina initially; Polina 12–13th |
 
@@ -41,6 +46,7 @@ Rina collects the exact shared commit, combined launch instructions, environment
 - [ ] Start both Next.js and Python from the launch guide; verify API forwarding, Python background plan execution, OAuth redirect/session behavior, environment variables and CORS where applicable.
 - [ ] Run the acceptance scenarios above; assign bugs to module owners and retest their fixes.
 - [ ] Verify a real MCP interaction and the Edamam path; record which integrations actually work.
+- [ ] Verify the FatSecret export acceptance checks in [the combined workflow](FATSECRET.md#acceptance-checks), including permitted export fields and app visibility. Record live/mocked/blocked status independently from the Silpo flow.
 - [ ] Confirm no blocking defects in the selected demo flow; label remaining limitations.
 - [ ] Prepare demo account/cart context and a repeatable starting state. Avoid repeatedly filling a personal cart during rehearsals.
 - [ ] Freeze the demonstrated revision on September 13; save deploy URL, launch instructions and recovery steps.
@@ -57,7 +63,8 @@ Suggested video sequence, subject to the actual portal requirements:
 4. Show meals, ingredients, a justified restocking suggestion when available, and the product basket.
 5. Demonstrate a budget decision or suitable substitution using actual computed numbers.
 6. Review concrete cart changes, confirm them and show the verified result. Do not proceed to checkout.
-7. Explain observed value and limitations; separate measured findings from expected future benefits.
+7. Select a meal, review its personal portion, save it to FatSecret and show the saved result in the connected app if this path is verified. Disclose any blocked/live/demo limitation; do not describe Saved Meals as a dated diary export.
+8. Explain observed value and limitations; separate measured findings from expected future benefits.
 
 Katia supplies the product story/design explanation; Ksiusha and Alina prepare the displayed UI; Arina and Rina explain MCP; Uliana, Sofiia and Vika explain the planning decisions. Polina coordinates recording and the submission checklist. Name the actual presenter and submission-account owner in `docs/handoffs/polina.md` by September 13.
 
