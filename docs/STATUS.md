@@ -8,7 +8,7 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Ksiusha | Not reported | — | Input flow on mocks 7th | — |
 | Alina | Not reported | — | Result flow on mocks 7th | — |
 | Arina | Not reported | — | MCP/OAuth access check 6th | — |
-| Rina | Not reported | — | Contract/setup 6th, mock HTTP 7th | — |
+| Rina | Ready to connect on mocks; September 7 | [Handoff](handoffs/rina.md), local implementation | Frontend/module connection check next; live integration September 8–9 | Live adapters/auth from Arina; planner from Uliana; meals from Sofiia; optimization/recurring input from Vika. Mock work complete for first connection. |
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
 | Sofiia | Not reported | — | Edamam access check 6th | — |
 | Vika | Not reported | — | Algorithm fixtures 7th | — |

@@ -1,0 +1,36 @@
+{
+  "previewId": "demo-cart-preview-003",
+  "runId": "demo-run-004",
+  "version": 1,
+  "expiresAt": "2026-09-07T12:00:00+00:00",
+  "existingCartTotalMinor": 3500,
+  "addedGoodsTotalMinor": 34000,
+  "projectedGoodsTotalMinor": 37500,
+  "changes": [
+    {
+      "productId": "demo-oats",
+      "name": "Demo dry oats, 500 g",
+      "beforeQuantity": 0.0,
+      "afterQuantity": 2.0,
+      "unitPriceMinor": 6000
+    },
+    {
+      "productId": "demo-rice",
+      "name": "Demo dry rice, 1000 g",
+      "beforeQuantity": 0.0,
+      "afterQuantity": 1.0,
+      "unitPriceMinor": 8000
+    },
+    {
+      "productId": "demo-lentils",
+      "name": "Demo dry lentils, 500 g",
+      "beforeQuantity": 0.0,
+      "afterQuantity": 2.0,
+      "unitPriceMinor": 7000
+    }
+  ],
+  "warnings": [
+    "DEMO: synthetic data; no provider account, cart or Saved Meal is changed.",
+    "Simulated confirmation outcome: success."
+  ]
+}

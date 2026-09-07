@@ -1,0 +1,8 @@
+{
+  "runId": "demo-run-001",
+  "status": "queued",
+  "stage": "context",
+  "events": [],
+  "result": null,
+  "error": null
+}
