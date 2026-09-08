@@ -16,6 +16,7 @@ from smart_basket import schemas
 from smart_basket.app import create_app
 from smart_basket.catalog.matching import MatchingContext, find_product_candidates
 from smart_basket.demo import DemoCatalog
+from smart_basket.mcp.adapters import normalize_purchase_history
 
 ROOT = Path(__file__).resolve().parents[3]
 REQUEST = {"budgetMinor": 180000, "currency": "UAH", "days": 4, "people": 3,
@@ -51,6 +52,13 @@ def artifacts():
 
     with TestClient(create_app()) as client:
         add("user-context", schemas.UserContext, client.get("/api/context").json())
+        raw_history = json.loads((ROOT / "fixtures/silpo-purchase-history-raw.json").read_text(encoding="utf-8"))
+        history = normalize_purchase_history(raw_history, default_channel="online", product_metadata={
+            "p-001": {"category": "dairy", "unit": "piece"},
+            "p-002": {"category": "eggs", "unit": "package"},
+        })
+        add("purchase-history", list[schemas.Purchase], history.purchases,
+            model_name="Purchase", many=True)
         add("planning-request", schemas.PlanningRequest, REQUEST)
         initial = client.post("/api/plans", json=REQUEST).json()
         add("run-queued", schemas.RunSnapshot, initial)

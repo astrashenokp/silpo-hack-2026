@@ -62,7 +62,7 @@ Example main demo request:
 | Type | Required fields and meaning | Producer → consumers |
 |---|---|---|
 | `UserContext` | `preferences`, `restrictions`, `pets`, `historyAvailable`, `cartContextReady`, `warnings`; optional household size; no unnecessary contact data | Arina → Ksiusha, Uliana |
-| `Purchase` | `receiptId`, `purchasedAt`, `channel` (online/offline), `productId`, `name`, `category`, `quantity`, `unit`; documented deduplication key | Arina → Vika |
+| `Purchase` | `receiptId`, `purchasedAt`, `channel` (online/offline), `productId`, `name`, `category`, `quantity`, `unit`; optional `unitPriceMinor` in integer kopiykas; documented deduplication key | Arina → Vika |
 | `IngredientRequirement` | `id`, `name`, `searchTerms`, `quantity`, `unit`, `mealIds`, `restrictions` | Sofiia → Rina, Vika |
 | `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `ingredientIds`, `ingredientAmounts` (per-meal quantities as defined in v0.2), `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina/Rina |
 | `ProductCandidate` | `id`, `name`, `requirementIds`, `priceMinor` per selling unit, `sellingUnit`, `quantityStep`, `contentQuantity`, `contentUnit`, `available`, `restrictionCheck` (pass/fail/unknown), `regularPriceMinor` (nullable), `source` (silpo/synthetic), `checkedAt` | Rina using Arina's reads → Vika |
