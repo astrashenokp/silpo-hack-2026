@@ -6,6 +6,11 @@ their stable invented IDs cannot be submitted as IDs of an actual running sessio
 Every JSON example listed in `manifest.json` validates against the server model
 named there. `packages/contracts/openapi.json` contains the public JSON schemas.
 
+`user-context.json` is the normalized response consumed by the API and frontend.
+`silpo-user-context-raw.json` preserves Arina's synthetic MCP-shaped example for
+adapter development; it is intentionally excluded from `manifest.json` because it
+is provider input, not a public API response.
+
 - **Ksiusha:** `planning-request`, `user-context`, `validation-error`.
 - **Alina:** `run-queued`, `run-failed`, `planning-result`, `cart-preview`,
   `cart-success`, `cart-partial`, `cart-failed`, `fatsecret-preview`,

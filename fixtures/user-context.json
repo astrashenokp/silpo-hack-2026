@@ -1,14 +1,11 @@
 {
-  "profile": {
-    "firstName": "Олексій",
-    "phone": "+380501234567",
-    "email": "oleksiy.test@example.com"
-  },
-  "family": {
-    "children": [{"age": 5}],
-    "pets": ["cat"]
-  },
-  "foodRestrictions": [
-    "lactose-intolerance"
+  "preferences": [],
+  "restrictions": [],
+  "pets": [],
+  "historyAvailable": false,
+  "cartContextReady": true,
+  "warnings": [
+    "DEMO: synthetic data; no provider account, cart or Saved Meal is changed.",
+    "Purchase history is empty; coverage unavailable."
   ]
 }
