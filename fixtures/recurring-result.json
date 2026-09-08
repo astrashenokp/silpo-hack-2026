@@ -1,0 +1,34 @@
+{
+  "asOf": "2026-09-10",
+  "input": {
+    "pets": [{ "species": "cat", "count": 1 }],
+    "purchases": [
+      {"receiptId": "r1", "purchasedAt": "2026-08-01T10:00:00+03:00",
+       "productId": "p-cat-1", "name": "Корм для кота 2кг", "category": "pet-food",
+       "quantity": 1, "unit": "piece", "species": "cat"},
+      {"receiptId": "r2", "purchasedAt": "2026-08-15T10:00:00+03:00",
+       "productId": "p-cat-1", "name": "Корм для кота 2кг", "category": "pet-food",
+       "quantity": 1, "unit": "piece", "species": "cat"},
+      {"receiptId": "r3", "purchasedAt": "2026-08-29T10:00:00+03:00",
+       "productId": "p-cat-1", "name": "Корм для кота 2кг", "category": "pet-food",
+       "quantity": 1, "unit": "piece", "species": "cat"}
+    ]
+  },
+  "output": [
+    {
+      "id": "rec-pet-food::корм для кота 2кг",
+      "productName": "Корм для кота 2кг",
+      "productId": "p-cat-1",
+      "category": "pet-food",
+      "species": "cat",
+      "suggestedQuantity": 1.0,
+      "unit": "piece",
+      "averageIntervalDays": 14.0,
+      "daysSinceLastPurchase": 12,
+      "confidence": 0.5,
+      "reason": "Куплено 3 рази за історію, середній інтервал 14 дн., минуло 12 дн. з останньої покупки.",
+      "selected": false
+    }
+  ],
+  "manualCheck": "Дати: 1, 15, 29 серпня -> інтервали 14 і 14 днів -> медіана 14. asOf=10.09 - 29.08 = 12 днів. 12 >= 0.8*14=11.2 -> пропозиція генерується. Перевірено вручну і через pytest з реальними Pydantic-схемами Ріни (55 passed)."
+}
