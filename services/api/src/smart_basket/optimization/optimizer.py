@@ -1,19 +1,3 @@
-"""
-========================================================================
-ЧАСТИНА B: оптимізація кошика під бюджет
-========================================================================
-
-Публічна функція, яку викликає Уляна:
-    optimize_basket(request, ingredients, candidates, selected_recurring)
-        -> OptimizationResult
-
-НІЧОГО НЕ ДУБЛЮЄМО з коду Ріни: округлення кількості й округлення грошей
-(half-up) уже реалізовані в smart_basket.catalog.matching:
-    purchase_quantity(quantity, unit, product) -> float
-    line_total(quantity, price_minor) -> int
-Ми лише ОБИРАЄМО, який ProductCandidate узяти, а рахує — Ріна.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,11 +17,6 @@ from smart_basket.schemas import (
 
 @dataclass
 class OptimizationResult:
-    """
-    НЕ Pydantic-модель Ріни (в schemas.py немає окремого класу для цього) —
-    Уляна розкладає ці поля напряму в PlanningResult, який вже сам володіє
-    run_id/version/dataMode/тощо.
-    """
     selected_products: list[ProductSelection]
     substitutions: list[Substitution]
     basket_total_minor: int
@@ -54,19 +33,7 @@ def optimize_basket(
     candidates: CandidateResult,
     selected_recurring: list[RecurringSuggestion],
 ) -> OptimizationResult:
-    """
-    candidates — це РЕЗУЛЬТАТ, який уже порахувала Ріна через
-    find_product_candidates(). Ми його не перераховуємо, тільки обираємо
-    найкращий (найдешевший придатний) варіант для кожної вимоги.
 
-    ВІДОМЕ ОБМЕЖЕННЯ (задокументовано і в docs/handoffs/vika.md):
-    Ріна написала: find_product_candidates() зараз кидає ValueError,
-    якщо selected_recurring не порожній — "Recurring candidate lookup
-    awaits Vika's normalized requirements." Тобто поки що candidates
-    може НЕ містити товарів для обраних регулярних покупок. У такому
-    разі ми чесно повертаємо їх у unresolved_requirements, а не
-    вигадуємо товар.
-    """
     selections: list[ProductSelection] = []
 
     # Починаємо з того, що вже позначила нерозв'язаним сама Ріна
@@ -81,7 +48,7 @@ def optimize_basket(
     # --- інгредієнти зі страв ---
     for req in ingredients:
         if req.id in already_unresolved_ids:
-            continue  # Ріна вже позначила це нерозв'язаним, не дублюємо
+            continue
 
         picked = _pick_best_candidate(req.id, req.quantity, req.unit, candidates.candidates)
         if picked is None:
@@ -131,7 +98,7 @@ def optimize_basket(
 
     return OptimizationResult(
         selected_products=selections,
-        substitutions=[],  # крок 2 (якщо встигнеш): явний підбір дешевшої заміни з причиною
+        substitutions=[],
         basket_total_minor=basket_total,
         budget_remaining_minor=remaining,
         budget_status=status,
@@ -167,8 +134,8 @@ def _pick_best_candidate(
     best_qty = None
     best_total = None
     for c in valid:
-        qty = purchase_quantity(needed_qty, unit, c)   # рахує Ріна
-        total = line_total(qty, c.price_minor)           # рахує Ріна
+        qty = purchase_quantity(needed_qty, unit, c)   
+        total = line_total(qty, c.price_minor)          
         if best_total is None or total < best_total:
             best, best_qty, best_total = c, qty, total
 

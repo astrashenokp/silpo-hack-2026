@@ -1,23 +1,3 @@
-"""
-========================================================================
-ЧАСТИНА A: аналіз повторюваних (регулярних) покупок
-========================================================================
-
-Публічна функція, яку викликає Уляна:
-    analyze_recurring(purchases, pets, as_of) -> list[RecurringSuggestion]
-
-Повертає список ГОТОВИХ Pydantic-моделей RecurringSuggestion
-(з smart_basket.schemas) — НЕ словників. Уляна може одразу покласти
-цей список у PlanningResult.recurring_items без додаткової конвертації.
-
-ВАЖЛИВО ПРО ТИПИ (schemas.py, Model.model_config): усі числові поля з
-типом PositiveNumber/PositiveInt валідуються в STRICT-режимі. Це означає:
-- suggestedQuantity, averageIntervalDays -> завжди передавай float
-  (1.0, а не 1), інакше Pydantic поверне ValidationError.
-- confidence -> float від 0.0 до 1.0 включно.
-- daysSinceLastPurchase -> звичайний int, це поле типізоване як int, ge=0.
-"""
-
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -41,17 +21,6 @@ def analyze_recurring(
     pets: list[Pet],
     as_of: date,
 ) -> list[RecurringSuggestion]:
-    """
-    purchases: нормалізована історія від Арини. Це ПРОСТІ словники
-        (Purchase не описаний як Pydantic-модель у schemas.py), кожен
-        мінімум містить: receiptId, purchasedAt (ISO-рядок), productId,
-        name, category, quantity, unit; опціонально species для товарів
-        тварин.
-    pets: request.pets — список Pet-моделей Ріни (Pet.species, Pet.count).
-    as_of: дата, відносно якої рахуємо "днів з останньої покупки".
-
-    Повертає [] якщо історії немає або вона надто розріджена.
-    """
     if not purchases:
         return []
 
@@ -111,7 +80,6 @@ def analyze_recurring(
 
 
 def _group_by_product(purchases: list[dict]) -> dict[str, list[dict]]:
-    """Ключ групування: (category, name) у нижньому регістрі — див. docstring вище."""
     groups: dict[str, list[dict]] = {}
     for p in purchases:
         enriched = dict(p)
@@ -128,7 +96,6 @@ def _parse_date(value) -> date:
 
 
 def _confidence_score(intervals: list[int]) -> float:
-    """Евристика 0.1..0.95 — детальні коментарі в docs/handoffs/vika.md."""
     n = len(intervals) + 1
     base = min(0.5 + 0.1 * (n - 3), 0.85)
 
