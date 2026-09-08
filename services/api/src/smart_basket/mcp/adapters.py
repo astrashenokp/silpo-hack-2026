@@ -56,3 +56,48 @@ async def search_products(session, query: str, branch_id: str) -> Dict[str, Any]
     except Exception as e:
         logger.warning(f"Помилка пошуку товарів: {e}")
         return {}
+
+async def get_food_restrictions(session) -> List[str]:
+    """Витягує дієтичні обмеження гостя."""
+    try:
+        result = await session.call_tool("silpo_get_my_food_restrictions", arguments={})
+        if result.content and len(result.content) > 0:
+            return json.loads(result.content[0].text)
+        return []
+    except Exception as e:
+        logger.warning(f"Помилка отримання обмежень: {e}")
+        return []
+
+async def get_product_details(session, product_id: str, branch_id: str) -> Dict[str, Any]:
+    #Отримує повну картку товару (склад, харчова цінність).
+    try:
+        args = {"productId": product_id, "branchId": branch_id}
+        result = await session.call_tool("silpo_get_product_details", arguments=args)
+        if result.content and len(result.content) > 0:
+            return json.loads(result.content[0].text)
+        return {}
+    except Exception as e:
+        logger.warning(f"Помилка отримання деталей товару {product_id}: {e}")
+        return {}
+
+async def get_promotions(session, branch_id: str) -> List[Dict[str, Any]]:
+    #Отримує активні акції в магазині.
+    try:
+        result = await session.call_tool("silpo_get_promotions", arguments={"branchId": branch_id})
+        if result.content and len(result.content) > 0:
+            return json.loads(result.content[0].text)
+        return []
+    except Exception as e:
+        logger.warning(f"Помилка отримання акцій: {e}")
+        return []
+
+async def get_favorites(session) -> List[Dict[str, Any]]:
+    #Список збережених улюблених товарів гостя.
+    try:
+        result = await session.call_tool("silpo_get_my_favorites", arguments={})
+        if result.content and len(result.content) > 0:
+            return json.loads(result.content[0].text)
+        return []
+    except Exception as e:
+        logger.warning(f"Помилка отримання улюблених товарів: {e}")
+        return []
