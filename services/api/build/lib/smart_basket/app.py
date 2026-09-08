@@ -11,8 +11,7 @@ from starlette.exceptions import HTTPException
 
 from smart_basket.cart.service import DemoCartService
 from smart_basket.core import ApiError
-from smart_basket.demo import DemoCatalog
-from smart_basket.agent import UlianaPlanner
+from smart_basket.demo import DemoCatalog, DemoPlanner
 from smart_basket.fatsecret.export import DemoExportService
 from smart_basket.routes.api import router
 from smart_basket.schemas import ErrorEnvelope
@@ -27,7 +26,7 @@ def create_app(*, planner=None, catalog=None):
     app.state.sessions = {}
     app.state.sessions_lock = RLock()
     app.state.catalog = catalog if catalog is not None else DemoCatalog()
-    app.state.planner = planner if planner is not None else UlianaPlanner(app.state.catalog)
+    app.state.planner = planner if planner is not None else DemoPlanner(app.state.catalog)
     app.state.cart_service = DemoCartService(app.state.catalog)
     app.state.export_service = DemoExportService()
     origins = [s.strip() for s in os.getenv("SMART_BASKET_CORS_ORIGINS", "http://localhost:3000").split(",") if s.strip()]
