@@ -1,13 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { PlannerResults, type SourceMode } from "@/features/planner-results/PlannerResults";
-import { Button, DemoBadge } from "@/features/planner-results/components/ui";
+import { DemoBadge } from "@/features/planner-results/components/ui";
 import {
-  apiContext,
   apiCreatePlan,
-  apiHealth,
-  apiRecalculate,
   pollRun,
   type DemoScenario,
 } from "@/lib/api/client";
@@ -21,7 +18,7 @@ import {
   fixturePlanningResult,
   fixtureRunFailed,
 } from "@/lib/api/fixtures";
-import type { PlanningResult, RunSnapshot, UserContext } from "@/lib/api/types";
+import type { PlanningResult, RunSnapshot } from "@/lib/api/types";
 
 type DemoScenarioKey =
   | "ready"
@@ -88,208 +85,147 @@ interface View {
 export default function Home() {
   const [mode, setMode] = useState<SourceMode>("fixtures");
   const [scenario, setScenario] = useState<DemoScenarioKey>("ready");
-  const [apiScenario, setApiScenario] = useState<DemoScenario>("success");
+  const [apiScenario] = useState<DemoScenario>("success");
   const [view, setView] = useState<View>(() => buildDemo("ready"));
-  const [busy, setBusy] = useState(false);
-  const [recalcBusyPage, setRecalcBusyPage] = useState(false);
-  const [liveStatus, setLiveStatus] = useState<{ ok: boolean; mode: string } | null>(null);
-  const [context, setContext] = useState<UserContext | null>(null);
-
-  useEffect(() => {
-    if (mode !== "live") return;
-    let cancelled = false;
-    apiHealth()
-      .then((health) => {
-        if (!cancelled) setLiveStatus({ ok: true, mode: health.mode });
-      })
-      .catch(() => {
-        if (!cancelled) setLiveStatus({ ok: false, mode: "" });
-      });
-    apiContext()
-      .then((ctx) => {
-        if (!cancelled) setContext(ctx);
-      })
-      .catch(() => {
-        if (!cancelled) setContext(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [mode]);
 
   function selectDemo(key: DemoScenarioKey) {
     setScenario(key);
-    setRecalcBusyPage(false);
     setView(buildDemo(key));
   }
 
   function enterMode(next: SourceMode) {
     setMode(next);
-    setRecalcBusyPage(false);
     if (next === "live") setView({ snapshot: null, result: null });
     else setView(buildDemo(scenario));
   }
 
   const runPlan = useCallback(async () => {
-    setBusy(true);
     try {
       const created = await apiCreatePlan(fixturePlanningRequest, apiScenario);
       const final = await pollRun(created.runId, 1500, (s) => setView({ snapshot: s, result: s.result }));
       setView({ snapshot: final, result: final.result });
     } catch (error) {
       setView({ snapshot: liveErrorSnapshot(error), result: null });
-    } finally {
-      setBusy(false);
     }
   }, [apiScenario]);
 
-  const recalculate = useCallback(
-    async (selectedRecurringIds: string[]) => {
-      if (mode === "fixtures") {
-        setRecalcBusyPage(true);
-        setView({ snapshot: derivedRunningSnapshot(), result: null });
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        setView(buildDemo(scenario));
-        setRecalcBusyPage(false);
-        return;
-      }
-      if (!view.result) return;
-      setRecalcBusyPage(true);
-      try {
-        const created = await apiRecalculate(view.result.runId, {
-          version: view.result.version,
-          selectedRecurringIds,
-        });
-        const final = await pollRun(created.runId, 1500, (s) =>
-          setView({ snapshot: s, result: s.result }),
-        );
-        setView({ snapshot: final, result: final.result });
-      } catch (error) {
-        setView({ snapshot: liveErrorSnapshot(error), result: null });
-      } finally {
-        setRecalcBusyPage(false);
-      }
-    },
-    [mode, view.result, scenario],
-  );
-
-  const currentScreen = demoScreen[scenario];
   const viewKey = `${mode}:${view.result?.runId ?? view.snapshot?.runId ?? "empty"}:${view.result?.version ?? 0}`;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
-      <header className="rounded-2xl border border-line bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold">Smart Basket Planner</h1>
-            <p className="mt-1 text-sm text-muted">
-              Demo-стенд результатів, прогресу й кошика —{" "}
-              {mode === "fixtures" ? "фікстури (без API)" : "живий бекенд"}.
-            </p>
+    <div className="min-h-screen bg-white text-[#1f1f1f]">
+      <div className="flex min-h-screen">
+        <aside className="hidden w-[265px] shrink-0 border-r border-[#eceff3] bg-white md:flex md:flex-col">
+          <div className="flex h-[68px] items-center gap-3 border-b border-[#eceff3] px-8">
+            <SilpoAgentMark />
+            <span className="text-lg font-semibold">Агент</span>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="px-7 pt-8">
+            <button
+              type="button"
+              onClick={() => {
+                enterMode("fixtures");
+                selectDemo("ready");
+              }}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-[22px] bg-brand px-4 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(247,107,21,0.22)] transition-colors hover:bg-brand-hover"
+            >
+              <span className="text-2xl leading-none">+</span>
+              Новий чат
+            </button>
+          </div>
+
+          <nav className="mt-7 space-y-1 px-6">
+            {(Object.keys(demoScreen) as DemoScenarioKey[]).slice(0, 4).map((key) => {
+              const item = demoScreen[key];
+              const active = mode === "fixtures" && scenario === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    enterMode("fixtures");
+                    selectDemo(key);
+                  }}
+                  title={item.hint}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                    active
+                      ? "bg-[#fff0df] text-[#9a5b17]"
+                      : "text-[#2c2c2c] hover:bg-[#fff7ef]"
+                  }`}
+                >
+                  <span className="relative size-4 rounded-[3px] bg-current before:absolute before:left-1 before:top-1 before:size-4 before:rounded-[3px] before:border-2 before:border-white" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto space-y-6 px-8 pb-6 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="size-4 rounded-sm bg-black" />
+              <span>Збережені у FatSecret</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="size-9 rounded-full bg-[#c9c9c9]" />
+              <span className="truncate">Катерина</span>
+              <span className="ml-auto text-xl leading-none">⋮</span>
+            </div>
+          </div>
+        </aside>
+
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-[68px] items-center justify-between border-b border-[#eceff3] px-4 md:hidden">
+            <div className="flex items-center gap-3">
+              <SilpoAgentMark />
+              <span className="font-semibold">Агент</span>
+            </div>
             <DemoBadge mode={mode === "fixtures" ? "demo" : "live"} />
-            <Button
-              variant={mode === "fixtures" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => enterMode("fixtures")}
-            >
-              Фікстури
-            </Button>
-            <Button
-              variant={mode === "live" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => enterMode("live")}
-            >
-              Живий бекенд
-            </Button>
           </div>
-        </div>
-      </header>
 
-      {mode === "fixtures" ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {(Object.keys(demoScreen) as DemoScenarioKey[]).map((key) => {
-            const item = demoScreen[key];
-            const active = scenario === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => selectDemo(key)}
-                title={item.hint}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active
-                    ? "border-brand bg-brand text-white"
-                    : "border-line bg-white text-muted hover:border-brand hover:text-brand"
-                }`}
-              >
-                {item.label}
+          <div className="flex-1 overflow-y-auto px-4 pb-28 pt-6 lg:px-12 xl:px-16">
+            <div className="mx-auto max-w-[1280px]">
+              <PlannerResults
+                key={viewKey}
+                snapshot={view.snapshot}
+                result={view.result}
+                sourceMode={mode}
+                cartScenario={apiScenario}
+                recalcBusy={false}
+                onRetryPlan={() => {
+                  if (mode === "live") runPlan();
+                  else selectDemo("running");
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="fixed bottom-0 left-0 right-0 border-t border-[#eceff3] bg-white/95 px-4 py-3 backdrop-blur md:left-[265px]">
+            <div className="mx-auto flex max-w-[900px] items-center gap-2 rounded-[26px] border border-[#e7e9ee] bg-white px-2 py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+              <button className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#fff0df] text-2xl leading-none text-brand">
+                +
               </button>
-            );
-          })}
-          <span className="text-xs text-muted">{currentScreen.hint}</span>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-brand-soft bg-brand-soft/40 p-3 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-brand">Живий бекенд</span>
-            {liveStatus && (
-              <span className="text-xs text-muted">
-                {liveStatus.ok ? `API: OK (${liveStatus.mode})` : "API недоступний"}
-              </span>
-            )}
-            {context && (
-              <span className="text-xs text-muted">
-                {context.preferences.length} вподобань · {context.restrictions.length} обмежень ·{" "}
-                {context.pets.length ? "пети є" : "петів нема"} · історія{" "}
-                {context.historyAvailable ? "є" : "порожня"} · кошик{" "}
-                {context.cartContextReady ? "готовий" : "не готовий"}
-              </span>
-            )}
+              <div className="min-h-8 flex-1" />
+              <button className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#fff0df] text-brand">
+                ◉
+              </button>
+              <button className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand text-xl text-white">
+                ↑
+              </button>
+            </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <label className="text-xs text-muted">
-              Демо-сценарій API
-              <select
-                value={apiScenario}
-                onChange={(event) => setApiScenario(event.target.value as DemoScenario)}
-                className="ml-2 rounded-lg border border-line bg-white px-2 py-1 text-xs"
-              >
-                <option value="success">success</option>
-                <option value="partial">partial</option>
-                <option value="failed">failed</option>
-                <option value="unmatched">unmatched</option>
-              </select>
-            </label>
-            <Button onClick={runPlan} disabled={busy} loading={busy}>
-              Скласти меню та кошик
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => apiContext().then(setContext).catch(() => setContext(null))}
-            >
-              Оновити контекст
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <PlannerResults
-        key={viewKey}
-        snapshot={view.snapshot}
-        result={view.result}
-        sourceMode={mode}
-        cartScenario={apiScenario}
-        fatsecretScenario={apiScenario}
-        onRecalculate={recalculate}
-        recalcBusy={recalcBusyPage}
-        onRetryPlan={() => {
-          if (mode === "live") runPlan();
-          else selectDemo("running");
-        }}
-      />
+        </main>
+      </div>
     </div>
+  );
+}
+
+function SilpoAgentMark() {
+  return (
+    <span className="relative block size-6" aria-hidden="true">
+      <span className="absolute left-[3px] top-[15px] h-[3px] w-[16px] -rotate-[7deg] rounded-full bg-brand" />
+      <span className="absolute left-[7px] top-[2px] h-[18px] w-[3px] -rotate-[22deg] rounded-full bg-brand" />
+      <span className="absolute left-[14px] top-[8px] h-[14px] w-[3px] -rotate-[28deg] rounded-full bg-brand" />
+    </span>
   );
 }
 

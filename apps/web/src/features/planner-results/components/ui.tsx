@@ -6,7 +6,7 @@ type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
 
 const variantClass: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-hover disabled:bg-neutral-300 disabled:text-neutral-500",
+  primary: "bg-brand text-white shadow-[0_8px_18px_rgba(247,107,21,0.16)] hover:bg-brand-hover disabled:bg-neutral-300 disabled:text-neutral-500 disabled:shadow-none",
   danger: "bg-danger text-white hover:brightness-95 disabled:bg-neutral-300 disabled:text-neutral-500",
   outline:
     "border border-line bg-white text-foreground hover:border-brand hover:text-brand disabled:text-neutral-400 disabled:bg-neutral-50",
@@ -34,7 +34,7 @@ export function Button({
 >) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors disabled:cursor-not-allowed ${variantClass[variant]} ${sizeClass[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed ${variantClass[variant]} ${sizeClass[size]} ${className}`}
       disabled={props.disabled || loading}
       {...props}
     >
@@ -161,7 +161,7 @@ export function Section({
   className = "",
 }: PropsWithChildren<{ title: string; right?: React.ReactNode; className?: string }>) {
   return (
-    <section className={`rounded-2xl border border-line bg-white p-4 ${className}`}>
+    <section className={`rounded-lg border border-line bg-white p-5 ${className}`}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {right}
