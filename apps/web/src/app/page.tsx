@@ -1,8 +1,21 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import PlannerForm from "@/features/planner-input/PlannerForm";
+import type { RunSnapshot } from "@/lib/api/planner";
 
 export default function Home() {
+  const [completedPlan, setCompletedPlan] =
+    useState<RunSnapshot | null>(null);
+  const handlePlanReady = useCallback((snapshot: RunSnapshot) => {
+  setCompletedPlan(snapshot);
+
+  console.log(
+    "Ready plan received by page:",
+    snapshot.result,
+  );
+}, []);
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-black">
 
@@ -63,7 +76,6 @@ export default function Home() {
           </div>
 
           <div className="mt-auto">
-
             <button className="flex h-10 w-full items-center gap-2 px-8 text-sm">
               <BookmarkIcon />
               Збережені у FatSecret
@@ -80,7 +92,6 @@ export default function Home() {
                 ⋮
               </button>
             </div>
-
           </div>
         </aside>
 
@@ -91,7 +102,6 @@ export default function Home() {
           <section className="relative flex min-w-0 flex-1 flex-col">
 
             <div className="flex-1 overflow-y-auto px-10 pb-36 pt-9">
-
               <div className="mx-auto max-w-[858px]">
 
                 {/* USER MESSAGE */}
@@ -117,7 +127,6 @@ export default function Home() {
                   <div className="flex-1">
 
                     <div className="flex items-start border-b border-[#EAECF0] pb-6">
-
                       <p className="max-w-[624px] px-4 py-2 text-base leading-6">
                         Привіт, Катерино! Я ваш автономний планер Сільпо.
                         Допоможу зібрати раціон, врахую історію покупок та
@@ -129,12 +138,11 @@ export default function Home() {
                         <button className="h-8 w-8">👎</button>
                         <button className="h-8 w-8">▢</button>
                       </div>
-
                     </div>
-                  <PlannerForm />
+
+                    <PlannerForm onPlanReady={handlePlanReady} />
 
                   </div>
-
                 </div>
 
               </div>
@@ -166,87 +174,61 @@ export default function Home() {
 
           </section>
 
-{/* SMART CART */}
-<aside className="w-[394px] shrink-0 px-5 py-[43px]">
-  <div
-    className="
-      flex
-      h-[calc(100vh-150px)]
-      min-h-0
-      flex-col
-      overflow-hidden
-      rounded-[24px]
-      border
-      border-[#F47B4A]
-      border-l-[6px]
-      bg-white
-    "
-  >
-    {/* HEADER КОШИКА */}
-    <div className="shrink-0 px-7 pt-8">
-      <h2 className="text-[22px] font-medium text-[#886432]">
-        Смарт кошик Сільпо
-      </h2>
+          {/* SMART CART */}
+          <aside className="w-[394px] shrink-0 px-5 py-[43px]">
+            <div className="flex h-[calc(100vh-150px)] min-h-0 flex-col overflow-hidden rounded-[24px] border border-[#F47B4A] border-l-[6px] bg-white">
 
-      <p className="mt-2 text-base leading-5 text-[#667085]">
-        Супермаркет: просп. Бандери, 23
-        <br />
-        (Самовивіз)
-      </p>
+              {/* HEADER */}
+              <div className="shrink-0 px-7 pt-8">
+                <h2 className="text-[22px] font-medium text-[#886432]">
+                  Смарт кошик Сільпо
+                </h2>
 
-      <p className="mt-8 text-base">
-        У кошику: 2 товари
-      </p>
-    </div>
+                <p className="mt-2 text-base leading-5 text-[#667085]">
+                  Супермаркет: просп. Бандери, 23
+                  <br />
+                  (Самовивіз)
+                </p>
 
-    {/* ТОВАРИ — ЦЯ ЧАСТИНА СКРОЛИТЬСЯ */}
-    <div className="min-h-0 flex-1 overflow-y-auto px-7 py-5">
-      <CartItem />
-      <CartItem />
-    </div>
+                <p className="mt-8 text-base">
+                  У кошику: 2 товари
+                </p>
+              </div>
 
-    {/* НИЖНЯ БІЛА ЧАСТИНА */}
-    <div className="shrink-0 border-t border-[#F3E5D8] bg-white px-7 pb-8 pt-5">
-      <div className="mb-5 text-right">
-        <p className="text-sm text-[#1D192B]">
-          Сума знижки:{" "}
-          <span className="font-medium text-[#16A34A]">
-            -88,02 ₴
-          </span>
-        </p>
+              {/* ITEMS */}
+              <div className="min-h-0 flex-1 overflow-y-auto px-7 py-5">
+                <CartItem />
+                <CartItem />
+              </div>
 
-        <p className="mt-2 text-base font-semibold text-[#1D192B]">
-          Загальна сума: 159,98 ₴
-        </p>
-      </div>
+              {/* BOTTOM */}
+              <div className="shrink-0 border-t border-[#F3E5D8] bg-white px-7 pb-8 pt-5">
+                <div className="mb-5 text-right">
+                  <p className="text-sm text-[#1D192B]">
+                    Сума знижки:{" "}
+                    <span className="font-medium text-[#16A34A]">
+                      -88,02 ₴
+                    </span>
+                  </p>
 
-      <button
-        disabled
-        className="
-          flex
-          h-12
-          w-full
-          items-center
-          justify-center
-          gap-2
-          rounded-lg
-          border
-          border-[rgba(248,159,70,0.2)]
-          bg-white
-          text-base
-          font-semibold
-          text-[rgba(248,159,70,0.3)]
-        "
-      >
-        <UploadIcon />
-        Синхронізувати з Сільпо
-      </button>
-    </div>
-  </div>
-</aside>
+                  <p className="mt-2 text-base font-semibold text-[#1D192B]">
+                    Загальна сума: 159,98 ₴
+                  </p>
+                </div>
+
+                <button
+                  disabled={!completedPlan}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[rgba(248,159,70,0.2)] bg-white text-base font-semibold text-[#F89F46] disabled:text-[rgba(248,159,70,0.3)]"
+                >
+                  <UploadIcon />
+                  Синхронізувати з Сільпо
+                </button>
+              </div>
+
+            </div>
+          </aside>
 
         </main>
-
       </div>
     </div>
   );
@@ -257,6 +239,30 @@ export default function Home() {
 /* SMALL COMPONENTS */
 /* ------------------------------------------------ */
 
+function ChatIcon() {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <path
+        d="M4 4.5H14.5C15.88 4.5 17 5.62 17 7V12C17 13.38 15.88 14.5 14.5 14.5H9L5.5 17V14.5H4C2.62 14.5 1.5 13.38 1.5 12V7C1.5 5.62 2.62 4.5 4 4.5Z"
+        fill="currentColor"
+      />
+
+      <path
+        d="M9.5 9H20C21.38 9 22.5 10.12 22.5 11.5V16.5C22.5 17.88 21.38 19 20 19H18.5V21.5L15 19H9.5C8.12 19 7 17.88 7 16.5V11.5C7 10.12 8.12 9 9.5 9Z"
+        fill="currentColor"
+        stroke="white"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
 
 function BookmarkIcon() {
   return (
@@ -293,12 +299,14 @@ function MicIcon() {
         stroke="currentColor"
         strokeWidth="2"
       />
+
       <path
         d="M6 11C6 14.3 8.7 17 12 17C15.3 17 18 14.3 18 11"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
       />
+
       <path
         d="M12 17V21"
         stroke="currentColor"
@@ -328,34 +336,6 @@ function ArrowUpIcon() {
     </svg>
   );
 }
-
-function ChatIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      {/* задня бульбашка */}
-      <path
-        d="M4 4.5H14.5C15.88 4.5 17 5.62 17 7V12C17 13.38 15.88 14.5 14.5 14.5H9L5.5 17V14.5H4C2.62 14.5 1.5 13.38 1.5 12V7C1.5 5.62 2.62 4.5 4 4.5Z"
-        fill="currentColor"
-      />
-
-      {/* передня бульбашка з білою окантовкою */}
-      <path
-        d="M9.5 9H20C21.38 9 22.5 10.12 22.5 11.5V16.5C22.5 17.88 21.38 19 20 19H18.5V21.5L15 19H9.5C8.12 19 7 17.88 7 16.5V11.5C7 10.12 8.12 9 9.5 9Z"
-        fill="currentColor"
-        stroke="white"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-
 
 function CartItem() {
   return (
@@ -414,14 +394,12 @@ function CartItem() {
             </button>
 
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }
+
 function UploadIcon() {
   return (
     <svg
@@ -438,6 +416,7 @@ function UploadIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+
       <path
         d="M7 18H6C4.34 18 3 16.66 3 15C3 13.45 4.18 12.17 5.69 12.02C6.12 9.15 8.6 7 11.5 7C14.46 7 16.92 9.2 17.31 12.08C19.38 12.23 21 13.95 21 16C21 18.21 19.21 20 17 20H7"
         stroke="currentColor"

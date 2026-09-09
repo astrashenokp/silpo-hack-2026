@@ -3,11 +3,28 @@
 import { useEffect, useState } from "react";
 import {
   createPlan,
+  getContext,
   getPlan,
+  type PlanningContext,
   type RunSnapshot,
 } from "@/lib/api/planner";
 
-export default function PlannerForm() {
+type PlannerFormProps = {
+  onPlanReady?: (snapshot: RunSnapshot) => void;
+};
+
+const STAGE_LABELS: Record<RunSnapshot["stage"], string> = {
+  context: "Аналізую ваші параметри...",
+  history: "Аналізую історію покупок...",
+  meals: "Формую меню...",
+  matching: "Підбираю товари...",
+  optimization: "Оптимізую кошик...",
+  ready: "План готовий.",
+};
+
+export default function PlannerForm({
+  onPlanReady,
+}: PlannerFormProps) {
   const [budget, setBudget] = useState("");
   const [calories, setCalories] = useState("");
 
@@ -20,52 +37,155 @@ export default function PlannerForm() {
 
   const [useHistory, setUseHistory] = useState(false);
 
+  const [context, setContext] =
+    useState<PlanningContext | null>(null);
+
+  const [contextError, setContextError] = useState("");
+
+  const [budgetError, setBudgetError] = useState("");
+  const [caloriesError, setCaloriesError] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const [createdRunId, setCreatedRunId] = useState("");
+
   const [runSnapshot, setRunSnapshot] =
     useState<RunSnapshot | null>(null);
 
+  /*
+    LOAD CONTEXT
+  */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContext() {
+      try {
+        const result = await getContext();
+
+        if (cancelled) {
+          return;
+        }
+
+        setContext(result);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Failed to load context:", error);
+
+        setContextError(
+          error instanceof Error
+            ? error.message
+            : "Не вдалося завантажити контекст.",
+        );
+      }
+    }
+
+    loadContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function validateBudget(value: string) {
+    if (!value.trim()) {
+      return "Вкажіть бюджет.";
+    }
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return "Введіть коректне число.";
+    }
+
+    if (number <= 0) {
+      return "Бюджет має бути більшим за 0.";
+    }
+
+    return "";
+  }
+
+  function validateCalories(value: string) {
+    if (!value.trim()) {
+      return "";
+    }
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return "Введіть коректне число.";
+    }
+
+    if (number <= 0) {
+      return "Кількість калорій має бути більшою за 0.";
+    }
+
+    return "";
+  }
+
+  function handleBudgetChange(value: string) {
+    setBudget(value);
+
+    if (budgetError) {
+      setBudgetError(validateBudget(value));
+    }
+  }
+
+  function handleCaloriesChange(value: string) {
+    setCalories(value);
+
+    if (caloriesError) {
+      setCaloriesError(validateCalories(value));
+    }
+  }
+
   async function handleSubmit() {
     setSubmitError("");
+    setBudgetError("");
+    setCaloriesError("");
     setCreatedRunId("");
     setRunSnapshot(null);
 
-    const budgetNumber = Number(budget);
+    const currentBudgetError =
+      validateBudget(budget);
 
-    if (!budget || !Number.isFinite(budgetNumber) || budgetNumber <= 0) {
-      setSubmitError("Вкажіть коректний бюджет.");
+    const currentCaloriesError =
+      validateCalories(calories);
+
+    setBudgetError(currentBudgetError);
+    setCaloriesError(currentCaloriesError);
+
+    if (
+      currentBudgetError ||
+      currentCaloriesError
+    ) {
       return;
     }
 
-    const caloriesNumber = calories
+    const budgetNumber = Number(budget);
+
+    const caloriesNumber = calories.trim()
       ? Number(calories)
       : null;
 
-    if (
-      caloriesNumber !== null &&
-      (!Number.isFinite(caloriesNumber) || caloriesNumber <= 0)
-    ) {
-      setSubmitError("Вкажіть коректну кількість калорій.");
-      return;
-    }
-
     const restrictionInput = restrictions.trim();
-    const restrictionKey = restrictionInput.toLowerCase();
+    const restrictionKey =
+      restrictionInput.toLowerCase();
 
     const preferenceInput = preferences.trim();
-    const preferenceKey = preferenceInput.toLowerCase();
+    const preferenceKey =
+      preferenceInput.toLowerCase();
 
     const petInput = pets.trim();
     const petKey = petInput.toLowerCase();
 
     /*
-      Demo backend зараз підтримує лише деякі
-      технічні значення.
-
-      Відомі українські варіанти перетворюємо
-      на значення API.
+      Demo backend підтримує лише частину
+      технічних значень.
     */
 
     const restrictionMap: Record<string, string> = {
@@ -120,21 +240,21 @@ export default function PlannerForm() {
       }
     }
 
-    /*
-      Довільні значення користувача не губимо.
-      Якщо demo backend не підтримує їх як preference /
-      restriction / pet, передаємо їх у notes.
-    */
-
     const notesParts: string[] = [];
 
-    if (preferenceInput && !normalizedPreference) {
+    if (
+      preferenceInput &&
+      !normalizedPreference
+    ) {
       notesParts.push(
         `Вподобання користувача: ${preferenceInput}`,
       );
     }
 
-    if (restrictionInput && !normalizedRestriction) {
+    if (
+      restrictionInput &&
+      !normalizedRestriction
+    ) {
       notesParts.push(
         `Обмеження користувача: ${restrictionInput}`,
       );
@@ -147,7 +267,9 @@ export default function PlannerForm() {
     }
 
     const request = {
-      budgetMinor: Math.round(budgetNumber * 100),
+      budgetMinor: Math.round(
+        budgetNumber * 100,
+      ),
 
       currency: "UAH" as const,
 
@@ -155,7 +277,8 @@ export default function PlannerForm() {
 
       people,
 
-      caloriesPerPersonPerDay: caloriesNumber,
+      caloriesPerPersonPerDay:
+        caloriesNumber,
 
       preferences: normalizedPreference
         ? [normalizedPreference]
@@ -167,7 +290,10 @@ export default function PlannerForm() {
 
       pets: normalizedPets,
 
-      includeRecurring: useHistory,
+      includeRecurring:
+        context?.historyAvailable
+          ? useHistory
+          : false,
 
       notes: notesParts.join(". "),
     };
@@ -182,7 +308,10 @@ export default function PlannerForm() {
       setRunSnapshot(result);
       setCreatedRunId(result.runId);
     } catch (error) {
-      console.error("Failed to create plan:", error);
+      console.error(
+        "Failed to create plan:",
+        error,
+      );
 
       setSubmitError(
         error instanceof Error
@@ -196,12 +325,6 @@ export default function PlannerForm() {
 
   /*
     POLLING
-
-    Після POST /api/plans backend повертає runId.
-
-    Потім frontend приблизно раз на 2 секунди
-    робить GET /api/plans/{runId}, доки статус
-    не стане completed або failed.
   */
 
   useEffect(() => {
@@ -217,7 +340,8 @@ export default function PlannerForm() {
 
     async function pollPlan() {
       try {
-        const snapshot = await getPlan(createdRunId);
+        const snapshot =
+          await getPlan(createdRunId);
 
         if (cancelled) {
           return;
@@ -231,10 +355,12 @@ export default function PlannerForm() {
           snapshot.stage,
         );
 
-        if (
-          snapshot.status === "completed" ||
-          snapshot.status === "failed"
-        ) {
+        if (snapshot.status === "completed") {
+          onPlanReady?.(snapshot);
+          return;
+        }
+
+        if (snapshot.status === "failed") {
           return;
         }
 
@@ -269,28 +395,46 @@ export default function PlannerForm() {
         clearTimeout(timeoutId);
       }
     };
-  }, [createdRunId]);
+  }, [createdRunId, onPlanReady]);
+
+  const isPlanning =
+    runSnapshot?.status === "queued" ||
+    runSnapshot?.status === "running";
 
   return (
     <div className="mt-8 max-w-[794px]">
+
       {/* BUDGET + CALORIES */}
       <div className="grid grid-cols-2 gap-[98px]">
         <PlannerNumberInput
           label="Бюджет"
           value={budget}
-          setValue={setBudget}
+          setValue={handleBudgetChange}
+          onBlur={() =>
+            setBudgetError(
+              validateBudget(budget),
+            )
+          }
           placeholder="Не вказано"
           suffix="UAH"
           helper="Вкажіть максимальну суму для покупок"
+          error={budgetError}
+          required
         />
 
         <PlannerNumberInput
           label="Калорії"
           value={calories}
-          setValue={setCalories}
+          setValue={handleCaloriesChange}
+          onBlur={() =>
+            setCaloriesError(
+              validateCalories(calories),
+            )
+          }
           placeholder="Не вказано"
           suffix="ккал/особа/день"
           helper="Бажана кількість калорій для 1 людини на день"
+          error={caloriesError}
         />
       </div>
 
@@ -354,85 +498,133 @@ export default function PlannerForm() {
         />
       </div>
 
-      {/* CHECKBOX + BUTTON */}
+      {/* HISTORY + BUTTON */}
       <div className="mt-8 flex items-center justify-between gap-8">
-        <label className="flex max-w-[411px] cursor-pointer items-start gap-2">
+
+        <label
+          className={`flex max-w-[411px] items-start gap-2 ${
+            context &&
+            !context.historyAvailable
+              ? "cursor-not-allowed"
+              : "cursor-pointer"
+          }`}
+        >
           <input
             type="checkbox"
             checked={useHistory}
+            disabled={!context?.historyAvailable}
             onChange={(event) =>
               setUseHistory(event.target.checked)
             }
-            className="mt-1 h-4 w-4 accent-[#F89F46]"
+            className="mt-1 h-4 w-4 accent-[#F89F46] disabled:cursor-not-allowed disabled:opacity-40"
           />
 
           <span>
             <span className="block text-sm font-medium text-[#344054]">
-              Аналізувати історію покупок для пропозицій рестоку
+              Аналізувати історію покупок для
+              пропозицій рестоку
             </span>
 
             <span className="block text-sm text-[#667085]">
-              Ми пропонуємо вам схожі товари до минулих придбань
+              Ми пропонуємо вам схожі товари
+              до минулих придбань
             </span>
+
+            {context &&
+              !context.historyAvailable && (
+                <span className="mt-1 block text-xs text-[#98A2B3]">
+                  Історія покупок зараз
+                  недоступна
+                </span>
+              )}
           </span>
         </label>
 
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={
-            isSubmitting ||
-            runSnapshot?.status === "queued" ||
-            runSnapshot?.status === "running"
-          }
+          disabled={isSubmitting || isPlanning}
           className="flex h-12 w-[264px] items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting
             ? "Створюємо план..."
-            : runSnapshot?.status === "queued" ||
-                runSnapshot?.status === "running"
+            : isPlanning
               ? "Формуємо план..."
               : "Скласти меню та кошик"}
         </button>
       </div>
 
-      {/* ERROR */}
-      {submitError && (
-        <p className="mt-4 text-sm text-red-600">
-          {submitError}
-        </p>
+      {/* CONTEXT ERROR */}
+      {contextError && (
+        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-600">
+            Не вдалося завантажити контекст користувача.
+          </p>
+        </div>
       )}
 
-      {/* DEMO PROGRESS */}
-      {runSnapshot &&
-        runSnapshot.status !== "completed" &&
-        runSnapshot.status !== "failed" && (
-          <div className="mt-4 text-sm text-[#667085]">
-            <p>
-              Статус: {runSnapshot.status}
-            </p>
+      {/* API ERROR */}
+      {submitError && (
+        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-600">
+            Не вдалося сформувати план.
+          </p>
 
-            <p>
-              Етап: {runSnapshot.stage}
-            </p>
+          <p className="mt-1 text-sm text-red-500">
+            {submitError}
+          </p>
+        </div>
+      )}
+
+      {/* PROGRESS */}
+      {isPlanning && runSnapshot && (
+        <div className="mt-5 flex items-center gap-3 rounded-lg border border-[#FDE4CA] bg-[#FFF8F1] px-4 py-3">
+
+          <div className="flex gap-1">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]" />
+
+            <span
+              className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]"
+              style={{
+                animationDelay: "150ms",
+              }}
+            />
+
+            <span
+              className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]"
+              style={{
+                animationDelay: "300ms",
+              }}
+            />
           </div>
-        )}
+
+          <span className="text-sm font-medium text-[#886432]">
+            {STAGE_LABELS[runSnapshot.stage]}
+          </span>
+        </div>
+      )}
 
       {/* FAILED */}
       {runSnapshot?.status === "failed" && (
-        <p className="mt-4 text-sm text-red-600">
-          Не вдалося сформувати план.
-          {runSnapshot.error?.message
-            ? ` ${runSnapshot.error.message}`
-            : ""}
-        </p>
+        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-red-600">
+            Не вдалося сформувати план.
+          </p>
+
+          {runSnapshot.error?.message && (
+            <p className="mt-1 text-sm text-red-500">
+              {runSnapshot.error.message}
+            </p>
+          )}
+        </div>
       )}
 
       {/* COMPLETED */}
       {runSnapshot?.status === "completed" && (
-        <p className="mt-4 text-sm font-medium text-green-700">
+        <div className="mt-5 flex items-center gap-2 text-sm font-medium text-green-700">
+          <CheckIcon />
           План готовий.
-        </p>
+        </div>
       )}
     </div>
   );
@@ -442,24 +634,40 @@ function PlannerNumberInput({
   label,
   value,
   setValue,
+  onBlur,
   placeholder,
   suffix,
   helper,
+  error,
+  required = false,
 }: {
   label: string;
   value: string;
   setValue: (value: string) => void;
+  onBlur: () => void;
   placeholder: string;
   suffix: string;
   helper: string;
+  error: string;
+  required?: boolean;
 }) {
   return (
     <div className="w-[334px]">
       <h3 className="mb-4 text-lg font-semibold text-[#886432]">
         {label}
+
+        {required && (
+          <span className="ml-1 text-red-500">*</span>
+        )}
       </h3>
 
-      <div className="flex h-[41px] items-center justify-between rounded border border-black/20 px-5">
+      <div
+        className={`flex h-[41px] items-center justify-between rounded border px-5 ${
+          error
+            ? "border-red-400"
+            : "border-black/20"
+        }`}
+      >
         <input
           type="number"
           min="0"
@@ -467,7 +675,9 @@ function PlannerNumberInput({
           onChange={(event) =>
             setValue(event.target.value)
           }
+          onBlur={onBlur}
           placeholder={placeholder}
+          aria-invalid={Boolean(error)}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50"
         />
 
@@ -476,9 +686,15 @@ function PlannerNumberInput({
         </span>
       </div>
 
-      <p className="pt-2 text-xs text-black/50">
-        {helper}
-      </p>
+      {error ? (
+        <p className="pt-2 text-xs text-red-600">
+          {error}
+        </p>
+      ) : (
+        <p className="pt-2 text-xs text-black/50">
+          {helper}
+        </p>
+      )}
     </div>
   );
 }
@@ -504,7 +720,9 @@ function Counter({
         <button
           type="button"
           onClick={onDecrease}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white"
+          disabled={value <= 1}
+          aria-label={`Зменшити ${label.toLowerCase()}`}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
         </button>
@@ -516,7 +734,13 @@ function Counter({
         <button
           type="button"
           onClick={onIncrease}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white"
+          disabled={
+            label === "Кількість людей"
+              ? value >= 6
+              : value >= 7
+          }
+          aria-label={`Збільшити ${label.toLowerCase()}`}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
         </button>
@@ -551,6 +775,7 @@ function SearchField({
             onChange(event.target.value)
           }
           placeholder={placeholder}
+          aria-label={label}
           className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085]"
         />
       </div>
@@ -581,6 +806,34 @@ function SearchIcon() {
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        cx="9"
+        cy="9"
+        r="8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+
+      <path
+        d="M5.5 9L8 11.5L12.5 6.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

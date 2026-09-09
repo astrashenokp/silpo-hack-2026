@@ -14,22 +14,31 @@ export type PlanningRequest = {
   notes: string;
 };
 
-export type RunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed";
-
 export type RunSnapshot = {
   runId: string;
-  status: RunStatus;
-  stage: string;
+
+  status:
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed";
+
+  stage:
+    | "context"
+    | "history"
+    | "meals"
+    | "matching"
+    | "optimization"
+    | "ready";
+
   events: {
     stage: string;
     message: string;
     at: string;
   }[];
-  result: unknown | null;
+
+  result: unknown;
+
   error: {
     code: string;
     message: string;
@@ -37,7 +46,22 @@ export type RunSnapshot = {
   } | null;
 };
 
-async function ensureContext() {
+export type PlanningContext = {
+  preferences: string[];
+  restrictions: string[];
+
+  pets: {
+    species: "cat" | "dog";
+    count: number;
+  }[];
+
+  historyAvailable: boolean;
+  cartContextReady: boolean;
+  warnings: string[];
+};
+
+
+export async function getContext(): Promise<PlanningContext> {
   const response = await fetch("/api/context", {
     method: "GET",
     credentials: "include",
@@ -47,26 +71,30 @@ async function ensureContext() {
     const body = await response.text();
 
     throw new Error(
-      `Failed to load user context: ${response.status} ${body}`,
+      `Failed to load context: ${response.status} ${body}`,
     );
   }
+
+  return response.json();
 }
+
 
 export async function createPlan(
   request: PlanningRequest,
 ): Promise<RunSnapshot> {
-  // Demo backend needs a user context/session first.
-  await ensureContext();
+  /*
+    /api/context також створює demo session/cookie,
+    тому викликаємо його перед створенням плану.
+  */
+
+  await getContext();
 
   const response = await fetch("/api/plans", {
     method: "POST",
-
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
-
-    credentials: "include",
-
     body: JSON.stringify(request),
   });
 
@@ -81,13 +109,17 @@ export async function createPlan(
   return response.json();
 }
 
+
 export async function getPlan(
   runId: string,
 ): Promise<RunSnapshot> {
-  const response = await fetch(`/api/plans/${runId}`, {
-    method: "GET",
-    credentials: "include",
-  });
+  const response = await fetch(
+    `/api/plans/${runId}`,
+    {
+      method: "GET",
+      credentials: "include",
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text();
