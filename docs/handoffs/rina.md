@@ -32,8 +32,9 @@ Edamam export permissions or FatSecret app verification. The first menu is inven
 and intentionally warns that it is not nutritionally complete. Nonempty recurring
 candidate lookup awaits Vika's input contract. Do not treat this as final delivery.
 
-Next connections: Arina supplies normalized catalog/context and authenticated provider
-clients; Uliana supplies the planner object; Sofiia supplies real meal quantities;
+Purchase-history normalization from Arina's nested orders into Vika-compatible flat
+`Purchase` records is connected and covered by tests. Next connections: Arina supplies
+normalized live catalog/context and authenticated provider clients; Sofiia supplies real meal quantities;
 Vika supplies optimization and recurring demand; Ksiusha adds the Next.js forwarder
 and TypeScript types; Alina checks the mock scenario fixtures and endpoints.
 

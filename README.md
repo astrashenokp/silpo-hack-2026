@@ -1,5 +1,7 @@
 # Smart Basket Planner
 
+FIGMA DESIGN: [Silpo hakathon design](https://www.figma.com/design/xhtDg7HHkwiG5lgTIvuOyH/SILPO-HAKATHON?node-id=0-1&t=4lOXEbKxnPZ8370m-1)
+
 A web page where users set a budget, planning period, household size, food preferences and pet needs, then receive a meal plan and a basket of real Silpo products. Forms, buttons, meal cards and product cards are the main interface. Optional text input supports the structured controls.
 
 **Confirmed stack: Next.js frontend + Python backend and AI modules.** The frontend communicates with the Python HTTP API using JSON. MCP, Edamam, agent orchestration and budget calculations run in Python. See [architecture and folder ownership](docs/WORKFLOW.md#confirmed-stack-and-planned-folders).

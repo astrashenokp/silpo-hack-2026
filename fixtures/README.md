@@ -6,11 +6,21 @@ their stable invented IDs cannot be submitted as IDs of an actual running sessio
 Every JSON example listed in `manifest.json` validates against the server model
 named there. `packages/contracts/openapi.json` contains the public JSON schemas.
 
+`user-context.json` is the normalized response consumed by the API and frontend.
+`silpo-user-context-raw.json` preserves Arina's synthetic MCP-shaped example for
+adapter development; it is intentionally excluded from `manifest.json` because it
+is provider input, not a public API response.
+
+`silpo-purchase-history-raw.json` preserves Arina's nested order/item shape.
+`purchase-history.json` is the flattened, normalized list consumed by Vika. The
+raw fixture is excluded from `manifest.json`; missing category or unit values must
+be enriched from product details rather than guessed.
+
 - **Ksiusha:** `planning-request`, `user-context`, `validation-error`.
 - **Alina:** `run-queued`, `run-failed`, `planning-result`, `cart-preview`,
   `cart-success`, `cart-partial`, `cart-failed`, `fatsecret-preview`,
   `fatsecret-success`, `fatsecret-partial`, `fatsecret-failed`, `fatsecret-unmatched`.
-- **Vika:** `product-candidates` plus the ingredients inside `planning-result`.
+- **Vika:** `purchase-history`, `product-candidates` plus the ingredients inside `planning-result`.
   Oats cost 6000 kopiykas per 500 g package; rice 8000 per 1000 g package;
   lentils 7000 per 500 g package. Catalog also contains unavailable, unknown
   composition and missing-size variants; these are not safe optimizer selections.

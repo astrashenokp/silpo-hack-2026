@@ -1,21 +1,24 @@
 [
   {
-    "orderId": "12345",
-    "date": "2026-09-01T10:00:00Z",
-    "items": [
-      {
-        "productId": "p-001",
-        "name": "Молоко Яготинське 2.6%",
-        "quantity": 2,
-        "price": 45.50
-      },
-      {
-        "productId": "p-002",
-        "name": "Яйця курячі Квіткове С1",
-        "quantity": 1,
-        "price": 60.00
-      }
-    ],
-    "total": 151.00
+    "receiptId": "12345",
+    "purchasedAt": "2026-09-07T12:00:00+00:00",
+    "channel": "online",
+    "productId": "p-001",
+    "name": "Молоко тестове 2.6%",
+    "category": "dairy",
+    "quantity": 2.0,
+    "unit": "piece",
+    "unitPriceMinor": 4550
+  },
+  {
+    "receiptId": "12345",
+    "purchasedAt": "2026-09-07T12:00:00+00:00",
+    "channel": "online",
+    "productId": "p-002",
+    "name": "Яйця тестові С1",
+    "category": "eggs",
+    "quantity": 1.0,
+    "unit": "package",
+    "unitPriceMinor": 6000
   }
 ]
