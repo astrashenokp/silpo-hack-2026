@@ -1,0 +1,70 @@
+{
+  "user-context.json": {
+    "model": "UserContext",
+    "many": false
+  },
+  "purchase-history.json": {
+    "model": "Purchase",
+    "many": true
+  },
+  "planning-request.json": {
+    "model": "PlanningRequest",
+    "many": false
+  },
+  "run-queued.json": {
+    "model": "RunSnapshot",
+    "many": false
+  },
+  "planning-result.json": {
+    "model": "PlanningResult",
+    "many": false
+  },
+  "product-candidates.json": {
+    "model": "ProductCandidate",
+    "many": true
+  },
+  "run-failed.json": {
+    "model": "RunSnapshot",
+    "many": false
+  },
+  "validation-error.json": {
+    "model": "ErrorEnvelope",
+    "many": false
+  },
+  "cart-preview.json": {
+    "model": "CartPreview",
+    "many": false
+  },
+  "cart-success.json": {
+    "model": "CartReceipt",
+    "many": false
+  },
+  "fatsecret-preview.json": {
+    "model": "FatSecretPreview",
+    "many": false
+  },
+  "fatsecret-success.json": {
+    "model": "FatSecretExport",
+    "many": false
+  },
+  "cart-partial.json": {
+    "model": "CartReceipt",
+    "many": false
+  },
+  "fatsecret-partial.json": {
+    "model": "FatSecretExport",
+    "many": false
+  },
+  "cart-failed.json": {
+    "model": "CartReceipt",
+    "many": false
+  },
+  "fatsecret-failed.json": {
+    "model": "FatSecretExport",
+    "many": false
+  },
+  "fatsecret-unmatched.json": {
+    "model": "FatSecretPreview",
+    "many": false
+  }
+}

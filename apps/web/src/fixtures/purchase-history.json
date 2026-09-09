@@ -1,0 +1,24 @@
+[
+  {
+    "receiptId": "12345",
+    "purchasedAt": "2026-09-07T12:00:00+00:00",
+    "channel": "online",
+    "productId": "p-001",
+    "name": "Молоко тестове 2.6%",
+    "category": "dairy",
+    "quantity": 2.0,
+    "unit": "piece",
+    "unitPriceMinor": 4550
+  },
+  {
+    "receiptId": "12345",
+    "purchasedAt": "2026-09-07T12:00:00+00:00",
+    "channel": "online",
+    "productId": "p-002",
+    "name": "Яйця тестові С1",
+    "category": "eggs",
+    "quantity": 1.0,
+    "unit": "package",
+    "unitPriceMinor": 6000
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "runId": "demo-run-002",
+  "status": "failed",
+  "stage": "context",
+  "events": [],
+  "result": null,
+  "error": {
+    "code": "UPSTREAM_UNAVAILABLE",
+    "message": "Simulated planner failure.",
+    "retryable": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "preferences": [],
+  "restrictions": [],
+  "pets": [],
+  "historyAvailable": false,
+  "cartContextReady": true,
+  "warnings": [
+    "DEMO: synthetic data; no provider account, cart or Saved Meal is changed.",
+    "Purchase history is empty; coverage unavailable."
+  ]
+}

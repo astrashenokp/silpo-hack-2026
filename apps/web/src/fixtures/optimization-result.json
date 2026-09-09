@@ -1,0 +1,36 @@
+{
+  "input": {
+    "request": { "budgetMinor": 100000, "currency": "UAH" },
+    "ingredients": [
+      { "id": "oats", "name": "Dry oats", "quantity": 750.0, "unit": "g" }
+    ],
+    "candidates": [
+      {
+        "id": "demo-oats", "name": "Demo dry oats, 500 g", "requirementIds": ["oats"],
+        "priceMinor": 6000, "sellingUnit": "package", "quantityStep": 1.0,
+        "contentQuantity": 500.0, "contentUnit": "g", "available": true,
+        "restrictionCheck": "pass", "regularPriceMinor": null, "source": "synthetic"
+      }
+    ],
+    "selectedRecurring": []
+  },
+  "output": {
+    "selectedProducts": [
+      {
+        "productId": "demo-oats", "name": "Demo dry oats, 500 g",
+        "requirementIds": ["oats"], "recurringSuggestionIds": [],
+        "quantity": 2.0, "sellingUnit": "package", "unitPriceMinor": 6000,
+        "lineTotalMinor": 12000, "source": "synthetic",
+        "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
+        "restrictionCheck": "pass"
+      }
+    ],
+    "substitutions": [],
+    "basketTotalMinor": 12000,
+    "budgetRemainingMinor": 88000,
+    "budgetStatus": "within_budget",
+    "unresolvedRequirements": [],
+    "savingsMinor": null
+  },
+  "manualCheck": "750г / 500г = 1.5 -> округлення вгору (ROUND_CEILING, функція Ріни purchase_quantity) = 2 пакунки. 2 * 6000 коп = 12000 коп (line_total, half-up). 100000 - 12000 = 88000. Перевірено вручну і через pytest з реальними функціями Ріни з catalog/matching.py (test_package_rounding_two_packages_needed, 55 passed)."
+}

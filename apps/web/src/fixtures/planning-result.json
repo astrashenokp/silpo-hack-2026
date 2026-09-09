@@ -1,0 +1,401 @@
+{
+  "runId": "demo-run-001",
+  "version": 1,
+  "dataMode": "demo",
+  "effectiveRequest": {
+    "budgetMinor": 180000,
+    "currency": "UAH",
+    "days": 4,
+    "people": 3,
+    "caloriesPerPersonPerDay": 2000,
+    "preferences": [
+      "vegetarian"
+    ],
+    "restrictions": [],
+    "pets": [
+      {
+        "species": "cat",
+        "count": 1
+      }
+    ],
+    "includeRecurring": true,
+    "notes": ""
+  },
+  "mealPlan": [
+    {
+      "id": "mock-day-1-breakfast",
+      "day": 1,
+      "slot": "breakfast",
+      "title": "Oatmeal bowl",
+      "servings": 3,
+      "kcalPerServing": 400.0,
+      "ingredientIds": [
+        "oats"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "oats",
+          "name": "Dry oats",
+          "quantity": 150.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-1-lunch",
+      "day": 1,
+      "slot": "lunch",
+      "title": "Rice vegetable bowl",
+      "servings": 3,
+      "kcalPerServing": 550.0,
+      "ingredientIds": [
+        "rice"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "rice",
+          "name": "Dry rice",
+          "quantity": 240.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-1-dinner",
+      "day": 1,
+      "slot": "dinner",
+      "title": "Lentil bowl",
+      "servings": 3,
+      "kcalPerServing": 500.0,
+      "ingredientIds": [
+        "lentils"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "lentils",
+          "name": "Dry lentils",
+          "quantity": 210.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-2-breakfast",
+      "day": 2,
+      "slot": "breakfast",
+      "title": "Oatmeal bowl",
+      "servings": 3,
+      "kcalPerServing": 400.0,
+      "ingredientIds": [
+        "oats"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "oats",
+          "name": "Dry oats",
+          "quantity": 150.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-2-lunch",
+      "day": 2,
+      "slot": "lunch",
+      "title": "Rice vegetable bowl",
+      "servings": 3,
+      "kcalPerServing": 550.0,
+      "ingredientIds": [
+        "rice"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "rice",
+          "name": "Dry rice",
+          "quantity": 240.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-2-dinner",
+      "day": 2,
+      "slot": "dinner",
+      "title": "Lentil bowl",
+      "servings": 3,
+      "kcalPerServing": 500.0,
+      "ingredientIds": [
+        "lentils"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "lentils",
+          "name": "Dry lentils",
+          "quantity": 210.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-3-breakfast",
+      "day": 3,
+      "slot": "breakfast",
+      "title": "Oatmeal bowl",
+      "servings": 3,
+      "kcalPerServing": 400.0,
+      "ingredientIds": [
+        "oats"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "oats",
+          "name": "Dry oats",
+          "quantity": 150.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-3-lunch",
+      "day": 3,
+      "slot": "lunch",
+      "title": "Rice vegetable bowl",
+      "servings": 3,
+      "kcalPerServing": 550.0,
+      "ingredientIds": [
+        "rice"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "rice",
+          "name": "Dry rice",
+          "quantity": 240.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-3-dinner",
+      "day": 3,
+      "slot": "dinner",
+      "title": "Lentil bowl",
+      "servings": 3,
+      "kcalPerServing": 500.0,
+      "ingredientIds": [
+        "lentils"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "lentils",
+          "name": "Dry lentils",
+          "quantity": 210.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-4-breakfast",
+      "day": 4,
+      "slot": "breakfast",
+      "title": "Oatmeal bowl",
+      "servings": 3,
+      "kcalPerServing": 400.0,
+      "ingredientIds": [
+        "oats"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "oats",
+          "name": "Dry oats",
+          "quantity": 150.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-4-lunch",
+      "day": 4,
+      "slot": "lunch",
+      "title": "Rice vegetable bowl",
+      "servings": 3,
+      "kcalPerServing": 550.0,
+      "ingredientIds": [
+        "rice"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "rice",
+          "name": "Dry rice",
+          "quantity": 240.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    },
+    {
+      "id": "mock-day-4-dinner",
+      "day": 4,
+      "slot": "dinner",
+      "title": "Lentil bowl",
+      "servings": 3,
+      "kcalPerServing": 500.0,
+      "ingredientIds": [
+        "lentils"
+      ],
+      "ingredientAmounts": [
+        {
+          "ingredientId": "lentils",
+          "name": "Dry lentils",
+          "quantity": 210.0,
+          "unit": "g"
+        }
+      ],
+      "source": "synthetic",
+      "sourceUrl": null,
+      "attribution": null
+    }
+  ],
+  "ingredients": [
+    {
+      "id": "oats",
+      "name": "Dry oats",
+      "searchTerms": [
+        "oats"
+      ],
+      "quantity": 600.0,
+      "unit": "g",
+      "mealIds": [
+        "mock-day-1-breakfast",
+        "mock-day-2-breakfast",
+        "mock-day-3-breakfast",
+        "mock-day-4-breakfast"
+      ],
+      "restrictions": []
+    },
+    {
+      "id": "rice",
+      "name": "Dry rice",
+      "searchTerms": [
+        "rice"
+      ],
+      "quantity": 960.0,
+      "unit": "g",
+      "mealIds": [
+        "mock-day-1-lunch",
+        "mock-day-2-lunch",
+        "mock-day-3-lunch",
+        "mock-day-4-lunch"
+      ],
+      "restrictions": []
+    },
+    {
+      "id": "lentils",
+      "name": "Dry lentils",
+      "searchTerms": [
+        "lentils"
+      ],
+      "quantity": 840.0,
+      "unit": "g",
+      "mealIds": [
+        "mock-day-1-dinner",
+        "mock-day-2-dinner",
+        "mock-day-3-dinner",
+        "mock-day-4-dinner"
+      ],
+      "restrictions": []
+    }
+  ],
+  "recurringItems": [],
+  "selectedProducts": [
+    {
+      "productId": "demo-oats",
+      "name": "Demo dry oats, 500 g",
+      "requirementIds": [
+        "oats"
+      ],
+      "recurringSuggestionIds": [],
+      "quantity": 2.0,
+      "sellingUnit": "package",
+      "unitPriceMinor": 6000,
+      "lineTotalMinor": 12000,
+      "source": "synthetic",
+      "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
+      "restrictionCheck": "pass"
+    },
+    {
+      "productId": "demo-rice",
+      "name": "Demo dry rice, 1000 g",
+      "requirementIds": [
+        "rice"
+      ],
+      "recurringSuggestionIds": [],
+      "quantity": 1.0,
+      "sellingUnit": "package",
+      "unitPriceMinor": 8000,
+      "lineTotalMinor": 8000,
+      "source": "synthetic",
+      "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
+      "restrictionCheck": "pass"
+    },
+    {
+      "productId": "demo-lentils",
+      "name": "Demo dry lentils, 500 g",
+      "requirementIds": [
+        "lentils"
+      ],
+      "recurringSuggestionIds": [],
+      "quantity": 2.0,
+      "sellingUnit": "package",
+      "unitPriceMinor": 7000,
+      "lineTotalMinor": 14000,
+      "source": "synthetic",
+      "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
+      "restrictionCheck": "pass"
+    }
+  ],
+  "substitutions": [],
+  "budgetMinor": 180000,
+  "basketTotalMinor": 34000,
+  "budgetRemainingMinor": 146000,
+  "savingsMinor": null,
+  "budgetStatus": "within_budget",
+  "unresolvedRequirements": [],
+  "warnings": [
+    "DEMO: synthetic data; no provider account, cart or Saved Meal is changed.",
+    "Purchase history is empty; coverage unavailable.",
+    "Meal plan uses mock data. Sofiia/Edamam is not connected yet."
+  ],
+  "canConfirmCart": true
+}

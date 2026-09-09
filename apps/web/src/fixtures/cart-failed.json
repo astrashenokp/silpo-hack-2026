@@ -1,0 +1,31 @@
+{
+  "previewId": "demo-cart-preview-012",
+  "status": "failed",
+  "items": [
+    {
+      "productId": "demo-oats",
+      "status": "failed",
+      "requestedQuantity": 6.0,
+      "actualQuantity": 4.0,
+      "message": "Simulated provider failure; no addition."
+    },
+    {
+      "productId": "demo-rice",
+      "status": "failed",
+      "requestedQuantity": 2.0,
+      "actualQuantity": 1.0,
+      "message": "Simulated provider failure; no addition."
+    },
+    {
+      "productId": "demo-lentils",
+      "status": "failed",
+      "requestedQuantity": 4.0,
+      "actualQuantity": 2.0,
+      "message": "Simulated provider failure; no addition."
+    }
+  ],
+  "verifiedCartTotalMinor": 49500,
+  "warnings": [
+    "DEMO: synthetic data; no provider account, cart or Saved Meal is changed."
+  ]
+}

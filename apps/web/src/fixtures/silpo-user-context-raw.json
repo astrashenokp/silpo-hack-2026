@@ -1,0 +1,20 @@
+{
+  "profile": {
+    "firstName": "Тестовий користувач",
+    "phone": "+380000000000",
+    "email": "demo@example.invalid"
+  },
+  "family": {
+    "children": [
+      {
+        "age": 5
+      }
+    ],
+    "pets": [
+      "cat"
+    ]
+  },
+  "foodRestrictions": [
+    "lactose-intolerance"
+  ]
+}
