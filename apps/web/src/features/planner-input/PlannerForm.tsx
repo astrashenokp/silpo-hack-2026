@@ -5,6 +5,7 @@ import {
   createPlan,
   getContext,
   getPlan,
+  isAuthError,
   type PlanningContext,
   type RunSnapshot,
 } from "@/lib/api/planner";
@@ -40,7 +41,14 @@ export default function PlannerForm({
   const [context, setContext] =
     useState<PlanningContext | null>(null);
 
-  const [contextError, setContextError] = useState("");
+  const [isContextLoading, setIsContextLoading] =
+    useState(true);
+
+  const [contextError, setContextError] =
+    useState("");
+
+  const [sessionExpired, setSessionExpired] =
+    useState(false);
 
   const [budgetError, setBudgetError] = useState("");
   const [caloriesError, setCaloriesError] = useState("");
@@ -53,14 +61,42 @@ export default function PlannerForm({
   const [runSnapshot, setRunSnapshot] =
     useState<RunSnapshot | null>(null);
 
-  /*
-    LOAD CONTEXT
-  */
+  async function loadContext() {
+    setIsContextLoading(true);
+    setContextError("");
+
+    try {
+      const result = await getContext();
+
+      setContext(result);
+      setSessionExpired(false);
+    } catch (error) {
+      console.error(
+        "Failed to load context:",
+        error,
+      );
+
+      setContext(null);
+
+      if (isAuthError(error)) {
+        setSessionExpired(true);
+        return;
+      }
+
+      setContextError(
+        "Не вдалося завантажити дані користувача. Спробуйте ще раз.",
+      );
+    } finally {
+      setIsContextLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadContext() {
+    async function initialLoad() {
+      setIsContextLoading(true);
+
       try {
         const result = await getContext();
 
@@ -69,31 +105,38 @@ export default function PlannerForm({
         }
 
         setContext(result);
+        setSessionExpired(false);
+        setContextError("");
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        console.error("Failed to load context:", error);
-
-        setContextError(
-          error instanceof Error
-            ? error.message
-            : "Не вдалося завантажити контекст.",
+        console.error(
+          "Failed to load context:",
+          error,
         );
+
+        if (isAuthError(error)) {
+          setSessionExpired(true);
+        } else {
+          setContextError(
+            "Не вдалося завантажити дані користувача. Спробуйте ще раз.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsContextLoading(false);
+        }
       }
     }
 
-    loadContext();
+    initialLoad();
 
     return () => {
       cancelled = true;
     };
   }, []);
-
-  /*
-    VALIDATION
-  */
 
   function validateBudget(value: string) {
     if (!value.trim()) {
@@ -147,10 +190,6 @@ export default function PlannerForm({
     }
   }
 
-  /*
-    CREATE PLAN
-  */
-
   async function handleSubmit() {
     setSubmitError("");
     setBudgetError("");
@@ -172,13 +211,6 @@ export default function PlannerForm({
       return;
     }
 
-    /*
-      Clearing createdRunId immediately causes cleanup
-      of the polling effect for the previous run.
-
-      Any response that arrives from the previous
-      polling request after cleanup will be ignored.
-    */
     setCreatedRunId("");
     setRunSnapshot(null);
 
@@ -198,11 +230,6 @@ export default function PlannerForm({
 
     const petInput = pets.trim();
     const petKey = petInput.toLowerCase();
-
-    /*
-      Demo backend currently supports only
-      specific machine-readable values.
-    */
 
     const restrictionMap: Record<string, string> = {
       "без арахісу": "peanut-free",
@@ -329,27 +356,20 @@ export default function PlannerForm({
         error,
       );
 
+      if (isAuthError(error)) {
+        setCreatedRunId("");
+        setRunSnapshot(null);
+        setSessionExpired(true);
+        return;
+      }
+
       setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "Не вдалося створити план.",
+        "Не вдалося сформувати план. Спробуйте ще раз.",
       );
     } finally {
       setIsSubmitting(false);
     }
   }
-
-  /*
-    POLLING
-
-    Every effect instance belongs to one runId.
-
-    When createdRunId changes or the component
-    unmounts, React runs the cleanup function.
-
-    cancelled then becomes true, so an old
-    asynchronous response cannot update the UI.
-  */
 
   useEffect(() => {
     if (!createdRunId) {
@@ -369,22 +389,10 @@ export default function PlannerForm({
         const snapshot =
           await getPlan(runId);
 
-        /*
-          This request may have started while this
-          run was active, but another run may have
-          replaced it while we were waiting.
-
-          In that case its response is stale.
-        */
         if (cancelled) {
           return;
         }
 
-        /*
-          Extra safety check: the backend snapshot
-          must belong to the run that this polling
-          effect was created for.
-        */
         if (snapshot.runId !== runId) {
           console.warn(
             "Ignored stale plan response:",
@@ -424,10 +432,15 @@ export default function PlannerForm({
           error,
         );
 
+        if (isAuthError(error)) {
+          setSessionExpired(true);
+          setCreatedRunId("");
+          setRunSnapshot(null);
+          return;
+        }
+
         setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "Не вдалося отримати стан плану.",
+          "Не вдалося отримати стан плану. Спробуйте ще раз.",
         );
       }
     }
@@ -435,14 +448,6 @@ export default function PlannerForm({
     pollPlan();
 
     return () => {
-      /*
-        This cleanup runs when:
-        - createdRunId changes;
-        - createdRunId is cleared;
-        - component unmounts.
-
-        It prevents an old run from changing state.
-      */
       cancelled = true;
 
       if (timeoutId) {
@@ -457,8 +462,6 @@ export default function PlannerForm({
 
   return (
     <div className="mt-8 max-w-[794px]">
-
-      {/* BUDGET + CALORIES */}
       <div className="grid grid-cols-2 gap-[98px]">
         <PlannerNumberInput
           label="Бюджет"
@@ -492,7 +495,6 @@ export default function PlannerForm({
         />
       </div>
 
-      {/* PEOPLE + DAYS */}
       <div className="mt-8 flex gap-[274px]">
         <Counter
           label="Кількість людей"
@@ -529,7 +531,6 @@ export default function PlannerForm({
         />
       </div>
 
-      {/* RESTRICTIONS + PREFERENCES */}
       <div className="mt-8 grid grid-cols-2 gap-[113px]">
         <SearchField
           label="Алергени/Заборони"
@@ -546,7 +547,6 @@ export default function PlannerForm({
         />
       </div>
 
-      {/* PETS */}
       <div className="mt-8">
         <SearchField
           label="Домашні тварини"
@@ -556,9 +556,7 @@ export default function PlannerForm({
         />
       </div>
 
-      {/* HISTORY + BUTTON */}
       <div className="mt-8 flex items-center justify-between gap-8">
-
         <label
           className={`flex max-w-[411px] items-start gap-2 ${
             context &&
@@ -601,7 +599,12 @@ export default function PlannerForm({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={isSubmitting || isPlanning}
+          disabled={
+            isSubmitting ||
+            isPlanning ||
+            isContextLoading ||
+            sessionExpired
+          }
           className="flex h-12 w-[264px] items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting
@@ -612,19 +615,59 @@ export default function PlannerForm({
         </button>
       </div>
 
-      {/* CONTEXT ERROR */}
-      {contextError && (
+      {sessionExpired && (
         <div
           role="alert"
-          className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+          className="mt-5 rounded-lg border border-[#FDE4CA] bg-[#FFF8F1] px-4 py-4"
         >
-          <p className="text-sm text-red-600">
-            Не вдалося завантажити контекст користувача.
+          <p className="text-sm font-semibold text-[#886432]">
+            Сесію користувача потрібно відновити.
           </p>
+
+          <p className="mt-1 text-sm text-[#667085]">
+            Підключення було втрачено або термін дії
+            сесії завершився.
+          </p>
+
+          <button
+            type="button"
+            onClick={loadContext}
+            disabled={isContextLoading}
+            className="mt-3 rounded-lg bg-[#F89F46] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isContextLoading
+              ? "Відновлюємо..."
+              : "Відновити сесію"}
+          </button>
         </div>
       )}
 
-      {/* API ERROR */}
+      {contextError && (
+        <div
+          role="alert"
+          className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-4"
+        >
+          <p className="text-sm font-semibold text-red-600">
+            Не вдалося отримати дані профілю.
+          </p>
+
+          <p className="mt-1 text-sm text-red-500">
+            {contextError}
+          </p>
+
+          <button
+            type="button"
+            onClick={loadContext}
+            disabled={isContextLoading}
+            className="mt-3 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-60"
+          >
+            {isContextLoading
+              ? "Завантаження..."
+              : "Спробувати ще раз"}
+          </button>
+        </div>
+      )}
+
       {submitError && (
         <div
           role="alert"
@@ -640,7 +683,6 @@ export default function PlannerForm({
         </div>
       )}
 
-      {/* PROGRESS */}
       {isPlanning && runSnapshot && (
         <div
           aria-live="polite"
@@ -670,7 +712,6 @@ export default function PlannerForm({
         </div>
       )}
 
-      {/* FAILED */}
       {runSnapshot?.status === "failed" && (
         <div
           role="alert"
@@ -688,7 +729,6 @@ export default function PlannerForm({
         </div>
       )}
 
-      {/* COMPLETED */}
       {runSnapshot?.status === "completed" && (
         <div
           aria-live="polite"

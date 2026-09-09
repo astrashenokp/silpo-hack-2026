@@ -60,34 +60,102 @@ export type PlanningContext = {
   warnings: string[];
 };
 
+type ApiErrorBody = {
+  error?: {
+    code?: string;
+    message?: string;
+    retryable?: boolean;
+  };
+};
+
+export class ApiClientError extends Error {
+  status: number;
+  code: string;
+  retryable: boolean;
+
+  constructor({
+    status,
+    code,
+    message,
+    retryable,
+  }: {
+    status: number;
+    code: string;
+    message: string;
+    retryable: boolean;
+  }) {
+    super(message);
+
+    this.name = "ApiClientError";
+    this.status = status;
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
+async function readApiError(
+  response: Response,
+): Promise<ApiClientError> {
+  let body: ApiErrorBody | null = null;
+
+  try {
+    body = await response.json();
+  } catch {
+    // Response may not contain JSON.
+  }
+
+  return new ApiClientError({
+    status: response.status,
+
+    code:
+      body?.error?.code ??
+      `HTTP_${response.status}`,
+
+    message:
+      body?.error?.message ??
+      "Сталася помилка під час запиту.",
+
+    retryable:
+      body?.error?.retryable ?? false,
+  });
+}
+
+export function isAuthError(
+  error: unknown,
+): boolean {
+  return (
+    error instanceof ApiClientError &&
+    (
+      error.status === 401 ||
+      error.code === "AUTH_REQUIRED"
+    )
+  );
+}
 
 export async function getContext(): Promise<PlanningContext> {
   const response = await fetch("/api/context", {
     method: "GET",
     credentials: "include",
+    cache: "no-store",
   });
 
   if (!response.ok) {
-    const body = await response.text();
-
-    throw new Error(
-      `Failed to load context: ${response.status} ${body}`,
-    );
+    throw await readApiError(response);
   }
 
   return response.json();
 }
 
-
 export async function createPlan(
   request: PlanningRequest,
 ): Promise<RunSnapshot> {
   /*
-    /api/context також створює demo session/cookie,
-    тому викликаємо його перед створенням плану.
-  */
+    The page loads /api/context first.
 
-  await getContext();
+    If the session disappears afterwards,
+    POST /api/plans can return 401 and the
+    frontend can display an expired-session state.
+  */
 
   const response = await fetch("/api/plans", {
     method: "POST",
@@ -99,16 +167,11 @@ export async function createPlan(
   });
 
   if (!response.ok) {
-    const body = await response.text();
-
-    throw new Error(
-      `Failed to create plan: ${response.status} ${body}`,
-    );
+    throw await readApiError(response);
   }
 
   return response.json();
 }
-
 
 export async function getPlan(
   runId: string,
@@ -118,15 +181,12 @@ export async function getPlan(
     {
       method: "GET",
       credentials: "include",
+      cache: "no-store",
     },
   );
 
   if (!response.ok) {
-    const body = await response.text();
-
-    throw new Error(
-      `Failed to get plan: ${response.status} ${body}`,
-    );
+    throw await readApiError(response);
   }
 
   return response.json();
