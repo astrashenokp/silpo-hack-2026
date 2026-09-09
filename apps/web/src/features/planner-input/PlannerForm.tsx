@@ -91,6 +91,10 @@ export default function PlannerForm({
     };
   }, []);
 
+  /*
+    VALIDATION
+  */
+
   function validateBudget(value: string) {
     if (!value.trim()) {
       return "Вкажіть бюджет.";
@@ -143,12 +147,14 @@ export default function PlannerForm({
     }
   }
 
+  /*
+    CREATE PLAN
+  */
+
   async function handleSubmit() {
     setSubmitError("");
     setBudgetError("");
     setCaloriesError("");
-    setCreatedRunId("");
-    setRunSnapshot(null);
 
     const currentBudgetError =
       validateBudget(budget);
@@ -165,6 +171,16 @@ export default function PlannerForm({
     ) {
       return;
     }
+
+    /*
+      Clearing createdRunId immediately causes cleanup
+      of the polling effect for the previous run.
+
+      Any response that arrives from the previous
+      polling request after cleanup will be ignored.
+    */
+    setCreatedRunId("");
+    setRunSnapshot(null);
 
     const budgetNumber = Number(budget);
 
@@ -184,8 +200,8 @@ export default function PlannerForm({
     const petKey = petInput.toLowerCase();
 
     /*
-      Demo backend підтримує лише частину
-      технічних значень.
+      Demo backend currently supports only
+      specific machine-readable values.
     */
 
     const restrictionMap: Record<string, string> = {
@@ -325,12 +341,22 @@ export default function PlannerForm({
 
   /*
     POLLING
+
+    Every effect instance belongs to one runId.
+
+    When createdRunId changes or the component
+    unmounts, React runs the cleanup function.
+
+    cancelled then becomes true, so an old
+    asynchronous response cannot update the UI.
   */
 
   useEffect(() => {
     if (!createdRunId) {
       return;
     }
+
+    const runId = createdRunId;
 
     let cancelled = false;
 
@@ -341,9 +367,29 @@ export default function PlannerForm({
     async function pollPlan() {
       try {
         const snapshot =
-          await getPlan(createdRunId);
+          await getPlan(runId);
 
+        /*
+          This request may have started while this
+          run was active, but another run may have
+          replaced it while we were waiting.
+
+          In that case its response is stale.
+        */
         if (cancelled) {
+          return;
+        }
+
+        /*
+          Extra safety check: the backend snapshot
+          must belong to the run that this polling
+          effect was created for.
+        */
+        if (snapshot.runId !== runId) {
+          console.warn(
+            "Ignored stale plan response:",
+            snapshot.runId,
+          );
           return;
         }
 
@@ -389,6 +435,14 @@ export default function PlannerForm({
     pollPlan();
 
     return () => {
+      /*
+        This cleanup runs when:
+        - createdRunId changes;
+        - createdRunId is cleared;
+        - component unmounts.
+
+        It prevents an old run from changing state.
+      */
       cancelled = true;
 
       if (timeoutId) {
@@ -443,6 +497,8 @@ export default function PlannerForm({
         <Counter
           label="Кількість людей"
           value={people}
+          min={1}
+          max={6}
           onDecrease={() =>
             setPeople((value) =>
               Math.max(1, value - 1),
@@ -458,6 +514,8 @@ export default function PlannerForm({
         <Counter
           label="Період часу (дні)"
           value={days}
+          min={1}
+          max={7}
           onDecrease={() =>
             setDays((value) =>
               Math.max(1, value - 1),
@@ -556,7 +614,10 @@ export default function PlannerForm({
 
       {/* CONTEXT ERROR */}
       {contextError && (
-        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <div
+          role="alert"
+          className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+        >
           <p className="text-sm text-red-600">
             Не вдалося завантажити контекст користувача.
           </p>
@@ -565,7 +626,10 @@ export default function PlannerForm({
 
       {/* API ERROR */}
       {submitError && (
-        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <div
+          role="alert"
+          className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+        >
           <p className="text-sm font-medium text-red-600">
             Не вдалося сформувати план.
           </p>
@@ -578,8 +642,10 @@ export default function PlannerForm({
 
       {/* PROGRESS */}
       {isPlanning && runSnapshot && (
-        <div className="mt-5 flex items-center gap-3 rounded-lg border border-[#FDE4CA] bg-[#FFF8F1] px-4 py-3">
-
+        <div
+          aria-live="polite"
+          className="mt-5 flex items-center gap-3 rounded-lg border border-[#FDE4CA] bg-[#FFF8F1] px-4 py-3"
+        >
           <div className="flex gap-1">
             <span className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]" />
 
@@ -606,7 +672,10 @@ export default function PlannerForm({
 
       {/* FAILED */}
       {runSnapshot?.status === "failed" && (
-        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <div
+          role="alert"
+          className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+        >
           <p className="text-sm font-medium text-red-600">
             Не вдалося сформувати план.
           </p>
@@ -621,7 +690,10 @@ export default function PlannerForm({
 
       {/* COMPLETED */}
       {runSnapshot?.status === "completed" && (
-        <div className="mt-5 flex items-center gap-2 text-sm font-medium text-green-700">
+        <div
+          aria-live="polite"
+          className="mt-5 flex items-center gap-2 text-sm font-medium text-green-700"
+        >
           <CheckIcon />
           План готовий.
         </div>
@@ -677,6 +749,7 @@ function PlannerNumberInput({
           }
           onBlur={onBlur}
           placeholder={placeholder}
+          aria-label={label}
           aria-invalid={Boolean(error)}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50"
         />
@@ -687,7 +760,10 @@ function PlannerNumberInput({
       </div>
 
       {error ? (
-        <p className="pt-2 text-xs text-red-600">
+        <p
+          role="alert"
+          className="pt-2 text-xs text-red-600"
+        >
           {error}
         </p>
       ) : (
@@ -702,11 +778,15 @@ function PlannerNumberInput({
 function Counter({
   label,
   value,
+  min,
+  max,
   onDecrease,
   onIncrease,
 }: {
   label: string;
   value: number;
+  min: number;
+  max: number;
   onDecrease: () => void;
   onIncrease: () => void;
 }) {
@@ -720,7 +800,7 @@ function Counter({
         <button
           type="button"
           onClick={onDecrease}
-          disabled={value <= 1}
+          disabled={value <= min}
           aria-label={`Зменшити ${label.toLowerCase()}`}
           className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -734,11 +814,7 @@ function Counter({
         <button
           type="button"
           onClick={onIncrease}
-          disabled={
-            label === "Кількість людей"
-              ? value >= 6
-              : value >= 7
-          }
+          disabled={value >= max}
           aria-label={`Збільшити ${label.toLowerCase()}`}
           className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
