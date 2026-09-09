@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import ContextSummary from "@/features/planner-input/ContextSummary";
 import {
@@ -15,14 +16,32 @@ type PlannerFormProps = {
   onPlanReady?: (snapshot: RunSnapshot) => void;
 };
 
-const STAGE_LABELS: Record<RunSnapshot["stage"], string> = {
-  context: "Аналізую ваші параметри...",
-  history: "Аналізую історію покупок...",
-  meals: "Формую меню...",
-  matching: "Підбираю товари...",
-  optimization: "Оптимізую кошик...",
-  ready: "План готовий.",
-};
+
+const MIN_THINKING_MS = 1200;
+
+const THINKING_STEPS = [
+  "Профіль та чеки зчитано...",
+  "Меню сформовано...",
+  "Оптимізація цін та замін у Сільпо...",
+  "Фіналізація...",
+] as const;
+
+function getThinkingStepIndex(stage: RunSnapshot["stage"] | undefined) {
+  switch (stage) {
+    case "context":
+    case "history":
+      return 0;
+    case "meals":
+      return 1;
+    case "matching":
+    case "optimization":
+      return 2;
+    case "ready":
+      return 3;
+    default:
+      return 0;
+  }
+}
 
 export default function PlannerForm({
   onPlanReady,
@@ -33,9 +52,9 @@ export default function PlannerForm({
   const [people, setPeople] = useState(1);
   const [days, setDays] = useState(1);
 
-  const [restrictions, setRestrictions] = useState("");
-  const [preferences, setPreferences] = useState("");
-  const [pets, setPets] = useState("");
+  const [restrictions, setRestrictions] = useState<string[]>([]);
+  const [preferences, setPreferences] = useState<string[]>([]);
+  const [pets, setPets] = useState<{ name: string; count: number }[]>([]);
 
   const [useHistory, setUseHistory] = useState(false);
 
@@ -61,6 +80,12 @@ export default function PlannerForm({
 
   const [runSnapshot, setRunSnapshot] =
     useState<RunSnapshot | null>(null);
+
+  const [thinkingStartedAt, setThinkingStartedAt] =
+    useState<number | null>(null);
+
+  const [minimumThinkingElapsed, setMinimumThinkingElapsed] =
+    useState(true);
 
   async function loadContext() {
     setIsContextLoading(true);
@@ -214,23 +239,14 @@ export default function PlannerForm({
 
     setCreatedRunId("");
     setRunSnapshot(null);
+    setThinkingStartedAt(Date.now());
+    setMinimumThinkingElapsed(false);
 
     const budgetNumber = Number(budget);
 
     const caloriesNumber = calories.trim()
       ? Number(calories)
       : null;
-
-    const restrictionInput = restrictions.trim();
-    const restrictionKey =
-      restrictionInput.toLowerCase();
-
-    const preferenceInput = preferences.trim();
-    const preferenceKey =
-      preferenceInput.toLowerCase();
-
-    const petInput = pets.trim();
-    const petKey = petInput.toLowerCase();
 
     const restrictionMap: Record<string, string> = {
       "без арахісу": "peanut-free",
@@ -246,67 +262,99 @@ export default function PlannerForm({
       vegetarian: "vegetarian",
     };
 
-    const normalizedRestriction =
-      restrictionMap[restrictionKey] ?? "";
+    const normalizedRestrictions = Array.from(
+      new Set(
+        restrictions
+          .map((item) => restrictionMap[item.toLowerCase()] ?? "")
+          .filter(Boolean),
+      ),
+    );
 
-    const normalizedPreference =
-      preferenceMap[preferenceKey] ?? "";
+    const normalizedPreferences = Array.from(
+      new Set(
+        preferences
+          .map((item) => preferenceMap[item.toLowerCase()] ?? "")
+          .filter(Boolean),
+      ),
+    );
 
     const normalizedPets: {
       species: "cat" | "dog";
       count: number;
     }[] = [];
 
-    let unsupportedPet = "";
+    const unsupportedPets: { name: string; count: number }[] = [];
 
-    if (petKey) {
+    for (const pet of pets) {
+      const petKey = pet.name.toLowerCase();
+
       if (
         petKey.includes("кіт") ||
         petKey.includes("кішка") ||
         petKey.includes("кот") ||
         petKey.includes("cat")
       ) {
-        normalizedPets.push({
-          species: "cat",
-          count: 1,
-        });
+        const existing = normalizedPets.find(
+          (item) => item.species === "cat",
+        );
+
+        if (existing) {
+          existing.count += pet.count;
+        } else {
+          normalizedPets.push({
+            species: "cat",
+            count: pet.count,
+          });
+        }
       } else if (
         petKey.includes("собака") ||
         petKey.includes("пес") ||
         petKey.includes("dog")
       ) {
-        normalizedPets.push({
-          species: "dog",
-          count: 1,
-        });
+        const existing = normalizedPets.find(
+          (item) => item.species === "dog",
+        );
+
+        if (existing) {
+          existing.count += pet.count;
+        } else {
+          normalizedPets.push({
+            species: "dog",
+            count: pet.count,
+          });
+        }
       } else {
-        unsupportedPet = petInput;
+        unsupportedPets.push(pet);
       }
     }
 
     const notesParts: string[] = [];
 
-    if (
-      preferenceInput &&
-      !normalizedPreference
-    ) {
+    const unsupportedPreferences = preferences.filter(
+      (item) => !preferenceMap[item.toLowerCase()],
+    );
+
+    const unsupportedRestrictions = restrictions.filter(
+      (item) => !restrictionMap[item.toLowerCase()],
+    );
+
+    if (unsupportedPreferences.length) {
       notesParts.push(
-        `Вподобання користувача: ${preferenceInput}`,
+        `Вподобання користувача: ${unsupportedPreferences.join(", ")}`,
       );
     }
 
-    if (
-      restrictionInput &&
-      !normalizedRestriction
-    ) {
+    if (unsupportedRestrictions.length) {
       notesParts.push(
-        `Обмеження користувача: ${restrictionInput}`,
+        `Обмеження користувача: ${unsupportedRestrictions.join(", ")}`,
       );
     }
 
-    if (unsupportedPet) {
+    if (unsupportedPets.length) {
       notesParts.push(
-        `Домашня тварина користувача: ${unsupportedPet}`,
+        `Домашні тварини користувача: ${unsupportedPets
+          .map((pet) => `${pet.name} (${pet.count})`)
+          .join(", ")}`,
       );
     }
 
@@ -324,13 +372,9 @@ export default function PlannerForm({
       caloriesPerPersonPerDay:
         caloriesNumber,
 
-      preferences: normalizedPreference
-        ? [normalizedPreference]
-        : [],
+      preferences: normalizedPreferences,
 
-      restrictions: normalizedRestriction
-        ? [normalizedRestriction]
-        : [],
+      restrictions: normalizedRestrictions,
 
       pets: normalizedPets,
 
@@ -371,6 +415,28 @@ export default function PlannerForm({
       setIsSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (thinkingStartedAt === null) {
+      return;
+    }
+
+    const elapsed = Date.now() - thinkingStartedAt;
+    const remaining = Math.max(0, MIN_THINKING_MS - elapsed);
+
+    if (remaining === 0) {
+      setMinimumThinkingElapsed(true);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setMinimumThinkingElapsed(true);
+    }, remaining);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [thinkingStartedAt]);
 
   useEffect(() => {
     if (!createdRunId) {
@@ -461,15 +527,163 @@ export default function PlannerForm({
     runSnapshot?.status === "queued" ||
     runSnapshot?.status === "running";
 
+  const isWaitingForMinimumThinking =
+    runSnapshot?.status === "completed" &&
+    !minimumThinkingElapsed;
+
+  const isThinking =
+    isSubmitting ||
+    isPlanning ||
+    isWaitingForMinimumThinking;
+  const thinkingStepIndex = getThinkingStepIndex(runSnapshot?.stage);
+
+  if (isThinking) {
+    return (
+      <section
+        aria-live="polite"
+        aria-busy="true"
+        className="mx-auto mt-8 w-full max-w-[720px] px-1 sm:px-0"
+      >
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div
+            aria-hidden="true"
+            className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-sm font-bold text-white"
+          >
+            A
+          </div>
+
+          <div className="min-w-0 pt-1">
+            <div className="space-y-3">
+              {THINKING_STEPS.map((step, index) => {
+                const isCurrent = index === thinkingStepIndex;
+                const isDone = index < thinkingStepIndex;
+
+                return (
+                  <div
+                    key={step}
+                    className={`flex items-center gap-2 text-sm transition-opacity ${
+                      isCurrent
+                        ? "font-medium text-[#667085]"
+                        : isDone
+                          ? "text-[#98A2B3]"
+                          : "text-[#C4C7CE]"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        isCurrent
+                          ? "animate-pulse bg-[#F89F46]"
+                          : isDone
+                            ? "bg-[#D0D5DD]"
+                            : "bg-[#EAECF0]"
+                      }`}
+                    />
+                    <span>{step}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (runSnapshot?.status === "completed") {
+    const result = runSnapshot.result;
+    const regularProducts = result?.selectedProducts.slice(0, 4) ?? [];
+
+    return (
+      <section
+        aria-live="polite"
+        className="mx-auto mt-6 w-full max-w-[720px] px-1 sm:px-0"
+      >
+        <div className="flex items-start gap-4">
+          <div
+            aria-hidden="true"
+            className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-white"
+          >
+            <span className="text-base font-semibold">A</span>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="max-w-[620px] text-[15px] leading-6 text-[#1F2937]">
+              Готово! Ось ваш персональний план, рекомендації щодо регулярних товарів
+              та оптимізований кошик:
+            </p>
+
+            <div className="mt-5 border-t border-[#EAECF0] pt-4">
+              <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                Регулярні покупки
+              </h3>
+
+              {regularProducts.length > 0 ? (
+                <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
+                  {regularProducts.map((product) => {
+                    const hasButterImage =
+                      product.name.toLowerCase().includes("галич") ||
+                      product.name.toLowerCase().includes("масло");
+
+                    return (
+                      <div
+                        key={`${product.productId}-${product.name}`}
+                        className="flex min-w-0 items-start gap-3"
+                      >
+                        <div className="flex h-12 w-14 shrink-0 items-center justify-center overflow-hidden rounded bg-white">
+                          {hasButterImage ? (
+                            <Image
+                              src="/butter-galychyna.png"
+                              alt={product.name}
+                              width={56}
+                              height={48}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded bg-[#FFF5E4] text-sm font-semibold text-[#9A6A2D]">
+                              {product.name.slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="line-clamp-2 text-[13px] leading-[18px] text-[#344054]">
+                            {product.name}
+                          </p>
+
+                          <p className="mt-0.5 text-[11px] text-[#98A2B3]">
+                            {product.quantity} {product.sellingUnit}
+                          </p>
+
+                          <p className="mt-1 text-[14px] font-semibold text-[#111827]">
+                            {(product.lineTotalMinor / 100).toFixed(2)} ₴
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-[#667085]">
+                  Регулярних покупок для цього плану немає.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
         void handleSubmit();
       }}
-      className="mx-auto mt-8 w-full max-w-[720px]"
+      className="mx-auto mt-4 w-full max-w-[720px]"
     >
-      <div className="grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 sm:gap-8">
+      <div className="grid grid-cols-1 gap-y-4 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
         <PlannerNumberInput
           label="Бюджет"
           value={budget}
@@ -502,10 +716,11 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 sm:gap-8">
+      <div className="mt-11 grid grid-cols-1 gap-y-8 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
         <Counter
           label="Кількість людей"
           value={people}
+          disabledMinusStyle="orange"
           min={1}
           max={6}
           onDecrease={() =>
@@ -538,27 +753,77 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 sm:gap-8">
-        <SearchField
+      <div className="mt-11 grid grid-cols-1 gap-y-8 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
+        <ChipInput
           label="Алергени/Заборони"
-          value={restrictions}
-          onChange={setRestrictions}
+          items={restrictions}
+          onAdd={(item) =>
+            setRestrictions((current) =>
+              current.some(
+                (value) =>
+                  value.toLowerCase() === item.toLowerCase(),
+              )
+                ? current
+                : [...current, item],
+            )
+          }
+          onRemove={(item) =>
+            setRestrictions((current) =>
+              current.filter((value) => value !== item),
+            )
+          }
           placeholder="Введіть назву продукту"
         />
 
-        <SearchField
+        <ChipInput
           label="Вподобання"
-          value={preferences}
-          onChange={setPreferences}
-          placeholder="Введіть вподобання"
+          items={preferences}
+          onAdd={(item) =>
+            setPreferences((current) =>
+              current.some(
+                (value) =>
+                  value.toLowerCase() === item.toLowerCase(),
+              )
+                ? current
+                : [...current, item],
+            )
+          }
+          onRemove={(item) =>
+            setPreferences((current) =>
+              current.filter((value) => value !== item),
+            )
+          }
+          placeholder="Введіть назву продукту"
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 justify-items-center sm:grid-cols-2 sm:gap-8">
-        <SearchField
+      <div className="mt-11 grid grid-cols-1 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
+        <PetChipInput
           label="Домашні тварини"
-          value={pets}
-          onChange={setPets}
+          items={pets}
+          onAdd={(name) =>
+            setPets((current) => {
+              const existing = current.find(
+                (pet) =>
+                  pet.name.toLowerCase() === name.toLowerCase(),
+              );
+
+              if (!existing) {
+                return [...current, { name, count: 1 }];
+              }
+
+              return current.map((pet) =>
+                pet === existing
+                  ? { ...pet, count: pet.count + 1 }
+                  : pet,
+              );
+            })
+          }
+          onRemove={(name) =>
+            setPets((current) =>
+              current.filter((pet) => pet.name !== name),
+            )
+          }
           placeholder="Шукати тварину"
         />
       </div>
@@ -570,7 +835,7 @@ export default function PlannerForm({
         hasError={Boolean(contextError)}
       />
 
-      <div className="mt-8 flex flex-col items-stretch gap-6 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+      <div className="mt-11 flex flex-col items-stretch gap-6 sm:flex-row sm:items-end sm:justify-between sm:gap-7">
         <label
           className={`flex max-w-[411px] items-start gap-2 ${
             context &&
@@ -618,13 +883,37 @@ export default function PlannerForm({
             isContextLoading ||
             sessionExpired
           }
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[264px]"
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-4 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[180px]"
         >
-          {isSubmitting
-            ? "Створюємо план..."
-            : isPlanning
-              ? "Формуємо план..."
-              : "Скласти меню та кошик"}
+          <span>
+            {isSubmitting
+              ? "Створюємо план..."
+              : isPlanning
+                ? "Формуємо план..."
+                : "Скласти меню та кошик"}
+          </span>
+
+          {!isSubmitting && !isPlanning && (
+            <span
+              aria-hidden="true"
+              className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-white"
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 20 20"
+                fill="none"
+              >
+                <path
+                  d="M4 10.5L8 14L16 5"
+                  stroke="currentColor"
+                  strokeWidth="2.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          )}
         </button>
       </div>
 
@@ -696,35 +985,6 @@ export default function PlannerForm({
         </div>
       )}
 
-      {isPlanning && runSnapshot && (
-        <div
-          aria-live="polite"
-          className="mt-5 flex items-center gap-3 rounded-lg border border-[#FDE4CA] bg-[#FFF8F1] px-4 py-3"
-        >
-          <div className="flex gap-1">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]" />
-
-            <span
-              className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]"
-              style={{
-                animationDelay: "150ms",
-              }}
-            />
-
-            <span
-              className="h-2 w-2 animate-pulse rounded-full bg-[#F89F46]"
-              style={{
-                animationDelay: "300ms",
-              }}
-            />
-          </div>
-
-          <span className="text-sm font-medium text-[#886432]">
-            {STAGE_LABELS[runSnapshot.stage]}
-          </span>
-        </div>
-      )}
-
       {runSnapshot?.status === "failed" && (
         <div
           role="alert"
@@ -742,15 +1002,6 @@ export default function PlannerForm({
         </div>
       )}
 
-      {runSnapshot?.status === "completed" && (
-        <div
-          aria-live="polite"
-          className="mt-5 flex items-center gap-2 text-sm font-medium text-green-700"
-        >
-          <CheckIcon />
-          План готовий.
-        </div>
-      )}
     </form>
   );
 }
@@ -777,8 +1028,8 @@ function PlannerNumberInput({
   required?: boolean;
 }) {
   return (
-    <div className="mx-auto w-full md:max-w-[334px]">
-      <h3 className="mb-4 text-lg font-semibold text-[#886432]">
+    <div className="w-full">
+      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
         {label}
 
         {required && (
@@ -787,7 +1038,7 @@ function PlannerNumberInput({
       </h3>
 
       <div
-        className={`flex h-[41px] items-center justify-between rounded border pl-5 pr-2 ${
+        className={`flex h-[38px] items-center justify-between rounded border pl-5 pr-2 ${
           error
             ? "border-red-400"
             : "border-black/20"
@@ -807,7 +1058,7 @@ function PlannerNumberInput({
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50 focus-visible:outline-none"
         />
 
-        <span className="ml-3 whitespace-nowrap text-sm text-black/50">
+        <span className="ml-2 whitespace-nowrap text-sm text-black/50">
           {suffix}
         </span>
       </div>
@@ -835,6 +1086,7 @@ function Counter({
   max,
   onDecrease,
   onIncrease,
+  disabledMinusStyle = "orange",
 }: {
   label: string;
   value: number;
@@ -842,25 +1094,34 @@ function Counter({
   max: number;
   onDecrease: () => void;
   onIncrease: () => void;
+  disabledMinusStyle?: "gray" | "orange";
 }) {
   return (
-    <div className="mx-auto w-full max-w-[180px]">
-      <h3 className="mb-4 text-lg font-semibold text-[#886432]">
+    <div className="w-full">
+      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
         {label}
       </h3>
 
-      <div className="flex h-9 items-center justify-between">
+      <div className="flex h-8 w-[104px] items-center justify-between">
         <button
           type="button"
           onClick={onDecrease}
           disabled={value <= min}
           aria-label={`Зменшити ${label.toLowerCase()}`}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-100"
+          style={{
+            backgroundColor:
+              value <= min
+                ? disabledMinusStyle === "gray"
+                  ? "#D0D5DD"
+                  : "#FFD9B2"
+                : "#F89F46",
+          }}
         >
           −
         </button>
 
-        <span className="text-2xl font-semibold text-[#886432]">
+        <span className="text-[18px] font-semibold text-[#886432]">
           {value}
         </span>
 
@@ -869,7 +1130,7 @@ function Counter({
           onClick={onIncrease}
           disabled={value >= max}
           aria-label={`Збільшити ${label.toLowerCase()}`}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#FFD9B2] disabled:text-white disabled:opacity-100"
         >
           +
         </button>
@@ -878,31 +1139,148 @@ function Counter({
   );
 }
 
-function SearchField({
+function ChipInput({
   label,
-  value,
-  onChange,
+  items,
+  onAdd,
+  onRemove,
   placeholder,
 }: {
   label: string;
-  value: string;
-  onChange: (value: string) => void;
+  items: string[];
+  onAdd: (item: string) => void;
+  onRemove: (item: string) => void;
   placeholder: string;
 }) {
+  const [draft, setDraft] = useState("");
+
+  function addDraft() {
+    const item = draft.trim();
+
+    if (!item) {
+      return;
+    }
+
+    onAdd(item);
+    setDraft("");
+  }
+
   return (
-    <div className="mx-auto w-full md:max-w-[320px]">
-      <h3 className="mb-4 text-lg font-semibold text-[#886432]">
+    <div className="w-full">
+      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
         {label}
       </h3>
 
-      <div className="flex h-11 items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-[14px] shadow-sm">
+      {items.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span
+              key={item}
+              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-3 py-1 text-sm text-[#344054]"
+            >
+              {item}
+              <button
+                type="button"
+                onClick={() => onRemove(item)}
+                aria-label={`Видалити ${item}`}
+                className="text-[#98A2B3] transition hover:text-[#667085] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex h-[38px] items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-[14px] shadow-sm focus-within:border-[#F89F46]">
         <SearchIcon />
 
         <input
-          value={value}
-          onChange={(event) =>
-            onChange(event.target.value)
-          }
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addDraft();
+            }
+          }}
+          placeholder={placeholder}
+          aria-label={label}
+          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085] focus-visible:outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PetChipInput({
+  label,
+  items,
+  onAdd,
+  onRemove,
+  placeholder,
+}: {
+  label: string;
+  items: { name: string; count: number }[];
+  onAdd: (name: string) => void;
+  onRemove: (name: string) => void;
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function addDraft() {
+    const item = draft.trim();
+
+    if (!item) {
+      return;
+    }
+
+    onAdd(item);
+    setDraft("");
+  }
+
+  return (
+    <div className="w-full">
+      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
+        {label}
+      </h3>
+
+      {items.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span
+              key={item.name}
+              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-3 py-1 text-sm text-[#344054]"
+            >
+              <span>{item.name}</span>
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F89F46] px-1 text-[10px] font-semibold text-white">
+                {item.count}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemove(item.name)}
+                aria-label={`Видалити ${item.name}`}
+                className="text-[#98A2B3] transition hover:text-[#667085] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex h-[38px] items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-[14px] shadow-sm focus-within:border-[#F89F46]">
+        <SearchIcon />
+
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addDraft();
+            }
+          }}
           placeholder={placeholder}
           aria-label={label}
           className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085] focus-visible:outline-none"

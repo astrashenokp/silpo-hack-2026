@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useState } from "react";
 import PlannerForm from "@/features/planner-input/PlannerForm";
 import type { RunSnapshot } from "@/lib/api/planner";
@@ -25,9 +26,7 @@ export default function Home() {
       {/* HEADER */}
       <header className="sticky top-0 z-30 flex h-16 items-center border-b border-[#E6E6E6] bg-white px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center text-2xl text-[#F89F46]">
-            △
-          </div>
+          <AgentLogo className="h-8 w-8 text-[#F89F46]" />
 
           <span className="text-[19px] font-medium">
             Агент
@@ -143,8 +142,8 @@ export default function Home() {
                 {/* AI MESSAGE */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
 
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-base text-white sm:h-10 sm:w-10 sm:text-lg">
-                    △
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-white sm:h-10 sm:w-10">
+                    <AgentLogo className="h-5 w-5 text-white" />
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -156,29 +155,29 @@ export default function Home() {
                         оптимізую кошик під бюджет. Оберіть параметри нижче:
                       </p>
 
-                      <div className="flex gap-1 text-[#999999] sm:ml-auto">
+                      <div className="flex items-center gap-1 text-[#9C9C9C] sm:ml-auto">
                         <button
                           type="button"
                           aria-label="Подобається"
-                          className="h-8 w-8 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                          className="flex h-8 w-8 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
                         >
-                          👍
+                          <ThumbUpIcon />
                         </button>
 
                         <button
                           type="button"
                           aria-label="Не подобається"
-                          className="h-8 w-8 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                          className="flex h-8 w-8 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
                         >
-                          👎
+                          <ThumbDownIcon />
                         </button>
 
                         <button
                           type="button"
                           aria-label="Копіювати"
-                          className="h-8 w-8 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                          className="flex h-8 w-8 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
                         >
-                          ▢
+                          <CopyIcon />
                         </button>
                       </div>
                     </div>
@@ -292,6 +291,121 @@ export default function Home() {
 /* SMALL COMPONENTS */
 /* ------------------------------------------------ */
 
+
+function AgentLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 40 40"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M8.2 29.6L16.2 16.1"
+        stroke="currentColor"
+        strokeWidth="5.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M19.1 7.4L30.8 27.5"
+        stroke="currentColor"
+        strokeWidth="6.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M18.2 31.3L31.9 29.7"
+        stroke="currentColor"
+        strokeWidth="6.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ThumbUpIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7.5 10.5V20H4.25C3.56 20 3 19.44 3 18.75v-7c0-.69.56-1.25 1.25-1.25H7.5Z"
+        fill="currentColor"
+      />
+      <path
+        d="M9 20V10.7l3.35-6.1c.3-.55.88-.89 1.51-.89.94 0 1.7.76 1.7 1.7v3.17h3.64c1.24 0 2.16 1.15 1.89 2.36l-1.57 7A2.62 2.62 0 0 1 16.96 20H9Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function ThumbDownIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <g transform="rotate(180 12 12)">
+        <path
+          d="M7.5 10.5V20H4.25C3.56 20 3 19.44 3 18.75v-7c0-.69.56-1.25 1.25-1.25H7.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M9 20V10.7l3.35-6.1c.3-.55.88-.89 1.51-.89.94 0 1.7.76 1.7 1.7v3.17h3.64c1.24 0 2.16 1.15 1.89 2.36l-1.57 7A2.62 2.62 0 0 1 16.96 20H9Z"
+          fill="currentColor"
+        />
+      </g>
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect
+        x="8"
+        y="6"
+        width="10"
+        height="13"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M6 16H5.5A1.5 1.5 0 0 1 4 14.5v-9A1.5 1.5 0 0 1 5.5 4h7A1.5 1.5 0 0 1 14 5.5V6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8 9v8M12 9v8M16 9v8M5 6h14M9 6V4h6v2M7 6l.75 14h8.5L17 6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 12h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 12h12M12 6v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function ChatIcon() {
   return (
     <svg
@@ -327,8 +441,10 @@ function BookmarkIcon() {
       aria-hidden="true"
     >
       <path
-        d="M7 4.5C7 3.67 7.67 3 8.5 3H15.5C16.33 3 17 3.67 17 4.5V21L12 17.8L7 21V4.5Z"
-        fill="currentColor"
+        d="M7.5 4.75C7.5 3.78 8.28 3 9.25 3H14.75C15.72 3 16.5 3.78 16.5 4.75V20L12 17.25L7.5 20V4.75Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -350,20 +466,20 @@ function MicIcon() {
         height="11"
         rx="3"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.6"
       />
 
       <path
         d="M6 11C6 14.3 8.7 17 12 17C15.3 17 18 14.3 18 11"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.6"
         strokeLinecap="round"
       />
 
       <path
         d="M12 17V21"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.6"
         strokeLinecap="round"
       />
     </svg>
@@ -394,8 +510,14 @@ function CartItem() {
   return (
     <div className="mb-5 flex gap-4">
 
-      <div className="flex h-[45px] w-[50px] shrink-0 items-center justify-center rounded bg-[#FFF5E4] text-xs">
-        🛒
+      <div className="flex h-[54px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded bg-white">
+        <Image
+          src="/butter-galychyna.png"
+          alt='Масло солодковершкове "Галичина" 82,5%'
+          width={64}
+          height={54}
+          className="h-full w-full object-contain"
+        />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -410,9 +532,9 @@ function CartItem() {
           <button
             type="button"
             aria-label="Видалити товар"
-            className="text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#F89F46] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
           >
-            ⌫
+            <TrashIcon />
           </button>
         </div>
 
@@ -443,19 +565,19 @@ function CartItem() {
             <button
               type="button"
               aria-label="Зменшити кількість"
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
             >
-              −
+              <MinusIcon />
             </button>
 
-            <span>1</span>
+            <span className="min-w-4 text-center text-base font-medium text-[#8B612E]">1</span>
 
             <button
               type="button"
               aria-label="Збільшити кількість"
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
             >
-              +
+              <PlusIcon />
             </button>
 
           </div>
