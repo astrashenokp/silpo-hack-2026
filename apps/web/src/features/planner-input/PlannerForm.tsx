@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { createPlan } from "@/lib/api/planner";
+import { useEffect, useState } from "react";
+import {
+  createPlan,
+  getPlan,
+  type RunSnapshot,
+} from "@/lib/api/planner";
 
 export default function PlannerForm() {
   const [budget, setBudget] = useState("");
@@ -18,11 +22,15 @@ export default function PlannerForm() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
   const [createdRunId, setCreatedRunId] = useState("");
+  const [runSnapshot, setRunSnapshot] =
+    useState<RunSnapshot | null>(null);
 
   async function handleSubmit() {
     setSubmitError("");
     setCreatedRunId("");
+    setRunSnapshot(null);
 
     const budgetNumber = Number(budget);
 
@@ -43,14 +51,6 @@ export default function PlannerForm() {
       return;
     }
 
-    /*
-      UI дозволяє вводити довільний текст.
-
-      Demo backend поки знає лише окремі технічні значення.
-      Відомі українські значення переводимо в API-коди.
-      Решту зберігаємо в notes, щоб введення користувача не губилось.
-    */
-
     const restrictionInput = restrictions.trim();
     const restrictionKey = restrictionInput.toLowerCase();
 
@@ -59,6 +59,14 @@ export default function PlannerForm() {
 
     const petInput = pets.trim();
     const petKey = petInput.toLowerCase();
+
+    /*
+      Demo backend зараз підтримує лише деякі
+      технічні значення.
+
+      Відомі українські варіанти перетворюємо
+      на значення API.
+    */
 
     const restrictionMap: Record<string, string> = {
       "без арахісу": "peanut-free",
@@ -111,6 +119,12 @@ export default function PlannerForm() {
         unsupportedPet = petInput;
       }
     }
+
+    /*
+      Довільні значення користувача не губимо.
+      Якщо demo backend не підтримує їх як preference /
+      restriction / pet, передаємо їх у notes.
+    */
 
     const notesParts: string[] = [];
 
@@ -165,6 +179,7 @@ export default function PlannerForm() {
 
       console.log("Created plan:", result);
 
+      setRunSnapshot(result);
       setCreatedRunId(result.runId);
     } catch (error) {
       console.error("Failed to create plan:", error);
@@ -178,6 +193,83 @@ export default function PlannerForm() {
       setIsSubmitting(false);
     }
   }
+
+  /*
+    POLLING
+
+    Після POST /api/plans backend повертає runId.
+
+    Потім frontend приблизно раз на 2 секунди
+    робить GET /api/plans/{runId}, доки статус
+    не стане completed або failed.
+  */
+
+  useEffect(() => {
+    if (!createdRunId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    let timeoutId:
+      | ReturnType<typeof setTimeout>
+      | undefined;
+
+    async function pollPlan() {
+      try {
+        const snapshot = await getPlan(createdRunId);
+
+        if (cancelled) {
+          return;
+        }
+
+        setRunSnapshot(snapshot);
+
+        console.log(
+          "Plan status:",
+          snapshot.status,
+          snapshot.stage,
+        );
+
+        if (
+          snapshot.status === "completed" ||
+          snapshot.status === "failed"
+        ) {
+          return;
+        }
+
+        timeoutId = setTimeout(
+          pollPlan,
+          2000,
+        );
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "Failed to get plan:",
+          error,
+        );
+
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "Не вдалося отримати стан плану.",
+        );
+      }
+    }
+
+    pollPlan();
+
+    return () => {
+      cancelled = true;
+
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [createdRunId]);
 
   return (
     <div className="mt-8 max-w-[794px]">
@@ -262,7 +354,7 @@ export default function PlannerForm() {
         />
       </div>
 
-      {/* HISTORY + SUBMIT */}
+      {/* CHECKBOX + BUTTON */}
       <div className="mt-8 flex items-center justify-between gap-8">
         <label className="flex max-w-[411px] cursor-pointer items-start gap-2">
           <input
@@ -288,19 +380,58 @@ export default function PlannerForm() {
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={isSubmitting}
+          disabled={
+            isSubmitting ||
+            runSnapshot?.status === "queued" ||
+            runSnapshot?.status === "running"
+          }
           className="flex h-12 w-[264px] items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting
             ? "Створюємо план..."
-            : "Скласти меню та кошик"}
+            : runSnapshot?.status === "queued" ||
+                runSnapshot?.status === "running"
+              ? "Формуємо план..."
+              : "Скласти меню та кошик"}
         </button>
       </div>
 
-      {/* RESULT / ERROR */}
+      {/* ERROR */}
       {submitError && (
         <p className="mt-4 text-sm text-red-600">
           {submitError}
+        </p>
+      )}
+
+      {/* DEMO PROGRESS */}
+      {runSnapshot &&
+        runSnapshot.status !== "completed" &&
+        runSnapshot.status !== "failed" && (
+          <div className="mt-4 text-sm text-[#667085]">
+            <p>
+              Статус: {runSnapshot.status}
+            </p>
+
+            <p>
+              Етап: {runSnapshot.stage}
+            </p>
+          </div>
+        )}
+
+      {/* FAILED */}
+      {runSnapshot?.status === "failed" && (
+        <p className="mt-4 text-sm text-red-600">
+          Не вдалося сформувати план.
+          {runSnapshot.error?.message
+            ? ` ${runSnapshot.error.message}`
+            : ""}
+        </p>
+      )}
+
+      {/* COMPLETED */}
+      {runSnapshot?.status === "completed" && (
+        <p className="mt-4 text-sm font-medium text-green-700">
+          План готовий.
         </p>
       )}
     </div>

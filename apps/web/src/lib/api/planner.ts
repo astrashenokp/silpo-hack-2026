@@ -80,3 +80,22 @@ export async function createPlan(
 
   return response.json();
 }
+
+export async function getPlan(
+  runId: string,
+): Promise<RunSnapshot> {
+  const response = await fetch(`/api/plans/${runId}`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+
+    throw new Error(
+      `Failed to get plan: ${response.status} ${body}`,
+    );
+  }
+
+  return response.json();
+}
