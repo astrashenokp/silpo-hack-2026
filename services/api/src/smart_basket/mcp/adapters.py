@@ -122,7 +122,7 @@ def normalize_purchase_history(
     return PurchaseHistoryResult(purchases=purchases, warnings=warnings)
 
 def with_retries(max_attempts=3, delay=1.0):
-    """Повторює запит у разі тимчасової помилки мережі."""
+    #Повторює запит у разі тимчасової мережевої помилки чи Rate Limit.
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -130,6 +130,11 @@ def with_retries(max_attempts=3, delay=1.0):
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
+                    error_msg = str(e).lower()
+                    #Критичні помилки авторизації не ретраїмо — відразу падаємо
+                    if any(code in error_msg for code in ["401", "403", "unauthorized"]):
+                        raise
+                        
                     if attempt == max_attempts - 1:
                         logger.warning(f"Остаточна помилка у {func.__name__} після {max_attempts} спроб: {e}")
                         raise McpReadError(f"MCP read {func.__name__} failed after {max_attempts} attempts.") from e
@@ -137,31 +142,49 @@ def with_retries(max_attempts=3, delay=1.0):
         return wrapper
     return decorator
 
+
+def _handle_adapter_exception(e: Exception, default_return: Any, context_name: str) -> Any:
+    #Розділяє критичні помилки провайдера (які мають підняти виняток) від штатної відсутності даних або порожніх відповідей.
+    error_msg = str(e).lower()
+    
+    # Критичні помилки: відсутність доступу, ліміти, недоступність сервісу
+    critical_indicators = ["401", "403", "429", "503", "unauthorized", "rate limit", "unavailable"]
+    if any(indicator in error_msg for indicator in critical_indicators):
+        logger.error(f"Критична помилка провайдера при отриманні ({context_name}): {e}")
+        raise e
+        
+    # Штатна ситуація / звичайна бізнес-помилка — повертаємо безпечний дефолт
+    logger.warning(f"Попередження при отриманні ({context_name}): {e}. Повертаємо порожню структуру.")
+    return default_return
+
+
+@with_retries(max_attempts=3)
 async def get_user_profile(session) -> Dict[str, Any]:
-    """Витягує дані профілю (ім'я, телефон, дата народження)."""
+    #Витягує дані профілю (ім'я, телефон, дата народження).
     try:
         result = await session.call_tool("silpo_get_my_profile", arguments={})
         if result.content and len(result.content) > 0:
             return json.loads(result.content[0].text)
         return {}
     except Exception as e:
-        logger.warning(f"Помилка отримання профілю: {e}")
-        return {}  # Якщо помилка - просто віддаємо пустий словник
+        return _handle_adapter_exception(e, {}, "профілю")
 
+
+@with_retries(max_attempts=3)
 async def get_family_info(session) -> Dict[str, Any]:
-    """Витягує дані про сім'ю та тварин (для підбору товарів)."""
+    #Витягує дані про сім'ю та тварин (для підбору товарів).
     try:
         result = await session.call_tool("silpo_get_my_family", arguments={})
         if result.content and len(result.content) > 0:
             return json.loads(result.content[0].text)
         return {}
     except Exception as e:
-        logger.warning(f"Помилка отримання сім'ї: {e}")
-        return {}
+        return _handle_adapter_exception(e, {}, "даних сім'ї")
+
 
 @with_retries(max_attempts=3)
 async def get_purchase_history(session) -> List[Dict[str, Any]]:
-    """Витягує онлайн та офлайн чеки."""
+    #Витягує онлайн та офлайн чеки (нормалізований список).
     history = []
     for tool_name, channel in (
         ("silpo_get_my_online_orders", "online"),
@@ -189,8 +212,9 @@ async def get_normalized_purchase_history(
     raw_orders = await get_purchase_history(session)
     return normalize_purchase_history(raw_orders, product_metadata=product_metadata)
 
+@with_retries(max_attempts=3)
 async def search_products(session, query: str, branch_id: str) -> Dict[str, Any]:
-    """Шукає товари за запитом у конкретному магазині."""
+    #Шукає товари за запитом у конкретному магазині за branchId.
     try:
         args = {"searchQuery": query, "branchId": branch_id}
         result = await session.call_tool("silpo_get_products", arguments=args)
@@ -198,22 +222,24 @@ async def search_products(session, query: str, branch_id: str) -> Dict[str, Any]
             return json.loads(result.content[0].text)
         return {}
     except Exception as e:
-        logger.warning(f"Помилка пошуку товарів: {e}")
-        return {}
+        return _handle_adapter_exception(e, {}, f"пошуку товарів (query: {query})")
 
+
+@with_retries(max_attempts=3)
 async def get_food_restrictions(session) -> List[str]:
-    """Витягує дієтичні обмеження гостя."""
+    #Витягує дієтичні обмеження гостя.
     try:
         result = await session.call_tool("silpo_get_my_food_restrictions", arguments={})
         if result.content and len(result.content) > 0:
             return json.loads(result.content[0].text)
         return []
     except Exception as e:
-        logger.warning(f"Помилка отримання обмежень: {e}")
-        return []
+        return _handle_adapter_exception(e, [], "дієтичних обмежень")
 
+
+@with_retries(max_attempts=3)
 async def get_product_details(session, product_id: str, branch_id: str) -> Dict[str, Any]:
-    """Отримує повну картку товару (склад, харчова цінність)."""
+    #Отримує повну картку товару (склад, харчова цінність, розмір упаковки).
     try:
         args = {"productId": product_id, "branchId": branch_id}
         result = await session.call_tool("silpo_get_product_details", arguments=args)
@@ -221,35 +247,37 @@ async def get_product_details(session, product_id: str, branch_id: str) -> Dict[
             return json.loads(result.content[0].text)
         return {}
     except Exception as e:
-        logger.warning(f"Помилка отримання деталей товару {product_id}: {e}")
-        return {}
+        return _handle_adapter_exception(e, {}, f"деталей товару {product_id}")
 
+
+@with_retries(max_attempts=3)
 async def get_promotions(session, branch_id: str) -> List[Dict[str, Any]]:
-    """Отримує активні акції в магазині."""
+    #Отримує активні акції в магазині за branchId.
     try:
         result = await session.call_tool("silpo_get_promotions", arguments={"branchId": branch_id})
         if result.content and len(result.content) > 0:
             return json.loads(result.content[0].text)
         return []
     except Exception as e:
-        logger.warning(f"Помилка отримання акцій: {e}")
-        return []
+        return _handle_adapter_exception(e, [], "акцій магазину")
 
+
+@with_retries(max_attempts=3)
 async def get_favorites(session) -> List[Dict[str, Any]]:
-    """Список збережених улюблених товарів гостя."""
+    #Список збережених улюблених товарів гостя.
     try:
         result = await session.call_tool("silpo_get_my_favorites", arguments={})
         if result.content and len(result.content) > 0:
             return json.loads(result.content[0].text)
         return []
     except Exception as e:
-        logger.warning(f"Помилка отримання улюблених товарів: {e}")
-        return []
+        return _handle_adapter_exception(e, [], "улюблених товарів")
 
+
+@with_retries(max_attempts=3)
 async def get_current_cart(session) -> Dict[str, Any]:
-    """Отримує поточний кошик гостя."""
+    #Отримує поточний кошик гостя (включно зі створенням/отриманням shoppingCartId).
     try:
-        # Спочатку дізнаємося ID кошика
         cart_info = await session.call_tool("silpo_get_my_shopping_cart", arguments={})
         if not cart_info.content:
             return {}
@@ -258,7 +286,6 @@ async def get_current_cart(session) -> Dict[str, Any]:
         if not cart_data.get("exists") or not cart_data.get("shoppingCartId"):
             return {}
             
-        # Якщо кошик є, тягнемо його деталі
         cart_id = cart_data["shoppingCartId"]
         details = await session.call_tool("silpo_get_shopping_cart_by_id", arguments={"shoppingCartId": cart_id})
         
@@ -266,5 +293,4 @@ async def get_current_cart(session) -> Dict[str, Any]:
             return json.loads(details.content[0].text)
         return {}
     except Exception as e:
-        logger.warning(f"Помилка отримання кошика: {e}")
-        return {}
+        return _handle_adapter_exception(e, {}, "поточного кошика")
