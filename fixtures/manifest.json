@@ -3,6 +3,10 @@
     "model": "UserContext",
     "many": false
   },
+  "purchase-history.json": {
+    "model": "Purchase",
+    "many": true
+  },
   "planning-request.json": {
     "model": "PlanningRequest",
     "many": false

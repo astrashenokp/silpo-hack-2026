@@ -24,7 +24,16 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
     assert plan["savingsMinor"] is None
     assert plan["effectiveRequest"] == planning_request
     assert plan["recurringItems"] == []
-    assert all(i["quantity"] == 600 for i in plan["ingredients"])
+    ingredient_quantities = {
+        item["id"]: item["quantity"]
+        for item in plan["ingredients"]
+    }
+
+    assert ingredient_quantities == {
+        "oats": 600,
+        "rice": 960,
+        "lentils": 840,
+    }
     assert plan["mealPlan"][0]["ingredientAmounts"][0]["quantity"] == 150
     assert plan["canConfirmCart"] is True
     assert client.get("/api/health").headers["X-Data-Mode"] == "demo"

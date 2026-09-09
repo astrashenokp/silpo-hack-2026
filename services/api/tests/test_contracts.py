@@ -16,7 +16,7 @@ def test_all_fixtures_validate_against_executable_models():
         "validation-error.json", "cart-preview.json", "cart-success.json",
         "cart-partial.json", "cart-failed.json", "fatsecret-preview.json",
         "fatsecret-success.json", "fatsecret-partial.json", "fatsecret-failed.json",
-        "fatsecret-unmatched.json",
+        "fatsecret-unmatched.json", "purchase-history.json",
     }
     for fixture, contract in manifest.items():
         data = json.loads((ROOT / "fixtures" / fixture).read_text(encoding="utf-8"))

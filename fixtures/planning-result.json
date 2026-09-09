@@ -23,12 +23,12 @@
   },
   "mealPlan": [
     {
-      "id": "demo-day-1-breakfast",
+      "id": "mock-day-1-breakfast",
       "day": 1,
       "slot": "breakfast",
-      "title": "Demo oats bowl",
+      "title": "Oatmeal bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 400.0,
       "ingredientIds": [
         "oats"
       ],
@@ -45,12 +45,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-1-lunch",
+      "id": "mock-day-1-lunch",
       "day": 1,
       "slot": "lunch",
-      "title": "Demo rice bowl",
+      "title": "Rice vegetable bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 550.0,
       "ingredientIds": [
         "rice"
       ],
@@ -58,7 +58,7 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 150.0,
+          "quantity": 240.0,
           "unit": "g"
         }
       ],
@@ -67,12 +67,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-1-dinner",
+      "id": "mock-day-1-dinner",
       "day": 1,
       "slot": "dinner",
-      "title": "Demo lentils bowl",
+      "title": "Lentil bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 500.0,
       "ingredientIds": [
         "lentils"
       ],
@@ -80,7 +80,7 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 150.0,
+          "quantity": 210.0,
           "unit": "g"
         }
       ],
@@ -89,12 +89,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-2-breakfast",
+      "id": "mock-day-2-breakfast",
       "day": 2,
       "slot": "breakfast",
-      "title": "Demo oats bowl",
+      "title": "Oatmeal bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 400.0,
       "ingredientIds": [
         "oats"
       ],
@@ -111,12 +111,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-2-lunch",
+      "id": "mock-day-2-lunch",
       "day": 2,
       "slot": "lunch",
-      "title": "Demo rice bowl",
+      "title": "Rice vegetable bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 550.0,
       "ingredientIds": [
         "rice"
       ],
@@ -124,7 +124,7 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 150.0,
+          "quantity": 240.0,
           "unit": "g"
         }
       ],
@@ -133,12 +133,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-2-dinner",
+      "id": "mock-day-2-dinner",
       "day": 2,
       "slot": "dinner",
-      "title": "Demo lentils bowl",
+      "title": "Lentil bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 500.0,
       "ingredientIds": [
         "lentils"
       ],
@@ -146,7 +146,7 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 150.0,
+          "quantity": 210.0,
           "unit": "g"
         }
       ],
@@ -155,12 +155,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-3-breakfast",
+      "id": "mock-day-3-breakfast",
       "day": 3,
       "slot": "breakfast",
-      "title": "Demo oats bowl",
+      "title": "Oatmeal bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 400.0,
       "ingredientIds": [
         "oats"
       ],
@@ -177,12 +177,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-3-lunch",
+      "id": "mock-day-3-lunch",
       "day": 3,
       "slot": "lunch",
-      "title": "Demo rice bowl",
+      "title": "Rice vegetable bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 550.0,
       "ingredientIds": [
         "rice"
       ],
@@ -190,7 +190,7 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 150.0,
+          "quantity": 240.0,
           "unit": "g"
         }
       ],
@@ -199,12 +199,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-3-dinner",
+      "id": "mock-day-3-dinner",
       "day": 3,
       "slot": "dinner",
-      "title": "Demo lentils bowl",
+      "title": "Lentil bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 500.0,
       "ingredientIds": [
         "lentils"
       ],
@@ -212,7 +212,7 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 150.0,
+          "quantity": 210.0,
           "unit": "g"
         }
       ],
@@ -221,12 +221,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-4-breakfast",
+      "id": "mock-day-4-breakfast",
       "day": 4,
       "slot": "breakfast",
-      "title": "Demo oats bowl",
+      "title": "Oatmeal bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 400.0,
       "ingredientIds": [
         "oats"
       ],
@@ -243,12 +243,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-4-lunch",
+      "id": "mock-day-4-lunch",
       "day": 4,
       "slot": "lunch",
-      "title": "Demo rice bowl",
+      "title": "Rice vegetable bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 550.0,
       "ingredientIds": [
         "rice"
       ],
@@ -256,7 +256,7 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 150.0,
+          "quantity": 240.0,
           "unit": "g"
         }
       ],
@@ -265,12 +265,12 @@
       "attribution": null
     },
     {
-      "id": "demo-day-4-dinner",
+      "id": "mock-day-4-dinner",
       "day": 4,
       "slot": "dinner",
-      "title": "Demo lentils bowl",
+      "title": "Lentil bowl",
       "servings": 3,
-      "kcalPerServing": null,
+      "kcalPerServing": 500.0,
       "ingredientIds": [
         "lentils"
       ],
@@ -278,7 +278,7 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 150.0,
+          "quantity": 210.0,
           "unit": "g"
         }
       ],
@@ -297,10 +297,10 @@
       "quantity": 600.0,
       "unit": "g",
       "mealIds": [
-        "demo-day-1-breakfast",
-        "demo-day-2-breakfast",
-        "demo-day-3-breakfast",
-        "demo-day-4-breakfast"
+        "mock-day-1-breakfast",
+        "mock-day-2-breakfast",
+        "mock-day-3-breakfast",
+        "mock-day-4-breakfast"
       ],
       "restrictions": []
     },
@@ -310,13 +310,13 @@
       "searchTerms": [
         "rice"
       ],
-      "quantity": 600.0,
+      "quantity": 960.0,
       "unit": "g",
       "mealIds": [
-        "demo-day-1-lunch",
-        "demo-day-2-lunch",
-        "demo-day-3-lunch",
-        "demo-day-4-lunch"
+        "mock-day-1-lunch",
+        "mock-day-2-lunch",
+        "mock-day-3-lunch",
+        "mock-day-4-lunch"
       ],
       "restrictions": []
     },
@@ -326,13 +326,13 @@
       "searchTerms": [
         "lentils"
       ],
-      "quantity": 600.0,
+      "quantity": 840.0,
       "unit": "g",
       "mealIds": [
-        "demo-day-1-dinner",
-        "demo-day-2-dinner",
-        "demo-day-3-dinner",
-        "demo-day-4-dinner"
+        "mock-day-1-dinner",
+        "mock-day-2-dinner",
+        "mock-day-3-dinner",
+        "mock-day-4-dinner"
       ],
       "restrictions": []
     }
@@ -351,7 +351,7 @@
       "unitPriceMinor": 6000,
       "lineTotalMinor": 12000,
       "source": "synthetic",
-      "reason": "Demo first compatible product; demand combined before package rounding.",
+      "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
       "restrictionCheck": "pass"
     },
     {
@@ -366,7 +366,7 @@
       "unitPriceMinor": 8000,
       "lineTotalMinor": 8000,
       "source": "synthetic",
-      "reason": "Demo first compatible product; demand combined before package rounding.",
+      "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
       "restrictionCheck": "pass"
     },
     {
@@ -381,7 +381,7 @@
       "unitPriceMinor": 7000,
       "lineTotalMinor": 14000,
       "source": "synthetic",
-      "reason": "Demo first compatible product; demand combined before package rounding.",
+      "reason": "Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
       "restrictionCheck": "pass"
     }
   ],
@@ -395,9 +395,7 @@
   "warnings": [
     "DEMO: synthetic data; no provider account, cart or Saved Meal is changed.",
     "Purchase history is empty; coverage unavailable.",
-    "Synthetic menu for UI development; not a nutritionally complete meal plan.",
-    "Calorie targeting, pet needs and free-text notes are not implemented by the mock planner.",
-    "Recurring suggestions and budget optimization await Vika's module."
+    "Meal plan uses mock data. Sofiia/Edamam is not connected yet."
   ],
   "canConfirmCart": true
 }

@@ -69,6 +69,18 @@ class UserContext(Model):
     warnings: list[str]
 
 
+class Purchase(Model):
+    receipt_id: str
+    purchased_at: str
+    channel: Literal["online", "offline"]
+    product_id: str
+    name: str
+    category: str
+    quantity: PositiveNumber
+    unit: str
+    unit_price_minor: Money | None = None
+
+
 class IngredientRequirement(Model):
     id: str
     name: str
