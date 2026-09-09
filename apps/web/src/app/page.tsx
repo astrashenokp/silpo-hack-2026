@@ -1,20 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import PlannerForm from "@/features/planner-input/PlannerForm";
 
 export default function Home() {
-  const [budget, setBudget] = useState("");
-  const [calories, setCalories] = useState("");
-
-  const [people, setPeople] = useState(1);
-  const [days, setDays] = useState(1);
-
-  const [restrictions, setRestrictions] = useState("");
-  const [preferences, setPreferences] = useState("");
-  const [pets, setPets] = useState("");
-
-  const [useHistory, setUseHistory] = useState(false);
-
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-black">
 
@@ -46,26 +34,26 @@ export default function Home() {
             <div className="flex w-[224px] flex-col">
 
               <button className="flex h-10 items-center gap-2 rounded-lg bg-[rgba(248,159,70,0.2)] px-2 text-left text-sm font-medium text-[#886432]">
-                <span>💬</span>
+                <ChatIcon />
                 <span className="truncate">Привіт</span>
               </button>
 
               <button className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm">
-                <span>💬</span>
+                <ChatIcon />
                 <span className="truncate">
                   Раціон на місяць на сім&apos;ю...
                 </span>
               </button>
 
               <button className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm">
-                <span>💬</span>
+                <ChatIcon />
                 <span className="truncate">
                   Планувальник дієти на...
                 </span>
               </button>
 
               <button className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm">
-                <span>💬</span>
+                <ChatIcon />
                 <span className="truncate">
                   Влаштування вечірки...
                 </span>
@@ -143,126 +131,7 @@ export default function Home() {
                       </div>
 
                     </div>
-
-                    {/* PLANNER FORM */}
-                    <div className="mt-8 max-w-[794px]">
-
-                      {/* BUDGET + CALORIES */}
-                      <div className="grid grid-cols-2 gap-[98px]">
-
-                        <PlannerNumberInput
-                          label="Бюджет"
-                          value={budget}
-                          setValue={setBudget}
-                          placeholder="Не вказано"
-                          suffix="UAH"
-                          helper="Вкажіть максимальну суму для покупок"
-                        />
-
-                        <PlannerNumberInput
-                          label="Калорії"
-                          value={calories}
-                          setValue={setCalories}
-                          placeholder="Не вказано"
-                          suffix="ккал/особа/день"
-                          helper="Бажана кількість калорій для 1 людини на день"
-                        />
-
-                      </div>
-
-                      {/* PEOPLE + DAYS */}
-                      <div className="mt-8 flex gap-[274px]">
-
-                        <Counter
-                          label="Кількість людей"
-                          value={people}
-                          onDecrease={() =>
-                            setPeople((value) => Math.max(1, value - 1))
-                          }
-                          onIncrease={() =>
-                            setPeople((value) => Math.min(6, value + 1))
-                          }
-                        />
-
-                        <Counter
-                          label="Період часу (дні)"
-                          value={days}
-                          onDecrease={() =>
-                            setDays((value) => Math.max(1, value - 1))
-                          }
-                          onIncrease={() =>
-                            setDays((value) => Math.min(7, value + 1))
-                          }
-                        />
-
-                      </div>
-
-                      {/* RESTRICTIONS + PREFERENCES */}
-                      <div className="mt-8 grid grid-cols-2 gap-[113px]">
-
-                        <SearchField
-                          label="Алергени/Заборони"
-                          value={restrictions}
-                          onChange={setRestrictions}
-                          placeholder="Введіть назву продукту"
-                        />
-
-                        <SearchField
-                          label="Вподобання"
-                          value={preferences}
-                          onChange={setPreferences}
-                          placeholder="Введіть назву продукту"
-                        />
-
-                      </div>
-
-                      {/* PETS */}
-                      <div className="mt-8">
-                        <SearchField
-                          label="Домашні тварини"
-                          value={pets}
-                          onChange={setPets}
-                          placeholder="Шукати тварину"
-                        />
-                      </div>
-
-                      {/* CHECKBOX + SUBMIT */}
-                      <div className="mt-8 flex items-center justify-between gap-8">
-
-                        <label className="flex max-w-[411px] cursor-pointer items-start gap-2">
-
-                          <input
-                            type="checkbox"
-                            checked={useHistory}
-                            onChange={(event) =>
-                              setUseHistory(event.target.checked)
-                            }
-                            className="mt-1 h-4 w-4 accent-[#F89F46]"
-                          />
-
-                          <span>
-                            <span className="block text-sm font-medium text-[#344054]">
-                              Аналізувати історію покупок для пропозицій рестоку
-                            </span>
-
-                            <span className="block text-sm text-[#667085]">
-                              Ми пропонуємо вам схожі товари до минулих придбань
-                            </span>
-                          </span>
-
-                        </label>
-
-                        <button
-                          type="button"
-                          className="flex h-12 w-[264px] items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95"
-                        >
-                          Скласти меню та кошик
-                          <span>✓</span>
-                        </button>
-
-                      </div>
-
-                    </div>
+                  <PlannerForm />
 
                   </div>
 
@@ -289,7 +158,7 @@ export default function Home() {
                 </button>
 
                 <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white">
-                  ↑
+                  <ArrowUpIcon />
                 </button>
 
               </div>
@@ -389,137 +258,6 @@ export default function Home() {
 /* ------------------------------------------------ */
 
 
-function PlannerNumberInput({
-  label,
-  value,
-  setValue,
-  placeholder,
-  suffix,
-  helper,
-}: {
-  label: string;
-  value: string;
-  setValue: (value: string) => void;
-  placeholder: string;
-  suffix: string;
-  helper: string;
-}) {
-  return (
-    <div className="w-[334px]">
-
-      <h3 className="mb-4 text-lg font-semibold text-[#886432]">
-        {label}
-      </h3>
-
-      <div className="flex h-[41px] items-center justify-between rounded border border-black/20 px-5">
-
-        <input
-          type="number"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder={placeholder}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50"
-        />
-
-        <span className="ml-3 whitespace-nowrap text-sm text-black/50">
-          {suffix}
-        </span>
-
-      </div>
-
-      <p className="pt-2 text-xs text-black/50">
-        {helper}
-      </p>
-
-    </div>
-  );
-}
-
-
-function Counter({
-  label,
-  value,
-  onDecrease,
-  onIncrease,
-}: {
-  label: string;
-  value: number;
-  onDecrease: () => void;
-  onIncrease: () => void;
-}) {
-  return (
-    <div className="w-[159px]">
-
-      <h3 className="mb-4 text-lg font-semibold text-[#886432]">
-        {label}
-      </h3>
-
-      <div className="flex h-9 items-center justify-between">
-
-        <button
-          type="button"
-          onClick={onDecrease}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white"
-        >
-          −
-        </button>
-
-        <span className="text-2xl font-semibold text-[#886432]">
-          {value}
-        </span>
-
-        <button
-          type="button"
-          onClick={onIncrease}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white"
-        >
-          +
-        </button>
-
-      </div>
-
-    </div>
-  );
-}
-
-
-function SearchField({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <div className="w-[320px]">
-
-      <h3 className="mb-4 text-lg font-semibold text-[#886432]">
-        {label}
-      </h3>
-
-      <div className="flex h-11 items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-[14px] shadow-sm">
-
-        <span className="text-[#667085]">
-          ⌕
-        </span>
-
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085]"
-        />
-
-      </div>
-
-    </div>
-  );
-}
-
 function BookmarkIcon() {
   return (
     <svg
@@ -586,6 +324,32 @@ function ArrowUpIcon() {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      {/* задня бульбашка */}
+      <path
+        d="M4 4.5H14.5C15.88 4.5 17 5.62 17 7V12C17 13.38 15.88 14.5 14.5 14.5H9L5.5 17V14.5H4C2.62 14.5 1.5 13.38 1.5 12V7C1.5 5.62 2.62 4.5 4 4.5Z"
+        fill="currentColor"
+      />
+
+      {/* передня бульбашка з білою окантовкою */}
+      <path
+        d="M9.5 9H20C21.38 9 22.5 10.12 22.5 11.5V16.5C22.5 17.88 21.38 19 20 19H18.5V21.5L15 19H9.5C8.12 19 7 17.88 7 16.5V11.5C7 10.12 8.12 9 9.5 9Z"
+        fill="currentColor"
+        stroke="white"
+        strokeWidth="2"
       />
     </svg>
   );
