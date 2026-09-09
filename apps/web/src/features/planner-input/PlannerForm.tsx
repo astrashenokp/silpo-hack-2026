@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ContextSummary from "@/features/planner-input/ContextSummary";
 import {
   createPlan,
   getContext,
@@ -555,6 +556,13 @@ export default function PlannerForm({
           placeholder="Шукати тварину"
         />
       </div>
+
+      <ContextSummary
+        context={context}
+        isLoading={isContextLoading}
+        sessionExpired={sessionExpired}
+        hasError={Boolean(contextError)}
+      />
 
       <div className="mt-8 flex items-center justify-between gap-8">
         <label
