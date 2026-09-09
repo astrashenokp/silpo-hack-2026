@@ -6,7 +6,7 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 |---|---|---|---|---|
 | Katia | Not reported | — | Draft Figma 6th, final 7th | — |
 | Ksiusha | Not reported | — | Input flow on mocks 7th | — |
-| Alina | Not reported | — | Result flow on mocks 7th | — |
+| Alina | In progress; September 9 | [Handoff](handoffs/alina.md), branch `codex/alina-planner-results` (not merged yet) | Results/progress/cart UI verified against demo backend; PR to `main` next | — |
 | Arina | Not reported | — | MCP/OAuth access check 6th | — |
 | Rina | Ready to connect on mocks; September 7 | [Handoff](handoffs/rina.md), local implementation | Frontend/module connection check next; live integration September 8–9 | Live adapters/auth from Arina; planner from Uliana; meals from Sofiia; optimization/recurring input from Vika. Mock work complete for first connection. |
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
