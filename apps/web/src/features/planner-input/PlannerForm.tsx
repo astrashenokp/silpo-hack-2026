@@ -462,8 +462,14 @@ export default function PlannerForm({
     runSnapshot?.status === "running";
 
   return (
-    <div className="mt-8 max-w-[794px]">
-      <div className="grid grid-cols-2 gap-[98px]">
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void handleSubmit();
+      }}
+      className="mx-auto mt-8 w-full max-w-[720px]"
+    >
+      <div className="grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 sm:gap-8">
         <PlannerNumberInput
           label="Бюджет"
           value={budget}
@@ -496,7 +502,7 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-8 flex gap-[274px]">
+      <div className="mt-8 grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 sm:gap-8">
         <Counter
           label="Кількість людей"
           value={people}
@@ -532,7 +538,7 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-[113px]">
+      <div className="mt-8 grid grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 sm:gap-8">
         <SearchField
           label="Алергени/Заборони"
           value={restrictions}
@@ -548,7 +554,7 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 grid grid-cols-1 justify-items-center sm:grid-cols-2 sm:gap-8">
         <SearchField
           label="Домашні тварини"
           value={pets}
@@ -564,7 +570,7 @@ export default function PlannerForm({
         hasError={Boolean(contextError)}
       />
 
-      <div className="mt-8 flex items-center justify-between gap-8">
+      <div className="mt-8 flex flex-col items-stretch gap-6 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
         <label
           className={`flex max-w-[411px] items-start gap-2 ${
             context &&
@@ -580,7 +586,7 @@ export default function PlannerForm({
             onChange={(event) =>
               setUseHistory(event.target.checked)
             }
-            className="mt-1 h-4 w-4 accent-[#F89F46] disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-1 h-4 w-4 accent-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
           />
 
           <span>
@@ -605,15 +611,14 @@ export default function PlannerForm({
         </label>
 
         <button
-          type="button"
-          onClick={handleSubmit}
+          type="submit"
           disabled={
             isSubmitting ||
             isPlanning ||
             isContextLoading ||
             sessionExpired
           }
-          className="flex h-12 w-[264px] items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-5 text-base font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[264px]"
         >
           {isSubmitting
             ? "Створюємо план..."
@@ -641,7 +646,7 @@ export default function PlannerForm({
             type="button"
             onClick={loadContext}
             disabled={isContextLoading}
-            className="mt-3 rounded-lg bg-[#F89F46] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 rounded-lg bg-[#F89F46] px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isContextLoading
               ? "Відновлюємо..."
@@ -667,7 +672,7 @@ export default function PlannerForm({
             type="button"
             onClick={loadContext}
             disabled={isContextLoading}
-            className="mt-3 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-60"
+            className="mt-3 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 disabled:opacity-60"
           >
             {isContextLoading
               ? "Завантаження..."
@@ -746,7 +751,7 @@ export default function PlannerForm({
           План готовий.
         </div>
       )}
-    </div>
+    </form>
   );
 }
 
@@ -772,7 +777,7 @@ function PlannerNumberInput({
   required?: boolean;
 }) {
   return (
-    <div className="w-[334px]">
+    <div className="mx-auto w-full md:max-w-[334px]">
       <h3 className="mb-4 text-lg font-semibold text-[#886432]">
         {label}
 
@@ -782,7 +787,7 @@ function PlannerNumberInput({
       </h3>
 
       <div
-        className={`flex h-[41px] items-center justify-between rounded border px-5 ${
+        className={`flex h-[41px] items-center justify-between rounded border pl-5 pr-2 ${
           error
             ? "border-red-400"
             : "border-black/20"
@@ -799,7 +804,7 @@ function PlannerNumberInput({
           placeholder={placeholder}
           aria-label={label}
           aria-invalid={Boolean(error)}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50 focus-visible:outline-none"
         />
 
         <span className="ml-3 whitespace-nowrap text-sm text-black/50">
@@ -839,7 +844,7 @@ function Counter({
   onIncrease: () => void;
 }) {
   return (
-    <div className="w-[159px]">
+    <div className="mx-auto w-full max-w-[180px]">
       <h3 className="mb-4 text-lg font-semibold text-[#886432]">
         {label}
       </h3>
@@ -850,7 +855,7 @@ function Counter({
           onClick={onDecrease}
           disabled={value <= min}
           aria-label={`Зменшити ${label.toLowerCase()}`}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
         >
           −
         </button>
@@ -864,7 +869,7 @@ function Counter({
           onClick={onIncrease}
           disabled={value >= max}
           aria-label={`Збільшити ${label.toLowerCase()}`}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F89F46] text-2xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
         >
           +
         </button>
@@ -885,7 +890,7 @@ function SearchField({
   placeholder: string;
 }) {
   return (
-    <div className="w-[320px]">
+    <div className="mx-auto w-full md:max-w-[320px]">
       <h3 className="mb-4 text-lg font-semibold text-[#886432]">
         {label}
       </h3>
@@ -900,7 +905,7 @@ function SearchField({
           }
           placeholder={placeholder}
           aria-label={label}
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085]"
+          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085] focus-visible:outline-none"
         />
       </div>
     </div>

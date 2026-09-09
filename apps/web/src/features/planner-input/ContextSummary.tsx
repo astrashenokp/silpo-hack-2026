@@ -64,7 +64,7 @@ export default function ContextSummary({
       aria-labelledby="profile-context-title"
       className="mt-8 rounded-xl border border-[#E6E0D8] bg-[#FFFCF8] p-4"
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h3
             id="profile-context-title"
@@ -92,7 +92,7 @@ export default function ContextSummary({
       </div>
 
       {context && (
-        <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+        <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
           <SummaryItem
             label="Вподобання"
             value={formatList(context.preferences)}

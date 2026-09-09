@@ -1,3 +1,8 @@
+export type Pet = {
+  species: "cat" | "dog";
+  count: number;
+};
+
 export type PlanningRequest = {
   budgetMinor: number;
   currency: "UAH";
@@ -6,39 +11,131 @@ export type PlanningRequest = {
   caloriesPerPersonPerDay: number | null;
   preferences: string[];
   restrictions: string[];
-  pets: {
-    species: "cat" | "dog";
-    count: number;
-  }[];
+  pets: Pet[];
   includeRecurring: boolean;
   notes: string;
 };
 
+export type IngredientAmount = {
+  ingredientId: string;
+  name: string;
+  quantity: number;
+  unit: "g" | "ml" | "piece";
+};
+
+export type Meal = {
+  id: string;
+  day: number;
+  slot: "breakfast" | "lunch" | "dinner";
+  title: string;
+  servings: number;
+  kcalPerServing: number | null;
+  ingredientIds: string[];
+  ingredientAmounts: IngredientAmount[];
+  source: "edamam" | "synthetic";
+  sourceUrl: string | null;
+  attribution: string | null;
+};
+
+export type IngredientRequirement = {
+  id: string;
+  name: string;
+  searchTerms: string[];
+  quantity: number;
+  unit: "g" | "ml" | "piece";
+  mealIds: string[];
+  restrictions: string[];
+};
+
+export type RecurringSuggestion = {
+  id: string;
+  productName: string;
+  productId: string | null;
+  category: string;
+  species: "cat" | "dog" | null;
+  suggestedQuantity: number;
+  unit: string;
+  averageIntervalDays: number;
+  daysSinceLastPurchase: number;
+  confidence: number;
+  reason: string;
+  selected: boolean;
+};
+
+export type ProductSelection = {
+  productId: string;
+  name: string;
+  requirementIds: string[];
+  recurringSuggestionIds: string[];
+  quantity: number;
+  sellingUnit: string;
+  unitPriceMinor: number;
+  lineTotalMinor: number;
+  source: "silpo" | "synthetic";
+  reason: string;
+  restrictionCheck: "pass" | "fail" | "unknown";
+};
+
+export type Substitution = {
+  requirementIds: string[];
+  fromProductId: string;
+  toProductId: string;
+  reason: string;
+  deltaMinor: number;
+};
+
+export type UnresolvedRequirement = {
+  requirementId: string;
+  reason: string;
+};
+
+export type PlanningResult = {
+  runId: string;
+  version: number;
+  dataMode: "live" | "demo" | "mixed";
+  effectiveRequest: PlanningRequest;
+  mealPlan: Meal[];
+  ingredients: IngredientRequirement[];
+  recurringItems: RecurringSuggestion[];
+  selectedProducts: ProductSelection[];
+  substitutions: Substitution[];
+  budgetMinor: number;
+  basketTotalMinor: number;
+  budgetRemainingMinor: number;
+  savingsMinor: number | null;
+  budgetStatus:
+    | "within_budget"
+    | "over_budget"
+    | "incomplete";
+  unresolvedRequirements: UnresolvedRequirement[];
+  warnings: string[];
+  canConfirmCart: boolean;
+};
+
+export type PlanStage =
+  | "context"
+  | "history"
+  | "meals"
+  | "matching"
+  | "optimization"
+  | "ready";
+
+export type ProgressEvent = {
+  stage: string;
+  message: string;
+  at: string;
+};
+
 export type RunSnapshot = {
   runId: string;
-
   status:
     | "queued"
     | "running"
     | "completed"
     | "failed";
-
-  stage:
-    | "context"
-    | "history"
-    | "meals"
-    | "matching"
-    | "optimization"
-    | "ready";
-
-  events: {
-    stage: string;
-    message: string;
-    at: string;
-  }[];
-
-  result: unknown;
-
+  stage: PlanStage;
+  events: ProgressEvent[];
+  result: PlanningResult | null;
   error: {
     code: string;
     message: string;
@@ -49,12 +146,7 @@ export type RunSnapshot = {
 export type PlanningContext = {
   preferences: string[];
   restrictions: string[];
-
-  pets: {
-    species: "cat" | "dog";
-    count: number;
-  }[];
-
+  pets: Pet[];
   historyAvailable: boolean;
   cartContextReady: boolean;
   warnings: string[];
@@ -106,15 +198,12 @@ async function readApiError(
 
   return new ApiClientError({
     status: response.status,
-
     code:
       body?.error?.code ??
       `HTTP_${response.status}`,
-
     message:
       body?.error?.message ??
       "Сталася помилка під час запиту.",
-
     retryable:
       body?.error?.retryable ?? false,
   });
@@ -149,14 +238,6 @@ export async function getContext(): Promise<PlanningContext> {
 export async function createPlan(
   request: PlanningRequest,
 ): Promise<RunSnapshot> {
-  /*
-    The page loads /api/context first.
-
-    If the session disappears afterwards,
-    POST /api/plans can return 401 and the
-    frontend can display an expired-session state.
-  */
-
   const response = await fetch("/api/plans", {
     method: "POST",
     credentials: "include",

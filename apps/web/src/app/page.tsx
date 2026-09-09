@@ -7,20 +7,23 @@ import type { RunSnapshot } from "@/lib/api/planner";
 export default function Home() {
   const [completedPlan, setCompletedPlan] =
     useState<RunSnapshot | null>(null);
-  const handlePlanReady = useCallback((snapshot: RunSnapshot) => {
-  setCompletedPlan(snapshot);
 
-  console.log(
-    "Ready plan received by page:",
-    snapshot.result,
+  const handlePlanReady = useCallback(
+    (snapshot: RunSnapshot) => {
+      setCompletedPlan(snapshot);
+
+      console.log(
+        "Ready plan received by page:",
+        snapshot.result,
+      );
+    },
+    [],
   );
-}, []);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-white font-sans text-black">
-
+    <div className="min-h-dvh bg-white font-sans text-black">
       {/* HEADER */}
-      <header className="flex h-16 shrink-0 items-center border-b border-[#E6E6E6] bg-white px-8">
+      <header className="sticky top-0 z-30 flex h-16 items-center border-b border-[#E6E6E6] bg-white px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center text-2xl text-[#F89F46]">
             △
@@ -33,50 +36,66 @@ export default function Home() {
       </header>
 
       {/* PAGE BODY */}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-[calc(100dvh-64px)]">
 
-        {/* SIDEBAR */}
-        <aside className="flex w-[272px] shrink-0 flex-col border-r border-[#E6E6E6] bg-white">
+        {/* SIDEBAR — desktop only */}
+        <aside className="hidden w-[272px] shrink-0 flex-col border-r border-[#E6E6E6] bg-white lg:flex">
           <div className="flex flex-col items-center gap-6 px-6 py-8">
 
-            <button className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-sm font-medium text-white">
+            <button
+              type="button"
+              className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+            >
               <span className="text-xl font-light">+</span>
               Новий чат
             </button>
 
             <div className="flex w-[224px] flex-col">
-
-              <button className="flex h-10 items-center gap-2 rounded-lg bg-[rgba(248,159,70,0.2)] px-2 text-left text-sm font-medium text-[#886432]">
+              <button
+                type="button"
+                className="flex h-10 items-center gap-2 rounded-lg bg-[rgba(248,159,70,0.2)] px-2 text-left text-sm font-medium text-[#886432] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              >
                 <ChatIcon />
                 <span className="truncate">Привіт</span>
               </button>
 
-              <button className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm">
+              <button
+                type="button"
+                className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              >
                 <ChatIcon />
                 <span className="truncate">
                   Раціон на місяць на сім&apos;ю...
                 </span>
               </button>
 
-              <button className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm">
+              <button
+                type="button"
+                className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              >
                 <ChatIcon />
                 <span className="truncate">
                   Планувальник дієти на...
                 </span>
               </button>
 
-              <button className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm">
+              <button
+                type="button"
+                className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              >
                 <ChatIcon />
                 <span className="truncate">
                   Влаштування вечірки...
                 </span>
               </button>
-
             </div>
           </div>
 
           <div className="mt-auto">
-            <button className="flex h-10 w-full items-center gap-2 px-8 text-sm">
+            <button
+              type="button"
+              className="flex h-10 w-full items-center gap-2 px-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-inset"
+            >
               <BookmarkIcon />
               Збережені у FatSecret
             </button>
@@ -88,7 +107,11 @@ export default function Home() {
                 Катерина
               </span>
 
-              <button className="text-xl">
+              <button
+                type="button"
+                aria-label="Меню профілю"
+                className="text-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+              >
                 ⋮
               </button>
             </div>
@@ -96,13 +119,13 @@ export default function Home() {
         </aside>
 
         {/* MAIN AREA */}
-        <main className="relative flex min-w-0 flex-1 overflow-hidden bg-white">
+        <main className="min-w-0 flex-1 bg-white">
+          <div className="mx-auto flex w-full max-w-[1500px] flex-col xl:flex-row">
 
-          {/* CHAT + FORM */}
-          <section className="relative flex min-w-0 flex-1 flex-col">
+            {/* CHAT + FORM */}
+            <section className="min-w-0 flex-1 px-4 pb-6 pt-6 sm:px-6 md:px-8 lg:px-10">
 
-            <div className="flex-1 overflow-y-auto px-10 pb-36 pt-9">
-              <div className="mx-auto max-w-[858px]">
+              <div className="mx-auto w-full max-w-[858px]">
 
                 {/* USER MESSAGE */}
                 <div className="mb-8 flex justify-end">
@@ -118,25 +141,45 @@ export default function Home() {
                 </div>
 
                 {/* AI MESSAGE */}
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
 
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-lg text-white">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-base text-white sm:h-10 sm:w-10 sm:text-lg">
                     △
                   </div>
 
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1">
 
-                    <div className="flex items-start border-b border-[#EAECF0] pb-6">
-                      <p className="max-w-[624px] px-4 py-2 text-base leading-6">
+                    <div className="flex flex-col gap-3 border-b border-[#EAECF0] pb-6 sm:flex-row sm:items-start">
+                      <p className="max-w-[624px] px-0 py-2 text-sm leading-6 sm:px-4 sm:text-base">
                         Привіт, Катерино! Я ваш автономний планер Сільпо.
                         Допоможу зібрати раціон, врахую історію покупок та
                         оптимізую кошик під бюджет. Оберіть параметри нижче:
                       </p>
 
-                      <div className="ml-auto flex gap-1 text-[#999999]">
-                        <button className="h-8 w-8">👍</button>
-                        <button className="h-8 w-8">👎</button>
-                        <button className="h-8 w-8">▢</button>
+                      <div className="flex gap-1 text-[#999999] sm:ml-auto">
+                        <button
+                          type="button"
+                          aria-label="Подобається"
+                          className="h-8 w-8 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                        >
+                          👍
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-label="Не подобається"
+                          className="h-8 w-8 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                        >
+                          👎
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-label="Копіювати"
+                          className="h-8 w-8 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                        >
+                          ▢
+                        </button>
                       </div>
                     </div>
 
@@ -146,88 +189,98 @@ export default function Home() {
                 </div>
 
               </div>
-            </div>
 
-            {/* CHAT INPUT */}
-            <div className="absolute bottom-0 left-0 right-0 bg-white px-10 pb-7 pt-4">
-              <div className="mx-auto flex h-12 max-w-[850px] items-center gap-4 rounded-full border border-[#E6E6E6] bg-white p-1">
+              {/* CHAT INPUT — inline on narrow screens */}
+              <div className="mx-auto mt-8 flex h-12 w-full max-w-[850px] items-center gap-2 rounded-full border border-[#E6E6E6] bg-white p-1 sm:gap-4">
 
-                <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-xl text-[#F89F46]">
+                <button
+                  type="button"
+                  aria-label="Додати"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-xl text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                >
                   +
                 </button>
 
                 <input
-                  className="min-w-0 flex-1 bg-transparent px-1 text-base outline-none placeholder:text-[#BABABA]"
+                  className="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-[#BABABA] sm:text-base"
                   placeholder="Опишіть, що ви хочете приготувати або спланувати..."
                 />
 
-                <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)]">
+                <button
+                  type="button"
+                  aria-label="Голосове введення"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                >
                   <MicIcon />
                 </button>
 
-                <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white">
+                <button
+                  type="button"
+                  aria-label="Надіслати"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+                >
                   <ArrowUpIcon />
                 </button>
 
               </div>
-            </div>
+            </section>
 
-          </section>
+            {/* SMART CART — right on desktop, below content on smaller screens */}
+            <aside className="w-full shrink-0 px-4 pb-8 sm:px-6 md:px-8 xl:w-[394px] xl:px-5 xl:py-[43px]">
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-[#F47B4A] border-l-[6px] bg-white xl:h-[calc(100vh-150px)]">
 
-          {/* SMART CART */}
-          <aside className="w-[394px] shrink-0 px-5 py-[43px]">
-            <div className="flex h-[calc(100vh-150px)] min-h-0 flex-col overflow-hidden rounded-[24px] border border-[#F47B4A] border-l-[6px] bg-white">
+                {/* HEADER */}
+                <div className="shrink-0 px-5 pt-6 sm:px-7 sm:pt-8">
+                  <h2 className="text-[20px] font-medium text-[#886432] sm:text-[22px]">
+                    Смарт кошик Сільпо
+                  </h2>
 
-              {/* HEADER */}
-              <div className="shrink-0 px-7 pt-8">
-                <h2 className="text-[22px] font-medium text-[#886432]">
-                  Смарт кошик Сільпо
-                </h2>
-
-                <p className="mt-2 text-base leading-5 text-[#667085]">
-                  Супермаркет: просп. Бандери, 23
-                  <br />
-                  (Самовивіз)
-                </p>
-
-                <p className="mt-8 text-base">
-                  У кошику: 2 товари
-                </p>
-              </div>
-
-              {/* ITEMS */}
-              <div className="min-h-0 flex-1 overflow-y-auto px-7 py-5">
-                <CartItem />
-                <CartItem />
-              </div>
-
-              {/* BOTTOM */}
-              <div className="shrink-0 border-t border-[#F3E5D8] bg-white px-7 pb-8 pt-5">
-                <div className="mb-5 text-right">
-                  <p className="text-sm text-[#1D192B]">
-                    Сума знижки:{" "}
-                    <span className="font-medium text-[#16A34A]">
-                      -88,02 ₴
-                    </span>
+                  <p className="mt-2 text-sm leading-5 text-[#667085] sm:text-base">
+                    Супермаркет: просп. Бандери, 23
+                    <br />
+                    (Самовивіз)
                   </p>
 
-                  <p className="mt-2 text-base font-semibold text-[#1D192B]">
-                    Загальна сума: 159,98 ₴
+                  <p className="mt-6 text-sm sm:mt-8 sm:text-base">
+                    У кошику: 2 товари
                   </p>
                 </div>
 
-                <button
-                  disabled={!completedPlan}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[rgba(248,159,70,0.2)] bg-white text-base font-semibold text-[#F89F46] disabled:text-[rgba(248,159,70,0.3)]"
-                >
-                  <UploadIcon />
-                  Синхронізувати з Сільпо
-                </button>
+                {/* ITEMS */}
+                <div className="min-h-0 flex-1 px-5 py-5 sm:px-7 xl:overflow-y-auto">
+                  <CartItem />
+                  <CartItem />
+                </div>
+
+                {/* BOTTOM */}
+                <div className="shrink-0 border-t border-[#F3E5D8] bg-white px-5 pb-6 pt-5 sm:px-7 sm:pb-8">
+                  <div className="mb-5 text-right">
+                    <p className="text-sm text-[#1D192B]">
+                      Сума знижки:{" "}
+                      <span className="font-medium text-[#16A34A]">
+                        -88,02 ₴
+                      </span>
+                    </p>
+
+                    <p className="mt-2 text-base font-semibold text-[#1D192B]">
+                      Загальна сума: 159,98 ₴
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!completedPlan}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[rgba(248,159,70,0.2)] bg-white text-sm font-semibold text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:text-[rgba(248,159,70,0.3)] sm:text-base"
+                  >
+                    <UploadIcon />
+                    Синхронізувати з Сільпо
+                  </button>
+                </div>
+
               </div>
+            </aside>
 
-            </div>
-          </aside>
-
+          </div>
         </main>
       </div>
     </div>
@@ -354,7 +407,11 @@ function CartItem() {
             &quot;Галичина&quot; 82,5%
           </p>
 
-          <button className="text-[#F89F46]">
+          <button
+            type="button"
+            aria-label="Видалити товар"
+            className="text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+          >
             ⌫
           </button>
         </div>
@@ -363,7 +420,7 @@ function CartItem() {
           180 г
         </p>
 
-        <div className="mt-1 flex items-end justify-between">
+        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 
           <div>
             <div className="flex items-center gap-1">
@@ -383,13 +440,21 @@ function CartItem() {
 
           <div className="flex items-center gap-3">
 
-            <button className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-[#F89F46]">
+            <button
+              type="button"
+              aria-label="Зменшити кількість"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+            >
               −
             </button>
 
             <span>1</span>
 
-            <button className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-[#F89F46]">
+            <button
+              type="button"
+              aria-label="Збільшити кількість"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+            >
               +
             </button>
 
