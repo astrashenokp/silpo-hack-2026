@@ -56,6 +56,23 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
     assert client.get("/api/health").headers["X-Data-Mode"] == "demo"
 
 
+def test_same_origin_swagger_posts_are_allowed(client, planning_request):
+    response = client.post(
+        "/api/plans",
+        json=planning_request,
+        headers={"Origin": "http://testserver"},
+    )
+    assert response.status_code == 202
+
+    rejected = client.post(
+        "/api/plans",
+        json=planning_request,
+        headers={"Origin": "https://untrusted.example"},
+    )
+    assert rejected.status_code == 403
+    assert rejected.json()["error"]["code"] == "ORIGIN_NOT_ALLOWED"
+
+
 @pytest.mark.parametrize("field,value", [
     ("budgetMinor", 0), ("budgetMinor", 12.5), ("budgetMinor", "180000"),
     ("budgetMinor", True), ("days", 15), ("people", 0), ("days", True),

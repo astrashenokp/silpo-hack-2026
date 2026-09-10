@@ -332,8 +332,16 @@ class SilpoStatus(Model):
     reason: str | None
 
 
+class FatSecretSelection(Model):
+    meal_id: str
+    ingredient_id: str
+    food_id: str
+    serving_id: str
+
+
 class FatSecretPreviewRequest(PlanReference):
     meal_ids: Annotated[list[str], Field(min_length=1)]
+    selections: list[FatSecretSelection] = Field(default_factory=list)
 
 
 class FatSecretItem(Model):
@@ -346,9 +354,18 @@ class FatSecretItem(Model):
     source_unit: Unit
 
 
+class FatSecretCandidate(Model):
+    food_id: str
+    serving_id: str
+    matched_name: str
+    number_of_units: PositiveNumber
+    calories: PositiveNumber | None
+
+
 class UnresolvedFood(Model):
     ingredient_id: str
     reason: str
+    candidates: list[FatSecretCandidate] = Field(default_factory=list)
 
 
 class FatSecretPreviewMeal(Model):

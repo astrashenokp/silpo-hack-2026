@@ -215,7 +215,7 @@ def fatsecret_status(owner: SessionDependency):
         account_label=account_label if connected else None,
         export_available=True,
         reason=(
-            "FatSecret account connected; Saved Meal exports are still simulated in demo mode."
+            "Connected; Saved Meal previews, writes and read-back use FatSecret."
             if connected
             else "DEMO: only simulated export is available; no real account is connected."
         ),
@@ -223,10 +223,10 @@ def fatsecret_status(owner: SessionDependency):
 
 
 @router.post("/fatsecret/exports/preview", response_model=FatSecretPreview)
-def export_preview(body: FatSecretPreviewRequest, request: Request, owner: SessionDependency,
-                   x_demo_scenario: Scenario = "success"):
+async def export_preview(body: FatSecretPreviewRequest, request: Request, owner: SessionDependency,
+                         x_demo_scenario: Scenario = "success"):
     scenario(x_demo_scenario, {"success", "partial", "failed", "unmatched"})
-    return request.app.state.export_service.preview(body, owner, x_demo_scenario)
+    return await request.app.state.export_service.preview(body, owner, x_demo_scenario)
 
 
 @router.post("/fatsecret/exports/confirm", status_code=202, response_model=ExportAccepted)

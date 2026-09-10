@@ -64,7 +64,11 @@ endpoint. This demo stores them only in its process-local session, so restart
 disconnects the account; durable encrypted storage is required for deployment.
 The connection flow was verified with a real test member account on September 10,
 2026: authorization returned through the callback and the session status reported
-`connected: true`. This does not verify Saved Meal creation or app visibility.
+`connected: true`. Connected sessions now use provider food/serving matching, Saved
+Meal writes and read-back verification. On September 11, 2026, one reviewed live
+Saved Meal was read back successfully and found under **Favorite Meals** in the same
+connected account. `FATSECRET_ALLOW_EDAMAM_EXPORT` defaults to `false`; enable it
+only after the team has verified its Edamam data-use permission.
 
 ## Ksiusha and Alina: HTTP connection
 
@@ -158,17 +162,17 @@ Cart and export flow:
 | Cart preview | `POST /api/cart/preview`, `{runId, version}` | Existing quantities, additions, projected total and expiry |
 | Cart confirm | `POST /api/cart/confirm`, `{previewId, idempotencyKey}` | Receipt: `success`, `partial` or `failed` |
 | FatSecret connect | `GET /api/auth/fatsecret/start` | Redirects through FatSecret OAuth 1.0 when developer credentials are configured |
-| FatSecret status | `GET /api/integrations/fatsecret` | Reports the session's real connection status; export remains **simulation only**; show `reason` |
-| FatSecret preview | `POST /api/fatsecret/exports/preview`, `{runId, version, mealIds}` | Personal portions, matches, unresolved foods, `canConfirm` |
+| FatSecret status | `GET /api/integrations/fatsecret` | Reports whether export will use a connected account or the labelled disconnected demo |
+| FatSecret preview | `POST /api/fatsecret/exports/preview`, `{runId, version, mealIds, selections?}` | Personal portions and unresolved candidates; repeat with reviewed food/serving selections until `canConfirm` |
 | FatSecret confirm | `POST /api/fatsecret/exports/confirm`, `{previewId, idempotencyKey}` | 202 `{exportId}` |
 | FatSecret outcome | `GET /api/fatsecret/exports/:exportId` | Poll until `success`, `partial` or `failed` |
 
-Every API response carries `X-Data-Mode: demo`; the plan includes `dataMode`, products
-include `source`, and operation payloads include demo warnings. FatSecret OAuth
-connection is implemented, but Saved Meal writes remain simulated and never use the
-connected account. An absent/unknown session yields 401; other sessions' IDs yield
-404. Demo `/context` is the documented exception that creates a session rather than
-requiring OAuth.
+Every API response carries `X-Data-Mode: demo` because planning and catalog data are
+still synthetic. The plan includes `dataMode` and products include `source`. When a
+FatSecret account is connected, export preview and confirmation use the live account;
+without a connection, the existing export fixtures remain explicitly simulated. An
+absent/unknown session yields 401; other sessions' IDs yield 404. Demo `/context` is
+the documented exception that creates a session rather than requiring OAuth.
 
 ## Exercise error states
 
@@ -232,14 +236,13 @@ pre-existing contents. Preview `afterQuantity - beforeQuantity` is the addition.
   pipeline against current matching/optimization state. Price-aware meal swaps are
   deferred until live catalog evidence can guide cheaper ingredient choices safely.
 
-Live mode is intentionally blocked. FatSecret OAuth request/access-token exchange and
-signed delegated transport are implemented, but credentials and provider behavior
-still require a real-account check. Real gateway writes, durable encrypted token
-storage, persistent operation journals, timeout reconciliation, provider food
-matching and FatSecret app visibility must be implemented/verified before enabling
-live exports. Cart and export services currently simulate deterministic outcomes in
-memory. Retrying a partial operation returns its stored receipt; automated partial
-recovery is deferred.
+Whole-application live mode is intentionally blocked while Silpo/cart integration is
+unfinished. FatSecret OAuth and the connected-session export path are implemented:
+conservative food/serving matching, personal-portion conversion, Saved Meal/item
+writes, read-back reconciliation and duplicate protection. A new reviewed preview can
+resume a partial operation. Durable encrypted token storage, a persistent operation
+journal remain deployment requirements. The first web-account visibility check is
+recorded above.
 
 ## Verification and generated contracts
 
