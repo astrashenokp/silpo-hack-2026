@@ -308,3 +308,14 @@ def test_injected_planner_failure_does_not_expose_details(app, client, planning_
     run = client.get(f"/api/plans/{queued['runId']}").json()
     assert run["status"] == "failed"
     assert "private" not in str(run)
+
+
+def test_filters_endpoint_returns_all_supported_labels(client):
+    response = client.get("/api/filters")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["preferences"]) == {"vegetarian", "vegan", "paleo", "high-protein", "high-fiber"}
+    assert set(body["restrictions"]) == {
+        "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
+        "shellfish-free", "soy-free", "egg-free", "pork-free",
+    }
