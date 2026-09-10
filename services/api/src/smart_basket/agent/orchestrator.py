@@ -938,7 +938,8 @@ class UlianaPlanner:
         
         matching_context = MatchingContext(
             session=session,
-            emit_progress=emit_progress,
+            catalog=self.catalog,
+            check_restrictions=self.catalog.check_restrictions,
         )
 
         matching_result = (
