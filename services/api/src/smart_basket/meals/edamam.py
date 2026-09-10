@@ -15,6 +15,14 @@ from urllib import error, parse, request
 
 from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal
 
+from .nutrition import (
+    ACCURACY_WARNINGS,
+    CALORIE_TOLERANCE_PCT,
+    build_nutrition_summary,
+    calorie_target_for_slot,
+    calorie_target_warnings,
+)
+
 
 class EdamamUnavailable(RuntimeError):
     """Raised when Edamam cannot be used for this run."""
@@ -62,10 +70,11 @@ def build_edamam_payload(request_model, filters) -> dict:
             ],
         }
     if request_model.calories_per_person_per_day is not None:
+        target = request_model.calories_per_person_per_day
         payload["plan"]["fit"] = {
             "ENERC_KCAL": {
-                "min": int(request_model.calories_per_person_per_day * 0.85),
-                "max": int(request_model.calories_per_person_per_day * 1.15),
+                "min": int(target * (1 - CALORIE_TOLERANCE_PCT)),
+                "max": int(target * (1 + CALORIE_TOLERANCE_PCT)),
             }
         }
     return payload
@@ -239,6 +248,10 @@ def map_edamam_plan_response(
                 title=str(recipe.get("label") or assignment.link_title or "Edamam recipe"),
                 servings=request_model.people,
                 kcal_per_serving=(calories / yield_count) if calories is not None else None,
+                calorie_target=calorie_target_for_slot(
+                    request_model.calories_per_person_per_day,
+                    assignment.slot,
+                ),
                 ingredient_ids=ingredient_ids,
                 ingredient_amounts=amounts,
                 source="edamam",
@@ -259,8 +272,13 @@ def map_edamam_plan_response(
         )
         for ingredient_id, data in ingredient_totals.items()
     ]
+    nutrition_summary = build_nutrition_summary(request_model, meals)
+    warnings.extend(ACCURACY_WARNINGS)
+    warnings.extend(calorie_target_warnings(nutrition_summary))
+
     return {
         "meals": meals,
+        "nutrition_summary": nutrition_summary,
         "ingredients": requirements,
         "warnings": warnings,
         "source": "edamam",

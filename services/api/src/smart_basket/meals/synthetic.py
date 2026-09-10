@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .normalization import IngredientSpec, MealTemplate, aggregate_ingredients, build_meal_from_template
+from .nutrition import ACCURACY_WARNINGS, calorie_target_for_slot, calorie_target_warnings, build_nutrition_summary
 
 INGREDIENTS: dict[str, IngredientSpec] = {
     "oats": IngredientSpec(
@@ -234,21 +235,29 @@ def build_synthetic_meal_plan(request, filters):
                     template=template,
                     restrictions=filters.restrictions,
                     source="synthetic",
+                    calorie_target=calorie_target_for_slot(
+                        request.calories_per_person_per_day,
+                        template.slot,
+                    ),
                 )
             )
 
     ingredients = aggregate_ingredients(meals, INGREDIENTS, filters.restrictions)
+    nutrition_summary = build_nutrition_summary(request, meals)
     warnings = [
         "Meal plan uses Sofiia synthetic fallback; live Edamam credentials are not configured.",
         "Synthetic recipes are original demo data and are not provider recipe payloads.",
+        *ACCURACY_WARNINGS,
+        *calorie_target_warnings(nutrition_summary),
     ]
     if request.calories_per_person_per_day is not None:
         warnings.append(
-            "Calorie target is retained as a constraint, but synthetic fallback does not optimize calories."
+            "Calorie target metadata uses a 25/35/40 breakfast/lunch/dinner split; synthetic fallback does not run ILP optimization."
         )
 
     return {
         "meals": meals,
+        "nutrition_summary": nutrition_summary,
         "ingredients": ingredients,
         "warnings": warnings,
         "source": "synthetic",

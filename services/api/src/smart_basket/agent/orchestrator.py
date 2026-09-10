@@ -169,6 +169,10 @@ class UlianaPlanner:
             "ingredients"
         ]
 
+        nutrition_summary = meal_result[
+            "nutrition_summary"
+        ]
+
         warnings.extend(
             meal_result.get(
                 "warnings",
@@ -303,6 +307,10 @@ class UlianaPlanner:
             effective_request=request,
 
             meal_plan=meals,
+
+            nutrition_summary=(
+                nutrition_summary
+            ),
 
             ingredients=ingredients,
 

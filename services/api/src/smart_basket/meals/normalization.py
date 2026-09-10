@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Literal
 
-from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal
+from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal, MealCalorieTarget
 
 NormalizedUnit = Literal["g", "ml", "piece"]
 
@@ -63,6 +63,7 @@ def build_meal_from_template(
     template: MealTemplate,
     restrictions: tuple[str, ...],
     source: Literal["edamam", "synthetic"],
+    calorie_target: MealCalorieTarget | None = None,
 ) -> Meal:
     meal_id = f"{source}-day-{day}-{template.slot}-{index}"
     amounts: list[IngredientAmount] = []
@@ -88,6 +89,7 @@ def build_meal_from_template(
         title=template.title,
         servings=servings,
         kcal_per_serving=template.kcal_per_serving,
+        calorie_target=calorie_target,
         ingredient_ids=ingredient_ids,
         ingredient_amounts=amounts,
         source=source,

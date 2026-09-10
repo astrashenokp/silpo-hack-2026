@@ -15,10 +15,16 @@ interface. The module covers:
 - explicit failure for unsupported hard restrictions from saved context;
 - original synthetic fallback meals covering every requested day and breakfast/lunch/dinner slot;
 - serving scaling for household portions;
+- per-meal `calorieTarget` metadata using a 25% breakfast, 35% lunch and 40% dinner split when a daily calorie target is provided;
+- `nutritionSummary` with daily planned calories, target range and whether each day lands within the configured +/-10% tolerance;
 - per-meal `ingredientAmounts` for FatSecret one-person export preview;
 - aggregate `IngredientRequirement` records with stable `mealIds`;
 - unit normalization limited to `g`, `ml` and `piece`; unknown units are unresolved instead of guessed;
+- explicit warnings for cooking yield, oil/sauce/hidden-ingredient uncertainty and the fact that consumed-food Vision analysis is outside this planner boundary;
 - Edamam credential/settings boundary, request payload builder and selection/recipe response mapper.
+- bounded recalculation compatibility through Uliana: the same meal-planning
+  interface is rerun with the confirmed request, preserved portions and preserved
+  restrictions.
 
 ## Supported Dietary Labels (for Ksiusha)
 
@@ -75,11 +81,18 @@ Returned mapping:
 ```python
 {
     "meals": list[Meal],
+    "nutrition_summary": NutritionSummary,
     "ingredients": list[IngredientRequirement],
     "warnings": list[str],
-    "source": "synthetic" | "mixed",
+    "source": "synthetic" | "edamam",
 }
 ```
+
+`Meal.calorieTarget` is `null` when the request has no calorie target. Otherwise it
+contains the slot share, target calories per serving and the +/-10% range for that
+meal slot. `nutritionSummary.daily[]` compares each day's available planned
+calories against the daily target. Missing provider calories remain `null`; the
+module does not invent nutrition values.
 
 The 4-day, 3-person golden request returns 12 meals and these aggregate demands:
 
@@ -158,13 +171,23 @@ services/api/.venv/bin/python -m pytest services/api/tests -q
 services/api/.venv/bin/python services/api/scripts/export_contracts.py --check
 ```
 
-Current local result: 115 backend tests pass with one Starlette/AnyIO deprecation warning.
+Current local result: 119 backend tests pass with one Starlette/AnyIO deprecation warning.
 
 ## Known Limits
 
 The synthetic menu is deliberately simple and uses only ingredients that Rina's
 demo catalog and FatSecret demo mapping can resolve. It is a deterministic
-integration fallback, not a complete nutrition product. Real-account Edamam
-request verification, recipe attribution verification and export permission
-verification remain credential-gated blockers, not work for Polina to discover
-from scratch.
+integration fallback, not a complete nutrition product. It exposes calorie target
+metadata and warnings but does not run ILP/PuLP optimization.
+
+Recalculation currently preserves the confirmed request and reruns the
+deterministic pipeline. It does not yet perform price-aware meal swaps, because
+that would require live catalog evidence from Rina/Vika before Sofiia can safely
+choose cheaper ingredient variants without guessing product prices.
+
+The attached AI Meal Planning specification also describes BMR/TDEE formulas,
+macro targets, inventory subtraction, meal swaps, hydration/recovery planning,
+voice input and Vision feedback loops. Those are valid roadmap directions, but
+they are not claimed as implemented in this branch. Real-account Edamam request
+verification, recipe attribution verification and export permission verification
+remain credential-gated blockers, not work for Polina to discover from scratch.

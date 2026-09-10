@@ -109,6 +109,13 @@ class IngredientAmount(Model):
     unit: Unit
 
 
+class MealCalorieTarget(Model):
+    share: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    target_kcal_per_serving: PositiveNumber
+    min_kcal_per_serving: PositiveNumber
+    max_kcal_per_serving: PositiveNumber
+
+
 class Meal(Model):
     id: str
     day: PositiveInt
@@ -116,6 +123,7 @@ class Meal(Model):
     title: str
     servings: PositiveInt
     kcal_per_serving: PositiveNumber | None
+    calorie_target: MealCalorieTarget | None
     ingredient_ids: list[str]
     ingredient_amounts: list[IngredientAmount]
     source: Literal["edamam", "synthetic"]
@@ -192,12 +200,34 @@ class Substitution(Model):
     delta_minor: int
 
 
+class SlotCalorieShare(Model):
+    slot: Literal["breakfast", "lunch", "dinner"]
+    share: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
+
+class DayNutritionSummary(Model):
+    day: PositiveInt
+    target_kcal_per_person: PositiveNumber | None
+    planned_kcal_per_person: PositiveNumber | None
+    min_kcal_per_person: PositiveNumber | None
+    max_kcal_per_person: PositiveNumber | None
+    within_target_range: bool | None
+
+
+class NutritionSummary(Model):
+    calorie_target_kcal_per_person_per_day: PositiveNumber | None
+    tolerance_pct: PositiveNumber
+    distribution: list[SlotCalorieShare]
+    daily: list[DayNutritionSummary]
+
+
 class PlanningResult(Model):
     run_id: str
     version: PositiveInt
     data_mode: Literal["live", "demo", "mixed"]
     effective_request: PlanningRequest
     meal_plan: list[Meal]
+    nutrition_summary: NutritionSummary
     ingredients: list[IngredientRequirement]
     recurring_items: list[RecurringSuggestion]
     selected_products: list[ProductSelection]

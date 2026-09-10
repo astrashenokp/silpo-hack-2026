@@ -64,7 +64,8 @@ Example main demo request:
 | `UserContext` | `preferences`, `restrictions`, `pets`, `historyAvailable`, `cartContextReady`, `warnings`; optional household size; no unnecessary contact data | Arina → Ksiusha, Uliana |
 | `Purchase` | `receiptId`, `purchasedAt`, `channel` (online/offline), `productId`, `name`, `category`, `quantity`, `unit`; optional `unitPriceMinor` in integer kopiykas; documented deduplication key | Arina → Vika |
 | `IngredientRequirement` | `id`, `name`, `searchTerms`, `quantity`, `unit`, `mealIds`, `restrictions` | Sofiia → Rina, Vika |
-| `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `ingredientIds`, `ingredientAmounts` (per-meal quantities as defined in v0.2), `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina/Rina |
+| `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `calorieTarget` (nullable), `ingredientIds`, `ingredientAmounts` (per-meal quantities as defined in v0.2), `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina/Rina |
+| `NutritionSummary` | `calorieTargetKcalPerPersonPerDay` (nullable), `tolerancePct`, `distribution`, `daily`; exposes the 25/35/40 meal split and daily +/-10% calorie target check when calories are available | Sofiia → Uliana → Alina |
 | `ProductCandidate` | `id`, `name`, `requirementIds`, `priceMinor` per selling unit, `sellingUnit`, `quantityStep`, `contentQuantity`, `contentUnit`, `available`, `restrictionCheck` (pass/fail/unknown), `regularPriceMinor` (nullable), `source` (silpo/synthetic), `checkedAt` | Rina using Arina's reads → Vika |
 | `RecurringSuggestion` | `id`, `productName`, `productId` (nullable), `category`, `species` (nullable), `suggestedQuantity`, `unit`, `averageIntervalDays`, `daysSinceLastPurchase`, `confidence` (0–1), `reason`, `selected` | Vika → Uliana → Alina |
 | `ProductSelection` | `productId`, `name`, `requirementIds`, `recurringSuggestionIds`, `quantity`, `sellingUnit`, `unitPriceMinor`, `lineTotalMinor`, `source`, `reason`, `restrictionCheck` | Vika → Uliana → Alina/Rina |
@@ -84,7 +85,7 @@ These names are our wrappers; discover actual MCP tool names and parameters thro
 | Arina | `search_products(session, query)`, `get_product_details(session, id)`, `get_promotions(session)` | Normalized raw catalog information, not the matching algorithm |
 | Arina | `get_cart_context(session)`, `get_cart_snapshot(session)` | Validated store/cart context and existing contents |
 | Arina | Shared authenticated MCP gateway | Read/write transport for Rina; explicit allowed tools, session isolation, normalized failures |
-| Sofiia | `build_meal_plan(request, effectiveContext)` | `{ meals, ingredients, warnings, source }` |
+| Sofiia | `build_meal_plan(request, effectiveContext)` | `{ meals, nutritionSummary, ingredients, warnings, source }` |
 | Vika | `analyze_recurring(purchases, pets, asOf)` | Suggestions with evidence/confidence; empty when insufficient history |
 | Rina | `find_product_candidates(ingredients, selectedRecurring, context)` | Candidate sets plus unresolved requirements |
 | Rina | `find_replacement(requirement, rejectedIds, context)` | Suitable alternatives; reuses Arina's catalog adapters |
@@ -104,6 +105,7 @@ type PlanningResult = {
   dataMode: "live" | "demo" | "mixed";
   effectiveRequest: PlanningRequest;
   mealPlan: Meal[];
+  nutritionSummary: NutritionSummary;
   ingredients: IngredientRequirement[];
   recurringItems: RecurringSuggestion[];
   selectedProducts: ProductSelection[];

@@ -23,6 +23,13 @@ export type IngredientAmount = {
   unit: "g" | "ml" | "piece";
 };
 
+export type MealCalorieTarget = {
+  share: number;
+  targetKcalPerServing: number;
+  minKcalPerServing: number;
+  maxKcalPerServing: number;
+};
+
 export type Meal = {
   id: string;
   day: number;
@@ -30,6 +37,7 @@ export type Meal = {
   title: string;
   servings: number;
   kcalPerServing: number | null;
+  calorieTarget: MealCalorieTarget | null;
   ingredientIds: string[];
   ingredientAmounts: IngredientAmount[];
   source: "edamam" | "synthetic";
@@ -89,12 +97,34 @@ export type UnresolvedRequirement = {
   reason: string;
 };
 
+export type SlotCalorieShare = {
+  slot: "breakfast" | "lunch" | "dinner";
+  share: number;
+};
+
+export type DayNutritionSummary = {
+  day: number;
+  targetKcalPerPerson: number | null;
+  plannedKcalPerPerson: number | null;
+  minKcalPerPerson: number | null;
+  maxKcalPerPerson: number | null;
+  withinTargetRange: boolean | null;
+};
+
+export type NutritionSummary = {
+  calorieTargetKcalPerPersonPerDay: number | null;
+  tolerancePct: number;
+  distribution: SlotCalorieShare[];
+  daily: DayNutritionSummary[];
+};
+
 export type PlanningResult = {
   runId: string;
   version: number;
   dataMode: "live" | "demo" | "mixed";
   effectiveRequest: PlanningRequest;
   mealPlan: Meal[];
+  nutritionSummary: NutritionSummary;
   ingredients: IngredientRequirement[];
   recurringItems: RecurringSuggestion[];
   selectedProducts: ProductSelection[];

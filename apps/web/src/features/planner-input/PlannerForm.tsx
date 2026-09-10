@@ -43,6 +43,32 @@ function getThinkingStepIndex(stage: RunSnapshot["stage"] | undefined) {
   }
 }
 
+function formatKcal(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return "немає даних";
+  }
+
+  return `${Math.round(value)} ккал`;
+}
+
+function formatQuantity(value: number, unit: string) {
+  const rounded = Number.isInteger(value)
+    ? value.toString()
+    : value.toFixed(1).replace(/\.0$/, "");
+
+  return `${rounded} ${unit}`;
+}
+
+function slotLabel(slot: string) {
+  const labels: Record<string, string> = {
+    breakfast: "Сніданок",
+    lunch: "Обід",
+    dinner: "Вечеря",
+  };
+
+  return labels[slot] ?? slot;
+}
+
 export default function PlannerForm({
   onPlanReady,
 }: PlannerFormProps) {
@@ -424,11 +450,6 @@ export default function PlannerForm({
     const elapsed = Date.now() - thinkingStartedAt;
     const remaining = Math.max(0, MIN_THINKING_MS - elapsed);
 
-    if (remaining === 0) {
-      setMinimumThinkingElapsed(true);
-      return;
-    }
-
     const timeoutId = setTimeout(() => {
       setMinimumThinkingElapsed(true);
     }, remaining);
@@ -592,7 +613,11 @@ export default function PlannerForm({
 
   if (runSnapshot?.status === "completed") {
     const result = runSnapshot.result;
-    const regularProducts = result?.selectedProducts.slice(0, 4) ?? [];
+    const mealPlan = result?.mealPlan ?? [];
+    const nutritionDays = result?.nutritionSummary.daily ?? [];
+    const ingredients = result?.ingredients ?? [];
+    const selectedProducts = result?.selectedProducts ?? [];
+    const warnings = result?.warnings ?? [];
 
     return (
       <section
@@ -615,12 +640,136 @@ export default function PlannerForm({
 
             <div className="mt-5 border-t border-[#EAECF0] pt-4">
               <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
-                Регулярні покупки
+                План харчування
               </h3>
 
-              {regularProducts.length > 0 ? (
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {mealPlan.map((meal) => (
+                  <div
+                    key={meal.id}
+                    className="min-w-0 rounded-lg border border-[#EAECF0] bg-white p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-medium text-[#98A2B3]">
+                          День {meal.day} · {slotLabel(meal.slot)}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-[14px] font-semibold leading-5 text-[#344054]">
+                          {meal.title}
+                        </p>
+                      </div>
+
+                      <span className="shrink-0 text-[12px] font-medium text-[#F89F46]">
+                        {meal.servings} порц.
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[#667085]">
+                      <span>План: {formatKcal(meal.kcalPerServing)}</span>
+                      {meal.calorieTarget ? (
+                        <span>
+                          Ціль: {formatKcal(meal.calorieTarget.targetKcalPerServing)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {nutritionDays.length > 0 ? (
+              <div className="mt-5 border-t border-[#EAECF0] pt-4">
+                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                  Калорійність
+                </h3>
+
+                <div className="mt-3 space-y-2">
+                  {nutritionDays.map((day) => (
+                    <div
+                      key={day.day}
+                      className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                    >
+                      <span className="font-medium text-[#344054]">
+                        День {day.day}
+                      </span>
+
+                      <span className="text-[#667085]">
+                        {formatKcal(day.plannedKcalPerPerson)}
+                        {day.targetKcalPerPerson ? (
+                          <> / ціль {formatKcal(day.targetKcalPerPerson)}</>
+                        ) : null}
+                      </span>
+
+                      {day.withinTargetRange !== null ? (
+                        <span
+                          className={
+                            day.withinTargetRange
+                              ? "text-[#16A34A]"
+                              : "text-[#B42318]"
+                          }
+                        >
+                          {day.withinTargetRange ? "у межах" : "поза межами"}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {warnings.length > 0 ? (
+              <div className="mt-5 border-t border-[#EAECF0] pt-4">
+                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                  Попередження
+                </h3>
+
+                <ul className="mt-3 space-y-2 text-sm leading-5 text-[#667085]">
+                  {warnings.map((warning) => (
+                    <li key={warning}>
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {ingredients.length > 0 ? (
+              <div className="mt-5 border-t border-[#EAECF0] pt-4">
+                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                  Інгредієнти
+                </h3>
+
+                <div className="mt-3 divide-y divide-[#EAECF0] text-sm">
+                  {ingredients.map((ingredient) => (
+                    <div
+                      key={ingredient.id}
+                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2"
+                    >
+                      <span className="min-w-0 font-medium text-[#344054]">
+                        {ingredient.name}
+                      </span>
+
+                      <span className="text-[#667085]">
+                        {formatQuantity(ingredient.quantity, ingredient.unit)}
+                      </span>
+
+                      <span className="w-full text-[12px] text-[#98A2B3]">
+                        {ingredient.mealIds.length} прийомів їжі
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-5 border-t border-[#EAECF0] pt-4">
+              <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                Товари до кошика
+              </h3>
+
+              {selectedProducts.length > 0 ? (
                 <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
-                  {regularProducts.map((product) => {
+                  {selectedProducts.map((product) => {
                     const hasButterImage =
                       product.name.toLowerCase().includes("галич") ||
                       product.name.toLowerCase().includes("масло");
@@ -665,7 +814,7 @@ export default function PlannerForm({
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-[#667085]">
-                  Регулярних покупок для цього плану немає.
+                  Товарів для кошика поки немає.
                 </p>
               )}
             </div>
@@ -1313,34 +1462,6 @@ function SearchIcon() {
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 18 18"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle
-        cx="9"
-        cy="9"
-        r="8"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-
-      <path
-        d="M5.5 9L8 11.5L12.5 6.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </svg>
   );
