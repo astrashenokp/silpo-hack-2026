@@ -1,10 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 import pytest
 from fastapi.testclient import TestClient
 
 from conftest import create_plan
 from smart_basket.app import create_app
+from smart_basket.schemas import UserContext
 
 
 def reference(plan):
@@ -217,6 +219,29 @@ def test_silpo_callback_requires_code_and_state(client):
         assert response.status_code == 400
         assert response.json()["error"]["code"] == "INVALID_OAUTH_CALLBACK"
         assert oauth.cancelled_for
+
+
+def test_context_uses_silpo_after_connection(app, client, monkeypatch):
+    session = owner(app, client)
+    session.silpo_connected = True
+
+    @asynccontextmanager
+    async def fake_mcp_session(storage):
+        yield object()
+
+    async def fake_user_context(mcp_session, session_owner):
+        assert session_owner is session
+        return UserContext(
+            preferences=["vegetarian"], restrictions=[], pets=[],
+            history_available=True, cart_context_ready=True, warnings=[],
+        )
+
+    monkeypatch.setattr("smart_basket.routes.api.get_mcp_session", fake_mcp_session)
+    monkeypatch.setattr("smart_basket.routes.api.get_user_context", fake_user_context)
+    response = client.get("/api/context")
+    assert response.status_code == 200
+    assert response.headers["X-Data-Mode"] == "live"
+    assert response.json()["historyAvailable"] is True
 
 
 def test_live_mode_fails_closed(monkeypatch):

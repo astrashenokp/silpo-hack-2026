@@ -45,7 +45,7 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None):
             return JSONResponse(status_code=403, content={"error": {"code": "ORIGIN_NOT_ALLOWED",
                 "message": "Browser origin is not allowed.", "retryable": False}})
         response = await call_next(request)
-        response.headers["X-Data-Mode"] = "demo"
+        response.headers.setdefault("X-Data-Mode", "demo")
         response.headers["Cache-Control"] = "no-store"
         return response
 

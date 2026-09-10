@@ -49,6 +49,10 @@ class Session:
     silpo_auth_flow: object | None = None
     silpo_connected: bool = False
     silpo_tools: tuple[str, ...] = ()
+    silpo_cart_id: str | None = None
+    silpo_branch_id: str | None = None
+    silpo_delivery_type: str | None = None
+    silpo_timeslot: object | None = None
 
     def get_run(self, run_id: str) -> RunSnapshot:
         if run_id not in self.runs:
