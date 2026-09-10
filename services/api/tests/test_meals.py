@@ -1,7 +1,13 @@
 import pytest
 
 from smart_basket.meals import build_meal_plan
-from smart_basket.meals.edamam import EdamamSettings, EdamamUnavailable, build_edamam_payload
+from smart_basket.meals.edamam import (
+    EdamamSettings,
+    EdamamUnavailable,
+    build_edamam_payload,
+    collect_assignments,
+    map_edamam_plan_response,
+)
 from smart_basket.meals.filters import UnsupportedMealFilter, resolve_meal_filters
 from smart_basket.meals.normalization import UnitNormalizationError, normalize_unit
 from smart_basket.schemas import Pet, PlanningRequest, UserContext
@@ -46,6 +52,15 @@ def test_synthetic_plan_covers_every_day_and_slot():
     assert {meal.source for meal in meals} == {"synthetic"}
     assert all(meal.servings == 3 for meal in meals)
     assert all(meal.kcal_per_serving is not None for meal in meals)
+
+
+def test_synthetic_plan_has_demo_variety_without_changing_totals():
+    result = build_meal_plan(request(), context())
+    titles = {meal.title for meal in result["meals"]}
+    quantities = {ingredient.id: ingredient.quantity for ingredient in result["ingredients"]}
+
+    assert len(titles) > 3
+    assert quantities == {"oats": 600, "rice": 1440, "lentils": 1200}
 
 
 def test_serving_scaling_and_aggregate_quantities_are_consistent():
@@ -147,6 +162,65 @@ def test_edamam_payload_omits_empty_accept_filters():
     assert "fit" not in payload["plan"]
 
 
+def test_edamam_selection_and_recipe_details_map_to_contract_models():
+    plan_response = _edamam_selection_response(days=1)
+    filters = resolve_meal_filters(request(preferences=[], restrictions=["peanut-free"]), context())
+    result = map_edamam_plan_response(
+        response=plan_response,
+        recipe_details={
+            "recipe:breakfast": _recipe_detail("Breakfast oats", "https://recipes.test/oats"),
+            "recipe:lunch": _recipe_detail("Lunch rice", "https://recipes.test/rice"),
+            "recipe:dinner": _recipe_detail("Dinner lentils", "https://recipes.test/lentils"),
+        },
+        request_model=request(days=1, people=2, preferences=[], restrictions=["peanut-free"]),
+        filters=filters,
+    )
+
+    assert result["source"] == "edamam"
+    assert len(result["meals"]) == 3
+    breakfast = result["meals"][0]
+    assert breakfast.source == "edamam"
+    assert breakfast.source_url == "https://recipes.test/oats"
+    assert breakfast.attribution == "Recipe data powered by Edamam."
+    assert breakfast.servings == 2
+    assert breakfast.kcal_per_serving == 200
+    assert breakfast.ingredient_amounts[0].quantity == 100
+
+    ingredient = result["ingredients"][0]
+    assert ingredient.quantity == 300
+    assert ingredient.unit == "g"
+    assert ingredient.restrictions == ["peanut-free"]
+
+
+def test_edamam_mapping_rejects_incomplete_selection():
+    with pytest.raises(EdamamUnavailable):
+        collect_assignments({"selection": [{"sections": {"Breakfast": {}}}]})
+
+
+def test_build_meal_plan_can_return_mapped_edamam_meals(monkeypatch):
+    class FakeClient:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def request_plan(self, payload):
+            return _edamam_selection_response(days=1)
+
+        def request_recipe(self, href, uri):
+            return _recipe_detail(f"Recipe {uri}", f"https://recipes.test/{uri.rsplit(':', 1)[-1]}")
+
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_ID", "app")
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_KEY", "key")
+    monkeypatch.setenv("EDAMAM_ACCOUNT_USER", "user")
+    monkeypatch.setattr("smart_basket.meals.planner.EdamamMealPlannerClient", FakeClient)
+
+    result = build_meal_plan(request(days=1, people=2, preferences=[]), context())
+
+    assert result["source"] == "edamam"
+    assert len(result["meals"]) == 3
+    assert {meal.source for meal in result["meals"]} == {"edamam"}
+
+
 def test_requested_edamam_source_uses_explicit_synthetic_fallback(monkeypatch):
     monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
     monkeypatch.delenv("EDAMAM_MEAL_PLANNER_APP_ID", raising=False)
@@ -180,3 +254,60 @@ def test_unknown_meal_source_fails_explicitly(monkeypatch):
 def test_unknown_units_are_not_guessed():
     with pytest.raises(UnitNormalizationError):
         normalize_unit("cup")
+
+
+def _edamam_selection_response(days):
+    return {
+        "status": "OK",
+        "selection": [
+            {
+                "sections": {
+                    "Breakfast": _assignment("recipe:breakfast"),
+                    "Lunch": _assignment("recipe:lunch"),
+                    "Dinner": _assignment("recipe:dinner"),
+                }
+            }
+            for _ in range(days)
+        ],
+    }
+
+
+def _assignment(uri):
+    slug = uri.rsplit(":", 1)[-1]
+    return {
+        "assigned": uri,
+        "_links": {
+            "self": {
+                "title": slug.title(),
+                "href": f"https://api.edamam.test/api/recipes/v2/{slug}?type=public",
+            }
+        },
+    }
+
+
+def _recipe_detail(label, url):
+    return {
+        "recipe": {
+            "uri": f"recipe:{label}",
+            "label": label,
+            "url": url,
+            "yield": 4,
+            "calories": 800,
+            "ingredients": [
+                {
+                    "foodId": "food-oats",
+                    "food": "Dry oats",
+                    "foodCategory": "grains",
+                    "weight": 200,
+                    "text": "Dry oats",
+                },
+                {
+                    "foodId": "food-rice",
+                    "food": "Dry rice",
+                    "foodCategory": "grains",
+                    "weight": 400,
+                    "text": "Dry rice",
+                },
+            ],
+        }
+    }

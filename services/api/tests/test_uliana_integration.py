@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from smart_basket.agent import UlianaPlanner
 from smart_basket.app import create_app
 from smart_basket.demo import DemoCatalog
-from smart_basket.schemas import UserContext
+from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal, UserContext
 
 
 def test_uliana_planner_through_api():
@@ -133,3 +133,74 @@ def test_uliana_reports_unsupported_context_restriction():
     assert run["status"] == "failed"
     assert run["error"]["code"] == "VALIDATION_ERROR"
     assert "gluten-free" in run["error"]["message"]
+
+
+def test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart(monkeypatch):
+    def fake_meal_plan(request, effective_context):
+        meal = Meal(
+            id="edamam-day-1-breakfast-oats",
+            day=1,
+            slot="breakfast",
+            title="Live oats",
+            servings=request.people,
+            kcal_per_serving=200.0,
+            ingredient_ids=["oats"],
+            ingredient_amounts=[
+                IngredientAmount(
+                    ingredient_id="oats",
+                    name="Dry oats",
+                    quantity=50.0 * request.people,
+                    unit="g",
+                )
+            ],
+            source="edamam",
+            source_url="https://recipes.test/oats",
+            attribution="Recipe data powered by Edamam.",
+        )
+        return {
+            "meals": [meal],
+            "ingredients": [
+                IngredientRequirement(
+                    id="oats",
+                    name="Dry oats",
+                    search_terms=["oats"],
+                    quantity=50.0 * request.people,
+                    unit="g",
+                    meal_ids=[meal.id],
+                    restrictions=[],
+                )
+            ],
+            "warnings": [],
+            "source": "edamam",
+        }
+
+    monkeypatch.setattr("smart_basket.agent.orchestrator.build_meal_plan", fake_meal_plan)
+
+    app = create_app()
+    client = TestClient(app)
+    client.get("/api/context")
+    response = client.post(
+        "/api/plans",
+        json={
+            "budgetMinor": 180000,
+            "currency": "UAH",
+            "days": 1,
+            "people": 2,
+            "caloriesPerPersonPerDay": None,
+            "preferences": [],
+            "restrictions": [],
+            "pets": [],
+            "includeRecurring": False,
+            "notes": "",
+        },
+    )
+    run = client.get(f"/api/plans/{response.json()['runId']}").json()
+    result = run["result"]
+
+    assert result["dataMode"] == "mixed"
+    assert result["canConfirmCart"] is False
+    assert "cart confirmation is disabled" in " ".join(result["warnings"])
+    assert client.post(
+        "/api/cart/preview",
+        json={"runId": result["runId"], "version": result["version"]},
+    ).status_code == 409
