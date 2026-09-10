@@ -12,7 +12,8 @@ def test_all_fixtures_validate_against_executable_models():
     manifest = json.loads((ROOT / "fixtures/manifest.json").read_text(encoding="utf-8"))
     assert set(manifest) == {
         "user-context.json", "planning-request.json", "run-queued.json",
-        "planning-result.json", "product-candidates.json", "recurring-items.json", "run-failed.json",
+        "planning-result.json", "meal-plan.json", "ingredients.json",
+        "product-candidates.json", "recurring-items.json", "run-failed.json",
         "validation-error.json", "cart-preview.json", "cart-success.json",
         "cart-partial.json", "cart-failed.json", "fatsecret-preview.json",
         "fatsecret-success.json", "fatsecret-partial.json", "fatsecret-failed.json",
