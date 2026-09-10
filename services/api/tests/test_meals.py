@@ -311,3 +311,82 @@ def _recipe_detail(label, url):
             ],
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# New dietary label coverage
+# ---------------------------------------------------------------------------
+
+def test_vegan_preference_maps_to_edamam_health_label():
+    filters = resolve_meal_filters(
+        request(preferences=["vegan"], restrictions=[]),
+        context(),
+    )
+    assert filters.preferences == ("vegan",)
+    assert "vegan" in filters.edamam_health_labels
+
+
+def test_paleo_preference_maps_to_edamam_health_label():
+    filters = resolve_meal_filters(
+        request(preferences=["paleo"], restrictions=[]),
+        context(),
+    )
+    assert "paleo" in filters.edamam_health_labels
+
+
+def test_new_restrictions_map_to_edamam_health_labels():
+    for label in ("gluten-free", "dairy-free", "tree-nut-free", "shellfish-free", "soy-free", "egg-free", "pork-free"):
+        filters = resolve_meal_filters(
+            request(preferences=[], restrictions=[label]),
+            context(),
+        )
+        assert label in filters.edamam_health_labels, f"{label} missing from edamam labels"
+        assert filters.restrictions == (label,)
+
+
+def test_combined_preferences_and_restrictions_produce_correct_edamam_labels():
+    filters = resolve_meal_filters(
+        request(preferences=["vegan", "high-protein"], restrictions=["gluten-free", "tree-nut-free"]),
+        context(),
+    )
+    assert set(filters.edamam_health_labels) == {"vegan", "high-protein", "gluten-free", "tree-nut-free"}
+
+
+def test_unsupported_preference_from_context_fails_closed():
+    with pytest.raises(UnsupportedMealFilter, match="Unsupported meal preferences"):
+        resolve_meal_filters(request(preferences=[]), context(preferences=["keto"]))
+
+
+def test_unsupported_restriction_from_context_still_fails_closed_with_expanded_set():
+    with pytest.raises(UnsupportedMealFilter, match="Unsupported hard restrictions"):
+        resolve_meal_filters(request(preferences=[], restrictions=[]), context(restrictions=["alcohol-free"]))
+
+
+# ---------------------------------------------------------------------------
+# Boundary tests: max and min plan sizes
+# ---------------------------------------------------------------------------
+
+def test_max_boundary_seven_days_six_people():
+    result = build_meal_plan(request(days=7, people=6), context())
+    meals = result["meals"]
+    assert len(meals) == 21
+    assert {meal.day for meal in meals} == set(range(1, 8))
+    assert all(meal.servings == 6 for meal in meals)
+
+
+def test_min_boundary_one_day_one_person():
+    result = build_meal_plan(request(days=1, people=1), context())
+    meals = result["meals"]
+    assert len(meals) == 3
+    assert {meal.slot for meal in meals} == {"breakfast", "lunch", "dinner"}
+    assert all(meal.servings == 1 for meal in meals)
+    for meal in meals:
+        for amount in meal.ingredient_amounts:
+            assert amount.quantity > 0
+
+
+def test_no_calorie_target_still_produces_meals_and_warning():
+    result = build_meal_plan(request(days=2, people=2, calories=None), context())
+    assert len(result["meals"]) == 6
+    warnings_text = " ".join(result["warnings"])
+    assert "calorie" not in warnings_text.lower() or result["source"] == "synthetic"
