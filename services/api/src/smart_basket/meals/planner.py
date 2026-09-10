@@ -13,6 +13,8 @@ def build_meal_plan(request, effective_context):
     filters = resolve_meal_filters(request, effective_context)
     settings = EdamamSettings.from_env()
     source = os.getenv("SMART_BASKET_MEALS_SOURCE", "synthetic")
+    if source not in {"synthetic", "edamam"}:
+        raise EdamamUnavailable("SMART_BASKET_MEALS_SOURCE must be 'synthetic' or 'edamam'.")
     fallback_enabled = os.getenv("EDAMAM_SYNTHETIC_FALLBACK", "true").casefold() in {
         "1",
         "true",

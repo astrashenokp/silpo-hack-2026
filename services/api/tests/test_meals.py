@@ -170,6 +170,13 @@ def test_requested_edamam_source_can_fail_without_fallback(monkeypatch):
         build_meal_plan(request(), context())
 
 
+def test_unknown_meal_source_fails_explicitly(monkeypatch):
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "typo")
+
+    with pytest.raises(EdamamUnavailable):
+        build_meal_plan(request(), context())
+
+
 def test_unknown_units_are_not_guessed():
     with pytest.raises(UnitNormalizationError):
         normalize_unit("cup")
