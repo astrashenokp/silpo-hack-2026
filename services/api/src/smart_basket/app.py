@@ -15,10 +15,12 @@ from smart_basket.demo import DemoCatalog
 from smart_basket.agent import UlianaPlanner
 from smart_basket.fatsecret.export import DemoExportService
 from smart_basket.routes.api import router
+from smart_basket.routes.auth import router as silpo_auth_router
+from smart_basket.mcp.oauth import SilpoOAuthManager
 from smart_basket.schemas import ErrorEnvelope
 
 
-def create_app(*, planner=None, catalog=None):
+def create_app(*, planner=None, catalog=None, silpo_oauth=None):
     if os.getenv("SMART_BASKET_MODE", "demo") != "demo":
         raise RuntimeError("Only demo mode is implemented. Live adapters and durable storage are required first.")
     app = FastAPI(title="Smart Basket API (demo)", version="0.2.0",
@@ -30,6 +32,7 @@ def create_app(*, planner=None, catalog=None):
     app.state.planner = planner if planner is not None else UlianaPlanner(app.state.catalog)
     app.state.cart_service = DemoCartService(app.state.catalog)
     app.state.export_service = DemoExportService()
+    app.state.silpo_oauth = silpo_oauth if silpo_oauth is not None else SilpoOAuthManager()
     origins = [s.strip() for s in os.getenv("SMART_BASKET_CORS_ORIGINS", "http://localhost:3000").split(",") if s.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-Demo-Scenario"])
@@ -67,6 +70,8 @@ def create_app(*, planner=None, catalog=None):
         return JSONResponse(status_code=500, content={"error": {"code": "INTERNAL_ERROR",
             "message": "Unexpected server error.", "retryable": False}})
 
+    # Concrete integration routes must precede the generic unavailable-auth fallback.
+    app.include_router(silpo_auth_router)
     app.include_router(router)
     # FastAPI's default validation response is 422; this contract deliberately returns 400.
     original_openapi = app.openapi

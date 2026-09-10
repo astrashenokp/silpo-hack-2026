@@ -156,8 +156,67 @@ def test_cors_errors_and_unimplemented_oauth(client, planning_request):
     assert response.headers["access-control-allow-credentials"] == "true"
     assert client.post("/api/plans", json=planning_request, headers={"Origin": "https://untrusted.test"}).status_code == 403
     assert client.get("/api/missing").json()["error"]["code"] == "NOT_FOUND"
-    assert client.get("/api/auth/silpo/start").status_code == 503
     assert client.get("/api/integrations/fatsecret").json()["connected"] is False
+
+
+def test_silpo_oauth_routes_use_server_session():
+    class FakeSilpoOAuth:
+        async def cancel(self, owner):
+            self.cancelled_for = owner.id
+
+        async def start(self, owner):
+            self.started_for = owner.id
+            return "https://auth.silpo.test/authorize?state=generated"
+
+        async def finish(self, owner, *, code, state, iss):
+            self.callback = {"code": code, "state": state, "iss": iss}
+            with owner.lock:
+                owner.silpo_connected = True
+                owner.silpo_tools = ("silpo_get_my_profile",)
+
+        def return_url(self, *, connected):
+            assert connected is True
+            return "http://localhost:3000?silpo=connected"
+
+    oauth = FakeSilpoOAuth()
+    app = create_app(silpo_oauth=oauth)
+    with TestClient(app) as auth_client:
+        auth_client.get("/api/context")
+        started = auth_client.get("/api/auth/silpo/start", follow_redirects=False)
+        assert started.status_code == 302
+        assert started.headers["location"].startswith("https://auth.silpo.test/authorize")
+
+        callback = auth_client.get(
+            "/api/auth/silpo/callback?code=one&state=generated&iss=https://auth.silpo.test",
+            follow_redirects=False,
+        )
+        assert callback.status_code == 303
+        assert callback.headers["location"] == "http://localhost:3000?silpo=connected"
+        assert oauth.callback == {
+            "code": "one",
+            "state": "generated",
+            "iss": "https://auth.silpo.test",
+        }
+        assert auth_client.get("/api/integrations/silpo").json() == {
+            "connected": True,
+            "toolsAvailable": ["silpo_get_my_profile"],
+            "reason": None,
+        }
+
+
+def test_silpo_callback_requires_code_and_state(client):
+    class FakeSilpoOAuth:
+        async def cancel(self, owner):
+            self.cancelled_for = owner.id
+
+    oauth = FakeSilpoOAuth()
+    app = create_app(silpo_oauth=oauth)
+    with TestClient(app) as auth_client:
+        auth_client.get("/api/context")
+        response = auth_client.get("/api/auth/silpo/callback?code=one")
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "INVALID_OAUTH_CALLBACK"
+        assert oauth.cancelled_for
 
 
 def test_live_mode_fails_closed(monkeypatch):
