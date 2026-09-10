@@ -54,6 +54,12 @@ In demo mode the `DemoCatalog.check_restrictions` only verifies `peanut-free`; a
 restrictions return `"unknown"` on product candidates. This is correct demo behaviour — it
 does not indicate a filter mapping error.
 
+## Additional API Surface
+
+`GET /api/filters` — no session required. Returns `{ preferences: string[], restrictions: string[] }`.
+Ksiusha uses this to render the dietary preference checkboxes dynamically.
+Uliana calls `from smart_basket.meals import supported_labels, label_display_map` for programmatic access.
+
 ## Contract Shape
 
 Public call:
@@ -152,7 +158,7 @@ services/api/.venv/bin/python -m pytest services/api/tests -q
 services/api/.venv/bin/python services/api/scripts/export_contracts.py --check
 ```
 
-Current local result: 106 backend tests pass with one Starlette/AnyIO deprecation warning.
+Current local result: 115 backend tests pass with one Starlette/AnyIO deprecation warning.
 
 ## Known Limits
 
