@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import PlannerForm from "@/features/planner-input/PlannerForm";
 import type { RunSnapshot as PlannerRunSnapshot } from "@/lib/api/planner";
@@ -91,6 +92,7 @@ interface ChatEntry {
   scenario: DemoScenarioKey;
   view: View | null;
   sentMessages: string[];
+  screen: "home" | "planner";
 }
 
 function chatViewKey(chat: ChatEntry): string {
@@ -102,17 +104,21 @@ export default function Home() {
   const [chats, setChats] = useState<ChatEntry[]>(() => [
     {
       id: 1,
-      title: "Чат 1",
+      title: "Привіт",
       mode: "fixtures",
       scenario: "ready",
-      view: buildDemo("ready"),
+      view: null,
       sentMessages: [],
+      screen: "home",
     },
   ]);
   const [activeChatId, setActiveChatId] = useState(1);
   const [nextChatId, setNextChatId] = useState(2);
   const [apiScenario] = useState<DemoScenario>("success");
   const [chatText, setChatText] = useState("");
+  const [enteredApp, setEnteredApp] = useState(false);
+  const [accountConnected, setAccountConnected] = useState(false);
+  const [fatSecretConnected, setFatSecretConnected] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [addedToCart, setAddedToCart] = useState(false);
   const [cartProductIds, setCartProductIds] = useState<string[] | null>(null);
@@ -147,11 +153,12 @@ export default function Home() {
     setNextChatId(id + 1);
     const entry: ChatEntry = {
       id,
-      title: `Чат ${id}`,
+      title: id === 1 ? "Привіт" : `Новий чат ${id}`,
       mode: "fixtures",
       scenario: "ready",
-      view: buildDemo("ready"),
+      view: null,
       sentMessages: [],
+      screen: "home",
     };
     setChats((current) => [...current, entry]);
     setActiveChatId(id);
@@ -159,20 +166,14 @@ export default function Home() {
     setChatText("");
   }
 
-  function newLivePlan() {
-    const id = nextChatId;
-    setNextChatId(id + 1);
-    const entry: ChatEntry = {
-      id,
-      title: `Новий план ${id}`,
-      mode: "live",
-      scenario: "ready",
+  function startPlanning() {
+    patchActiveChat({
+      screen: "planner",
       view: null,
+      mode: "fixtures",
       sentMessages: [],
-    };
-    setChats((current) => [...current, entry]);
-    setActiveChatId(id);
-    setActiveTab("chats");
+      title: "Планування меню",
+    });
     setChatText("");
   }
 
@@ -189,11 +190,12 @@ export default function Home() {
       setNextChatId(fallbackId + 1);
       const fallback: ChatEntry = {
         id: fallbackId,
-        title: `Чат ${fallbackId}`,
+        title: `Новий чат ${fallbackId}`,
         mode: "fixtures",
         scenario: "ready",
-        view: buildDemo("ready"),
+        view: null,
         sentMessages: [],
+        screen: "home",
       };
       setChats([fallback]);
       setActiveChatId(fallbackId);
@@ -269,7 +271,13 @@ export default function Home() {
       sourceMode={chat.mode}
       cartScenario={apiScenario}
       recalcBusy={false}
-      paramsForm={!chat.view ? <PlannerForm onPlanReady={handlePlanReady} /> : undefined}
+      paramsForm={!chat.view ? (
+        <PlannerForm
+          onPlanReady={handlePlanReady}
+          demoMode
+          accountConnected={accountConnected}
+        />
+      ) : undefined}
       sentMessages={chat.sentMessages}
       savedMeals={savedMeals}
       onSavedMealsChange={setSavedMeals}
@@ -289,7 +297,7 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-dvh bg-white font-sans text-black">
+    <div className="min-h-dvh bg-white font-sans text-[#202124]">
       {fsPreview && (
         <FatSecretPreviewModal
           preview={fsPreview}
@@ -302,7 +310,7 @@ export default function Home() {
       <header className="sticky top-0 z-30 flex h-16 items-center border-b border-[#E6E6E6] bg-white px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2">
           <AgentLogo className="h-8 w-8 text-[#F89F46]" />
-          <span className="text-[19px] font-medium">Агент</span>
+          <span className="text-[18px] font-medium">Агент</span>
         </div>
         <div className="ml-auto flex items-center gap-3 lg:hidden">
           <button
@@ -317,24 +325,18 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="flex min-h-[calc(100dvh-64px)]">
-        <aside className="hidden w-[272px] shrink-0 flex-col border-r border-[#E6E6E6] bg-white lg:flex">
+      <div className="flex h-[calc(100dvh-64px)] overflow-hidden">
+        <aside className="sticky top-16 hidden h-[calc(100dvh-64px)] w-[272px] shrink-0 self-start flex-col overflow-hidden border-r border-[#E6E6E6] bg-white lg:flex">
           <div className="flex flex-col items-center gap-4 px-6 py-6">
             <button
               type="button"
               onClick={newChat}
-              className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-[14px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
             >
               <span className="text-xl font-light">+</span>
               Новий чат
             </button>
-            <button
-              type="button"
-              onClick={newLivePlan}
-              className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full border border-[#F89F46] text-sm font-medium text-[#886432] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
-            >
-              Запустити новий план
-            </button>
+
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col px-6 pb-2">
@@ -358,7 +360,7 @@ export default function Home() {
                     >
                       <ChatIcon className={active ? "text-[#F89F46]" : "text-[#8E8E93]"} />
                       <span
-                        className={`truncate text-sm ${
+                        className={`truncate text-[14px] ${
                           active ? "font-medium text-[#886432]" : "text-[#2c2c2c]"
                         }`}
                       >
@@ -379,11 +381,11 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-auto">
+          <div className="mt-auto shrink-0 border-t border-[#F2F2F2] bg-white">
             <button
               type="button"
               onClick={() => setActiveTab(activeTab === "saved" ? "chats" : "saved")}
-              className={`flex h-10 w-full items-center gap-2 px-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-inset ${
+              className={`flex h-10 w-full items-center gap-2 px-8 text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-inset ${
                 activeTab === "saved"
                   ? "bg-[rgba(248,159,70,0.2)] text-[#886432]"
                   : "text-[#2c2c2c]"
@@ -400,7 +402,7 @@ export default function Home() {
 
             <div className="flex h-16 items-center gap-2 px-8">
               <div className="h-8 w-8 shrink-0 rounded-full bg-[#BABABA]" />
-              <span className="flex-1 text-sm">Катерина</span>
+              <span className="flex-1 text-[14px]">{accountConnected ? "Катерина" : "Гість"}</span>
               <button
                 type="button"
                 aria-label="Меню профілю"
@@ -415,10 +417,33 @@ export default function Home() {
         <main className="min-w-0 flex-1 bg-white">
           <div
             ref={scrollRef}
-            className="min-h-[calc(100dvh-64px)] overflow-y-auto px-4 pb-32 pt-4 sm:px-6 md:px-8 lg:px-10"
+            className={
+              !enteredApp ||
+              (activeTab === "chats" && activeChat?.screen === "home")
+                ? "h-[calc(100dvh-64px)] overflow-hidden"
+                : "h-[calc(100dvh-64px)] overflow-y-auto px-4 pb-28 pt-3 sm:px-6 md:px-8 lg:px-8"
+            }
           >
-            <div className="mx-auto w-full max-w-[1500px]">
-              {activeTab === "saved" ? (
+            <div
+              className={
+                !enteredApp ||
+                (activeTab === "chats" && activeChat?.screen === "home")
+                  ? "h-full w-full"
+                  : `mx-auto w-full max-w-[1500px] ${activeTab === "chats" && activeChat?.screen === "planner" && !activeChat.view ? "xl:pr-[350px]" : ""}`
+              }
+            >
+              {!enteredApp ? (
+                <AccountGate
+                  onConnect={() => {
+                    setAccountConnected(true);
+                    setEnteredApp(true);
+                  }}
+                  onGuest={() => {
+                    setAccountConnected(false);
+                    setEnteredApp(true);
+                  }}
+                />
+              ) : activeTab === "saved" ? (
                 <SavedMealsTab
                   meals={savedMeals}
                   onRemove={(id) =>
@@ -428,6 +453,16 @@ export default function Home() {
                   exportBusy={fsBusy}
                   exportResult={fsExport}
                   onBack={() => setActiveTab("chats")}
+                />
+              ) : activeChat?.screen === "home" ? (
+                <WelcomeScreen
+                  accountConnected={accountConnected}
+                  fatSecretConnected={fatSecretConnected}
+                  value={chatText}
+                  onChange={setChatText}
+                  onStartPlanning={startPlanning}
+                  onConnectFatSecret={() => setFatSecretConnected(true)}
+                  onQuickPrompt={(prompt) => setChatText(prompt)}
                 />
               ) : (
                 chats.map((chat) => (
@@ -439,13 +474,18 @@ export default function Home() {
                   </div>
                 ))
               )}
+
+              {enteredApp &&
+                activeTab === "chats" &&
+                activeChat?.screen === "planner" &&
+                !activeChat.view && <SetupCartPreview />}
             </div>
           </div>
 
-          {activeTab === "chats" && (
-            <div className="fixed bottom-0 right-0 left-0 z-20 border-t border-[#E6E6E6] bg-white/95 px-4 py-3 backdrop-blur lg:left-[272px]">
+          {enteredApp && activeTab === "chats" && activeChat?.screen === "planner" && (
+            <div className="fixed bottom-0 right-0 left-0 z-20 border-t border-[#E6E6E6] bg-white/95 px-4 py-3 backdrop-blur lg:left-[272px] xl:right-[350px]">
               <form
-                className="mx-auto flex h-12 w-full max-w-[850px] items-center gap-2 rounded-full border border-[#E6E6E6] bg-white p-1"
+                className="mx-auto flex h-11 w-full max-w-[760px] items-center gap-2 rounded-full border border-[#E6E6E6] bg-white p-1"
                 onSubmit={(event) => {
                   event.preventDefault();
                   sendChat();
@@ -461,7 +501,7 @@ export default function Home() {
                 <input
                   value={chatText}
                   onChange={(event) => setChatText(event.target.value)}
-                  className="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-[#BABABA] sm:text-base"
+                  className="min-w-0 flex-1 bg-transparent px-1 text-[14px] outline-none placeholder:text-[#BABABA]"
                   placeholder="Опишіть, що ви хочете приготувати або спланувати..."
                   aria-label="Повідомлення"
                 />
@@ -485,6 +525,199 @@ export default function Home() {
         </main>
       </div>
     </div>
+  );
+}
+
+
+function SetupCartPreview() {
+  const items = [1, 2];
+
+  return (
+    <aside className="fixed bottom-[92px] right-6 top-[96px] z-10 hidden w-[300px] flex-col rounded-[18px] border border-[#F28A64] border-l-[6px] bg-white px-4 py-5 shadow-sm xl:flex">
+      <div>
+        <h2 className="text-[17px] font-semibold text-[#9A6A31]">Смарт кошик Сільпо</h2>
+        <p className="mt-1 text-[11px] leading-4 text-[#7D8798]">
+          Супермаркет: просп. Бандери, 23<br />(Самовивіз)
+        </p>
+        <p className="mt-5 text-[12px] text-[#333]">У кошику: 2 товари</p>
+
+        <div className="mt-4 space-y-4">
+          {items.map((item) => (
+            <div key={item} className="grid grid-cols-[44px_minmax(0,1fr)_64px] gap-2">
+              <Image
+                src="/butter-galychyna.png"
+                alt="Масло солодковершкове Галичина"
+                width={44}
+                height={32}
+                className="mt-1 h-8 w-11 object-contain"
+              />
+              <div className="min-w-0">
+                <p className="text-[10px] leading-[14px] text-[#333]">Масло солодковершкове “Галичина” 82,5%</p>
+                <p className="text-[9px] text-[#9A9A9A]">180 г</p>
+                <div className="mt-1 flex items-center gap-1">
+                  <span className="text-[10px] text-[#777] line-through">124.00 ₴</span>
+                  <span className="rounded bg-[#F89F46] px-1 text-[8px] text-white">-35%</span>
+                </div>
+                <p className="text-[11px] font-semibold text-[#333]">79.99 ₴</p>
+              </div>
+              <div className="flex flex-col items-end justify-between">
+                <button type="button" aria-label="Видалити товар" className="flex size-5 items-center justify-center rounded border border-[#F89F46] text-[10px] text-[#F89F46]">▢</button>
+                <div className="flex items-center gap-2 text-[11px] text-[#777]">
+                  <button type="button" className="flex size-5 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">−</button>
+                  <span>1</span>
+                  <button type="button" className="flex size-5 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">+</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-auto">
+        <p className="text-right text-[10px] text-[#444]">Сума знижки: <span className="font-semibold text-[#22A06B]">-88,02 ₴</span></p>
+        <p className="mt-1 text-right text-[11px] font-semibold text-[#333]">Загальна сума: 159,98 ₴</p>
+        <button type="button" disabled className="mt-4 h-10 w-full rounded-md border border-[#F8DCC5] text-[11px] font-medium text-[#EFCDB1]">
+          ↥ Синхронізувати з Сільпо
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function AccountGate({
+  onConnect,
+  onGuest,
+}: {
+  onConnect: () => void;
+  onGuest: () => void;
+}) {
+  return (
+    <section className="flex h-full w-full items-center justify-center overflow-hidden bg-[#FBC890] p-4 sm:p-6">
+      <div className="flex aspect-square w-[min(72vw,calc(100dvh-112px),650px)] max-w-[650px] items-center justify-center rounded-full bg-[#FFF8EC] p-8 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]">
+        <div className="max-w-[460px]">
+          <h1 className="silpo-page-title">
+            Підключіть ваш акаунт Сільпо
+          </h1>
+          <p className="mx-auto mt-6 max-w-[430px] silpo-page-subtitle">
+            Автономний AI-планер використовує «Власний Рахунок», щоб автоматично враховувати
+            ваші знижки, історію чеків та улюблені товари.
+          </p>
+          <div className="mx-auto mt-8 flex max-w-[310px] flex-col gap-3">
+            <button
+              type="button"
+              onClick={onConnect}
+              className="h-12 rounded-lg bg-[#F89F46] px-5 font-semibold text-white transition hover:bg-[#E88E36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+            >
+              Підключити акаунт Сільпо&nbsp; ◎
+            </button>
+            <button
+              type="button"
+              onClick={onGuest}
+              className="h-12 rounded-lg bg-[#F5E6D2] px-5 font-medium text-[#8B7357] transition hover:bg-[#EEDCC5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+            >
+              Продовжити як гість (без історії)
+            </button>
+          </div>
+          <p className="mt-5 text-xs leading-5 text-[#8B7357]">
+            Демо-режим: підключення імітується у браузері, без передачі реальних облікових даних.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WelcomeScreen({
+  accountConnected,
+  fatSecretConnected,
+  value,
+  onChange,
+  onStartPlanning,
+  onConnectFatSecret,
+  onQuickPrompt,
+}: {
+  accountConnected: boolean;
+  fatSecretConnected: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onStartPlanning: () => void;
+  onConnectFatSecret: () => void;
+  onQuickPrompt: (value: string) => void;
+}) {
+  const prompts = [
+    "Меню для вечірки",
+    "Вкластися у бюджет",
+    "Корм для тварин",
+    "Персональна дієта/КБЖУ",
+    "Автопоповнення продуктів",
+  ];
+
+  return (
+    <section className="flex h-full w-full items-center justify-center overflow-hidden bg-[#FBC890] p-4 sm:p-6">
+      <div className="flex aspect-square w-[min(72vw,calc(100dvh-112px),690px)] max-w-[690px] items-center justify-center rounded-full bg-[#FFF8EC] p-7 text-center sm:p-12">
+        <div className="w-full max-w-[540px]">
+          <h1 className="silpo-page-title">Сільпо AI помічник</h1>
+          <p className="mx-auto mt-5 max-w-[430px] silpo-page-subtitle">
+            {accountConnected
+              ? "Вітаю, Катерино. Чим я можу допомогти вам сьогодні?"
+              : "Вітаю! Чим я можу допомогти вам сьогодні?"}
+          </p>
+
+          <form
+            className="mt-10 flex h-12 w-full items-center rounded-full border border-[#E7E7E7] bg-white px-1 shadow-sm"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onStartPlanning();
+            }}
+          >
+            <span className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#FFF0E1] text-xl text-[#F89F46]">+</span>
+            <input
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-[#B8B8B8]"
+              placeholder="Опишіть, що ви хочете приготувати або спланувати..."
+              aria-label="Запит до помічника"
+            />
+            <button type="button" aria-label="Голосове введення" className="flex size-9 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">
+              <MicIcon />
+            </button>
+            <button type="submit" aria-label="Надіслати" className="ml-1 flex size-9 items-center justify-center rounded-full bg-[#F89F46] text-white">
+              <ArrowUpIcon />
+            </button>
+          </form>
+
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={onStartPlanning}
+              className="rounded-lg bg-[#F89F46] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#E88E36]"
+            >
+              Почати планування&nbsp; 🚀
+            </button>
+            <button
+              type="button"
+              onClick={onConnectFatSecret}
+              className="rounded-lg border border-[#F89F46] bg-white px-6 py-3 text-[14px] font-semibold text-[#F89F46] transition hover:bg-[#FFF8F1]"
+            >
+              {fatSecretConnected ? "FatSecret підключено ✓" : "Підключити FatSecret  🔗"}
+            </button>
+          </div>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {prompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => onQuickPrompt(prompt)}
+                className="rounded-full bg-[#FFF2DE] px-4 py-2 text-[12px] font-medium text-[#8A5D2A] transition hover:bg-[#FCE7C6]"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -655,7 +888,7 @@ function SavedMealsTab({
     <div className="pt-2 lg:pt-6">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-[#886432]">Збережені у FatSecret</h2>
+          <h2 className="text-[18px] font-semibold text-[#886432]">Збережені у FatSecret</h2>
           <p className="mt-1 text-sm text-[#667085]">
             Страви, які ви зберегли у FatSecret як Saved Meals. Натисніть сердечко біля страви в
             плані харчування, щоб додати її сюди, потім збережіть у свій акаунт.
