@@ -15,6 +15,8 @@ from urllib import error, parse, request
 
 from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal
 
+from .nutrition import ACCURACY_WARNINGS, calorie_target_for_slot, calorie_target_warnings, build_nutrition_summary
+
 
 class EdamamUnavailable(RuntimeError):
     """Raised when Edamam cannot be used for this run."""
@@ -239,6 +241,10 @@ def map_edamam_plan_response(
                 title=str(recipe.get("label") or assignment.link_title or "Edamam recipe"),
                 servings=request_model.people,
                 kcal_per_serving=(calories / yield_count) if calories is not None else None,
+                calorie_target=calorie_target_for_slot(
+                    request_model.calories_per_person_per_day,
+                    assignment.slot,
+                ),
                 ingredient_ids=ingredient_ids,
                 ingredient_amounts=amounts,
                 source="edamam",
@@ -259,8 +265,13 @@ def map_edamam_plan_response(
         )
         for ingredient_id, data in ingredient_totals.items()
     ]
+    nutrition_summary = build_nutrition_summary(request_model, meals)
+    warnings.extend(ACCURACY_WARNINGS)
+    warnings.extend(calorie_target_warnings(nutrition_summary))
+
     return {
         "meals": meals,
+        "nutrition_summary": nutrition_summary,
         "ingredients": requirements,
         "warnings": warnings,
         "source": "edamam",

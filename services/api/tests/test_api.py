@@ -37,6 +37,20 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
         "lentils": 1200,
     }
     assert plan["mealPlan"][0]["ingredientAmounts"][0]["quantity"] == 150
+    assert plan["mealPlan"][0]["calorieTarget"] == {
+        "share": 0.25,
+        "targetKcalPerServing": 500.0,
+        "minKcalPerServing": 450.0,
+        "maxKcalPerServing": 550.0,
+    }
+    assert plan["nutritionSummary"]["daily"][0] == {
+        "day": 1,
+        "targetKcalPerPerson": 2000.0,
+        "plannedKcalPerPerson": 1860.0,
+        "minKcalPerPerson": 1800.0,
+        "maxKcalPerPerson": 2200.0,
+        "withinTargetRange": True,
+    }
     assert "Sofiia synthetic fallback" in " ".join(plan["warnings"])
     assert plan["canConfirmCart"] is True
     assert client.get("/api/health").headers["X-Data-Mode"] == "demo"

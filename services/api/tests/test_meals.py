@@ -54,6 +54,41 @@ def test_synthetic_plan_covers_every_day_and_slot():
     assert all(meal.kcal_per_serving is not None for meal in meals)
 
 
+def test_synthetic_plan_exposes_chrononutrition_calorie_targets():
+    result = build_meal_plan(request(days=1, people=2, calories=2000), context())
+    by_slot = {meal.slot: meal for meal in result["meals"]}
+
+    assert by_slot["breakfast"].calorie_target.target_kcal_per_serving == 500
+    assert by_slot["lunch"].calorie_target.target_kcal_per_serving == 700
+    assert by_slot["dinner"].calorie_target.target_kcal_per_serving == 800
+    assert result["nutrition_summary"].distribution[0].slot == "breakfast"
+    assert result["nutrition_summary"].daily[0].planned_kcal_per_person == 1860
+    assert result["nutrition_summary"].daily[0].within_target_range is True
+
+
+def test_synthetic_plan_warns_when_daily_calories_miss_target_range():
+    result = build_meal_plan(request(days=1, people=1, calories=3000), context())
+
+    assert result["nutrition_summary"].daily[0].within_target_range is False
+    assert "outside the configured +/-10%" in " ".join(result["warnings"])
+
+
+def test_meal_plan_without_calorie_target_keeps_summary_nullable():
+    result = build_meal_plan(request(days=1, people=1, calories=None), context())
+
+    assert all(meal.calorie_target is None for meal in result["meals"])
+    assert result["nutrition_summary"].calorie_target_kcal_per_person_per_day is None
+    assert result["nutrition_summary"].daily[0].within_target_range is None
+
+
+def test_meal_plan_warnings_cover_cooking_and_vision_accuracy_boundaries():
+    result = build_meal_plan(request(days=1, people=1), context())
+    warnings = " ".join(result["warnings"])
+
+    assert "cooking yield" in warnings
+    assert "Vision-based consumed-food analysis is outside this planner boundary" in warnings
+
+
 def test_synthetic_plan_has_demo_variety_without_changing_totals():
     result = build_meal_plan(request(), context())
     titles = {meal.title for meal in result["meals"]}
@@ -184,12 +219,14 @@ def test_edamam_selection_and_recipe_details_map_to_contract_models():
     assert breakfast.attribution == "Recipe data powered by Edamam."
     assert breakfast.servings == 2
     assert breakfast.kcal_per_serving == 200
+    assert breakfast.calorie_target.target_kcal_per_serving == 500
     assert breakfast.ingredient_amounts[0].quantity == 100
 
     ingredient = result["ingredients"][0]
     assert ingredient.quantity == 300
     assert ingredient.unit == "g"
     assert ingredient.restrictions == ["peanut-free"]
+    assert result["nutrition_summary"].daily[0].planned_kcal_per_person == 600
 
 
 def test_edamam_mapping_rejects_incomplete_selection():

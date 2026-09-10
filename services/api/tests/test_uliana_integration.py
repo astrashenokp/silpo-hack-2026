@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from smart_basket.agent import UlianaPlanner
 from smart_basket.app import create_app
 from smart_basket.demo import DemoCatalog
+from smart_basket.meals.nutrition import build_nutrition_summary
 from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal, UserContext
 
 
@@ -159,6 +160,7 @@ def test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart(monkeypatch):
         )
         return {
             "meals": [meal],
+            "nutrition_summary": build_nutrition_summary(request, [meal]),
             "ingredients": [
                 IngredientRequirement(
                     id="oats",

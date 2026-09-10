@@ -5,6 +5,7 @@ from typing import Callable, Protocol
 
 from smart_basket.catalog.matching import MatchingContext, find_product_candidates, line_total, purchase_quantity
 from smart_basket.core import DEMO_WARNING, now
+from smart_basket.meals.nutrition import build_nutrition_summary
 from smart_basket.schemas import (
     IngredientAmount, IngredientRequirement, Meal, PlanningRequest, PlanningResult,
     ProductCandidate, ProductSelection, UserContext,
@@ -88,6 +89,7 @@ class DemoPlanner:
         ingredients = [IngredientRequirement(id=key, name=names[key], search_terms=[key],
             quantity=quantity, unit="g", meal_ids=meal_ids[key], restrictions=request.restrictions)
             for key, quantity in quantities.items()]
+        nutrition_summary = build_nutrition_summary(request, meals)
         emit_progress("meals", "Created synthetic meal cards and scaled ingredient quantities.")
         matches = find_product_candidates(ingredients, [], MatchingContext(
             session, self.catalog, self.catalog.check_restrictions))
@@ -123,11 +125,12 @@ class DemoPlanner:
         ]
         emit_progress("optimization", "Calculated demo package totals; no optimization performed.")
         return PlanningResult(run_id="pending", version=1, data_mode="demo", effective_request=request,
-            meal_plan=meals, ingredients=ingredients, recurring_items=[], selected_products=selections,
-            substitutions=[], budget_minor=request.budget_minor, basket_total_minor=total,
-            budget_remaining_minor=request.budget_minor-total, savings_minor=None, budget_status=status,
-            unresolved_requirements=matches.unresolved_requirements, warnings=warnings,
-            can_confirm_cart=status == "within_budget")
+            meal_plan=meals, nutrition_summary=nutrition_summary, ingredients=ingredients,
+            recurring_items=[], selected_products=selections, substitutions=[],
+            budget_minor=request.budget_minor, basket_total_minor=total,
+            budget_remaining_minor=request.budget_minor-total, savings_minor=None,
+            budget_status=status, unresolved_requirements=matches.unresolved_requirements,
+            warnings=warnings, can_confirm_cart=status == "within_budget")
 
     def recalculate_plan(self, previous_result, selected_recurring_ids, session, emit_progress):
         if selected_recurring_ids:
