@@ -11,6 +11,7 @@ PositiveNumber = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 Unit = Literal["g", "ml", "piece"]
 Source = Literal["silpo", "synthetic"]
 Stage = Literal["context", "history", "meals", "matching", "optimization", "ready"]
+HealthCondition = Literal["diabetes", "hypercholesterolemia"]
 
 
 class Model(BaseModel):
@@ -26,9 +27,11 @@ class Pet(Model):
 class PlanningRequest(Model):
     budget_minor: PositiveInt
     currency: Literal["UAH"]
-    days: Annotated[int, Field(ge=1, le=7)]
+    days: Annotated[int, Field(ge=1, le=14)]
     people: Annotated[int, Field(ge=1, le=6)]
     calories_per_person_per_day: PositiveInt | None
+    health_conditions: list[HealthCondition] = Field(default_factory=list)
+    cooking_time_limit: Annotated[int, Field(ge=5, le=240)] | None = None
     preferences: list[str]
     restrictions: list[str]
     pets: list[Pet]
@@ -116,6 +119,12 @@ class MealCalorieTarget(Model):
     max_kcal_per_serving: PositiveNumber
 
 
+class MealMacros(Model):
+    protein_g: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    fat_g: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    carbs_g: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+
+
 class Meal(Model):
     id: str
     day: PositiveInt
@@ -123,7 +132,9 @@ class Meal(Model):
     title: str
     servings: PositiveInt
     kcal_per_serving: PositiveNumber | None
+    macros_per_serving: MealMacros | None
     calorie_target: MealCalorieTarget | None
+    cooking_time_minutes: PositiveInt | None
     ingredient_ids: list[str]
     ingredient_amounts: list[IngredientAmount]
     source: Literal["edamam", "synthetic"]
