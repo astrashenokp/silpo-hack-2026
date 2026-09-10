@@ -10,6 +10,20 @@
   --color-foreground: var(--foreground);
   --font-sans: Arial, Helvetica, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --color-brand: #f89f46;
+  --color-brand-hover: #e08a2b;
+  --color-brand-soft: #fff0e1;
+  --color-line: #e6e6e6;
+  --color-muted: #667085;
+  --color-danger: #d92d20;
+  --color-danger-soft: #fde8e8;
+  --color-warn-bg: #fff4d6;
+  --color-warn-border: #ffd66b;
+  --color-warn-text: #7a5d00;
+  --color-success: #16a34a;
+  --color-success-soft: #e8f5e9;
+  --color-sidebar: #1d2130;
+  --color-sidebar-muted: #545a6b;
 }
 
 @media (prefers-color-scheme: dark) {
