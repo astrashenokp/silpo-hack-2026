@@ -35,6 +35,7 @@ def optimize_basket(
 ) -> OptimizationResult:
 
     selections: list[ProductSelection] = []
+    pending: dict[str, tuple[ProductCandidate, float, list[str], list[str]]] = {}
 
     # Починаємо з того, що вже позначила нерозв'язаним сама Ріна
     # (наприклад: обмеження не пройшли перевірку, або одиниці виміру
@@ -59,11 +60,8 @@ def optimize_basket(
             ))
             continue
 
-        selection, savings = picked
-        selections.append(selection)
-        if savings is not None:
-            verified_savings_total += savings
-            has_verified_savings = True
+        selection, _, candidate = picked
+        _add_pending(pending, candidate, req.quantity, [req.id], [])
 
     # --- обрані користувачем регулярні покупки / товари для тварин ---
     for rec in selected_recurring:
@@ -79,11 +77,41 @@ def optimize_basket(
             ))
             continue
 
-        selection, savings = picked
-        selections.append(selection)
-        if savings is not None:
+        selection, _, candidate = picked
+        existing = pending.get(selection.product_id)
+        if existing is not None:
+            candidate, quantity, requirement_ids, recurring_ids = existing
+            pending[selection.product_id] = (
+                candidate,
+                quantity,
+                requirement_ids,
+                list(dict.fromkeys(recurring_ids + [rec.id])),
+            )
+            continue
+        _add_pending(pending, candidate, rec.suggested_quantity, [], [rec.id])
+
+    for candidate, needed_qty, requirement_ids, recurring_ids in pending.values():
+        quantity = purchase_quantity(needed_qty, candidate.content_unit, candidate)
+        total = line_total(quantity, candidate.price_minor)
+        savings = None
+        if (candidate.regular_price_minor is not None
+                and candidate.regular_price_minor > candidate.price_minor):
+            savings = line_total(quantity, candidate.regular_price_minor) - total
             verified_savings_total += savings
             has_verified_savings = True
+        selections.append(ProductSelection(
+            product_id=candidate.id,
+            name=candidate.name,
+            requirement_ids=requirement_ids,
+            recurring_suggestion_ids=recurring_ids,
+            quantity=quantity,
+            selling_unit=candidate.selling_unit,
+            unit_price_minor=candidate.price_minor,
+            line_total_minor=total,
+            source=candidate.source,
+            reason="Попит об'єднано перед округленням упаковок.",
+            restriction_check=candidate.restriction_check,
+        ))
 
     # --- підсумки бюджету ---
     basket_total = sum(s.line_total_minor for s in selections)
@@ -107,13 +135,38 @@ def optimize_basket(
     )
 
 
+def _add_pending(
+    pending: dict[str, tuple[ProductCandidate, float, list[str], list[str]]],
+    candidate: ProductCandidate,
+    needed_quantity: float,
+    requirement_ids: list[str],
+    recurring_ids: list[str],
+) -> None:
+    existing = pending.get(candidate.id)
+    if existing is None:
+        pending[candidate.id] = (
+            candidate,
+            needed_quantity,
+            requirement_ids,
+            recurring_ids,
+        )
+        return
+    candidate, quantity, existing_requirements, existing_recurring = existing
+    pending[candidate.id] = (
+        candidate,
+        quantity + needed_quantity,
+        list(dict.fromkeys(existing_requirements + requirement_ids)),
+        list(dict.fromkeys(existing_recurring + recurring_ids)),
+    )
+
+
 def _pick_best_candidate(
     requirement_id: str,
     needed_qty: float,
     unit: str,
     all_candidates: list[ProductCandidate],
     recurring_suggestion_ids: list[str] | None = None,
-) -> tuple[ProductSelection, int | None] | None:
+) -> tuple[ProductSelection, int | None, ProductCandidate] | None:
     """
     Серед усіх кандидатів обирає найдешевший ПРИДАТНИЙ варіант, що
     покриває ПОВНУ потрібну кількість — не за ціною однієї упаковки,
@@ -159,4 +212,4 @@ def _pick_best_candidate(
         reason="Найдешевший доступний кандидат, що покриває повну потрібну кількість.",
         restriction_check=best.restriction_check,
     )
-    return selection, savings
+    return selection, savings, best
