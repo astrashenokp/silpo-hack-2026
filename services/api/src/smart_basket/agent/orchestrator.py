@@ -16,12 +16,12 @@ from smart_basket.optimization.recurrence import (
     analyze_recurring,
 )
 
-from smart_basket.schemas import (
-    PlanningResult,
+from smart_basket.meals import (
+    build_meal_plan,
 )
 
-from .mocks import (
-    build_meal_plan,
+from smart_basket.schemas import (
+    PlanningResult,
 )
 
 
@@ -126,7 +126,7 @@ class UlianaPlanner:
 
         # ====================================================
         # STAGE 3 — MEALS
-        # Still mock Sofiia
+        # Sofiia owns Edamam/fallback meal planning.
         # ====================================================
 
         meal_result = build_meal_plan(
