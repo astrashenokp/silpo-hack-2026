@@ -123,7 +123,7 @@ class Meal(Model):
     title: str
     servings: PositiveInt
     kcal_per_serving: PositiveNumber | None
-    calorie_target: MealCalorieTarget | None = None
+    calorie_target: MealCalorieTarget | None
     ingredient_ids: list[str]
     ingredient_amounts: list[IngredientAmount]
     source: Literal["edamam", "synthetic"]

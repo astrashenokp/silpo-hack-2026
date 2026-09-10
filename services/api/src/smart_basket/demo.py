@@ -83,7 +83,7 @@ class DemoPlanner:
                 quantities[key] += quantity
                 meal_ids[key].append(meal_id)
                 meals.append(Meal(id=meal_id, day=day, slot=slot, title=f"Demo {key} bowl",
-                    servings=request.people, kcal_per_serving=None, ingredient_ids=[key],
+                    servings=request.people, kcal_per_serving=None, calorie_target=None, ingredient_ids=[key],
                     ingredient_amounts=[IngredientAmount(ingredient_id=key, name=names[key],
                         quantity=quantity, unit="g")], source="synthetic", source_url=None, attribution=None))
         ingredients = [IngredientRequirement(id=key, name=names[key], search_terms=[key],

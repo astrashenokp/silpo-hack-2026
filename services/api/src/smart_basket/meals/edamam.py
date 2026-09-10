@@ -15,7 +15,13 @@ from urllib import error, parse, request
 
 from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal
 
-from .nutrition import ACCURACY_WARNINGS, calorie_target_for_slot, calorie_target_warnings, build_nutrition_summary
+from .nutrition import (
+    ACCURACY_WARNINGS,
+    CALORIE_TOLERANCE_PCT,
+    build_nutrition_summary,
+    calorie_target_for_slot,
+    calorie_target_warnings,
+)
 
 
 class EdamamUnavailable(RuntimeError):
@@ -64,10 +70,11 @@ def build_edamam_payload(request_model, filters) -> dict:
             ],
         }
     if request_model.calories_per_person_per_day is not None:
+        target = request_model.calories_per_person_per_day
         payload["plan"]["fit"] = {
             "ENERC_KCAL": {
-                "min": int(request_model.calories_per_person_per_day * 0.85),
-                "max": int(request_model.calories_per_person_per_day * 1.15),
+                "min": int(target * (1 - CALORIE_TOLERANCE_PCT)),
+                "max": int(target * (1 + CALORIE_TOLERANCE_PCT)),
             }
         }
     return payload

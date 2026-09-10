@@ -153,7 +153,7 @@ def test_edamam_payload_retains_days_slots_filters_and_calorie_bounds():
     assert payload["size"] == 4
     assert set(payload["plan"]["sections"]) == {"Breakfast", "Lunch", "Dinner"}
     assert payload["plan"]["accept"]["all"] == [{"health": ["vegetarian", "peanut-free"]}]
-    assert payload["plan"]["fit"]["ENERC_KCAL"] == {"min": 1700, "max": 2300}
+    assert payload["plan"]["fit"]["ENERC_KCAL"] == {"min": 1800, "max": 2200}
 
 
 def test_edamam_settings_are_loaded_only_when_complete(monkeypatch):

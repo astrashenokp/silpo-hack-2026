@@ -2820,6 +2820,7 @@
           "title",
           "servings",
           "kcalPerServing",
+          "calorieTarget",
           "ingredientIds",
           "ingredientAmounts",
           "source",
