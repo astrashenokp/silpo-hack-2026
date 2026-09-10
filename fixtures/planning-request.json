@@ -4,6 +4,8 @@
   "days": 4,
   "people": 3,
   "caloriesPerPersonPerDay": 2000,
+  "healthConditions": [],
+  "cookingTimeLimit": null,
   "preferences": [
     "vegetarian"
   ],

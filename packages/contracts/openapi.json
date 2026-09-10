@@ -2756,6 +2756,16 @@
             ],
             "title": "Kcalperserving"
           },
+          "macrosPerServing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealMacros"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "calorieTarget": {
             "anyOf": [
               {
@@ -2765,6 +2775,18 @@
                 "type": "null"
               }
             ]
+          },
+          "cookingTimeMinutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cookingtimeminutes"
           },
           "ingredientIds": {
             "items": {
@@ -2820,7 +2842,9 @@
           "title",
           "servings",
           "kcalPerServing",
+          "macrosPerServing",
           "calorieTarget",
+          "cookingTimeMinutes",
           "ingredientIds",
           "ingredientAmounts",
           "source",
@@ -2862,6 +2886,33 @@
           "maxKcalPerServing"
         ],
         "title": "MealCalorieTarget"
+      },
+      "MealMacros": {
+        "properties": {
+          "proteinG": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Proteing"
+          },
+          "fatG": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Fatg"
+          },
+          "carbsG": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Carbsg"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "proteinG",
+          "fatG",
+          "carbsG"
+        ],
+        "title": "MealMacros"
       },
       "NutritionSummary": {
         "properties": {
@@ -2965,7 +3016,7 @@
           },
           "days": {
             "type": "integer",
-            "maximum": 7.0,
+            "maximum": 14.0,
             "minimum": 1.0,
             "title": "Days"
           },
@@ -2986,6 +3037,30 @@
               }
             ],
             "title": "Caloriesperpersonperday"
+          },
+          "healthConditions": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "diabetes",
+                "hypercholesterolemia"
+              ]
+            },
+            "type": "array",
+            "title": "Healthconditions"
+          },
+          "cookingTimeLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 240.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cookingtimelimit"
           },
           "preferences": {
             "items": {

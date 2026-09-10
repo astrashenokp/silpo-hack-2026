@@ -6,12 +6,18 @@
     "title": "Oatmeal breakfast bowl",
     "servings": 3,
     "kcalPerServing": 420.0,
+    "macrosPerServing": {
+      "proteinG": 13.5,
+      "fatG": 7.0,
+      "carbsG": 69.0
+    },
     "calorieTarget": {
       "share": 0.25,
       "targetKcalPerServing": 500.0,
       "minKcalPerServing": 450.0,
       "maxKcalPerServing": 550.0
     },
+    "cookingTimeMinutes": 12,
     "ingredientIds": [
       "oats"
     ],
@@ -34,12 +40,18 @@
     "title": "Rice and lentil lunch bowl",
     "servings": 3,
     "kcalPerServing": 680.0,
+    "macrosPerServing": {
+      "proteinG": 23.0,
+      "fatG": 3.5,
+      "carbsG": 126.0
+    },
     "calorieTarget": {
       "share": 0.35,
       "targetKcalPerServing": 700.0,
       "minKcalPerServing": 630.0,
       "maxKcalPerServing": 770.0000000000001
     },
+    "cookingTimeMinutes": 30,
     "ingredientIds": [
       "rice",
       "lentils"
@@ -69,12 +81,18 @@
     "title": "Lentil dinner stew",
     "servings": 3,
     "kcalPerServing": 760.0,
+    "macrosPerServing": {
+      "proteinG": 30.0,
+      "fatG": 4.0,
+      "carbsG": 130.0
+    },
     "calorieTarget": {
       "share": 0.4,
       "targetKcalPerServing": 800.0,
       "minKcalPerServing": 720.0,
       "maxKcalPerServing": 880.0000000000001
     },
+    "cookingTimeMinutes": 35,
     "ingredientIds": [
       "lentils",
       "rice"
@@ -104,12 +122,18 @@
     "title": "Warm oat porridge with fruit",
     "servings": 3,
     "kcalPerServing": 430.0,
+    "macrosPerServing": {
+      "proteinG": 13.0,
+      "fatG": 7.5,
+      "carbsG": 71.0
+    },
     "calorieTarget": {
       "share": 0.25,
       "targetKcalPerServing": 500.0,
       "minKcalPerServing": 450.0,
       "maxKcalPerServing": 550.0
     },
+    "cookingTimeMinutes": 14,
     "ingredientIds": [
       "oats"
     ],
@@ -132,12 +156,18 @@
     "title": "Rice pilaf with lentils",
     "servings": 3,
     "kcalPerServing": 670.0,
+    "macrosPerServing": {
+      "proteinG": 24.0,
+      "fatG": 4.0,
+      "carbsG": 123.0
+    },
     "calorieTarget": {
       "share": 0.35,
       "targetKcalPerServing": 700.0,
       "minKcalPerServing": 630.0,
       "maxKcalPerServing": 770.0000000000001
     },
+    "cookingTimeMinutes": 32,
     "ingredientIds": [
       "rice",
       "lentils"
@@ -167,12 +197,18 @@
     "title": "Lentil and rice soup",
     "servings": 3,
     "kcalPerServing": 730.0,
+    "macrosPerServing": {
+      "proteinG": 28.0,
+      "fatG": 4.5,
+      "carbsG": 124.0
+    },
     "calorieTarget": {
       "share": 0.4,
       "targetKcalPerServing": 800.0,
       "minKcalPerServing": 720.0,
       "maxKcalPerServing": 880.0000000000001
     },
+    "cookingTimeMinutes": 34,
     "ingredientIds": [
       "lentils",
       "rice"
@@ -202,12 +238,18 @@
     "title": "Oat breakfast cup",
     "servings": 3,
     "kcalPerServing": 410.0,
+    "macrosPerServing": {
+      "proteinG": 12.5,
+      "fatG": 6.5,
+      "carbsG": 67.0
+    },
     "calorieTarget": {
       "share": 0.25,
       "targetKcalPerServing": 500.0,
       "minKcalPerServing": 450.0,
       "maxKcalPerServing": 550.0
     },
+    "cookingTimeMinutes": 10,
     "ingredientIds": [
       "oats"
     ],
@@ -230,12 +272,18 @@
     "title": "Rice bowl with lentil topping",
     "servings": 3,
     "kcalPerServing": 690.0,
+    "macrosPerServing": {
+      "proteinG": 22.0,
+      "fatG": 3.0,
+      "carbsG": 129.0
+    },
     "calorieTarget": {
       "share": 0.35,
       "targetKcalPerServing": 700.0,
       "minKcalPerServing": 630.0,
       "maxKcalPerServing": 770.0000000000001
     },
+    "cookingTimeMinutes": 28,
     "ingredientIds": [
       "rice",
       "lentils"
@@ -265,12 +313,18 @@
     "title": "Hearty lentil skillet",
     "servings": 3,
     "kcalPerServing": 780.0,
+    "macrosPerServing": {
+      "proteinG": 32.0,
+      "fatG": 4.0,
+      "carbsG": 131.0
+    },
     "calorieTarget": {
       "share": 0.4,
       "targetKcalPerServing": 800.0,
       "minKcalPerServing": 720.0,
       "maxKcalPerServing": 880.0000000000001
     },
+    "cookingTimeMinutes": 36,
     "ingredientIds": [
       "lentils",
       "rice"
@@ -300,12 +354,18 @@
     "title": "Simple overnight oats",
     "servings": 3,
     "kcalPerServing": 420.0,
+    "macrosPerServing": {
+      "proteinG": 13.5,
+      "fatG": 7.0,
+      "carbsG": 69.0
+    },
     "calorieTarget": {
       "share": 0.25,
       "targetKcalPerServing": 500.0,
       "minKcalPerServing": 450.0,
       "maxKcalPerServing": 550.0
     },
+    "cookingTimeMinutes": 8,
     "ingredientIds": [
       "oats"
     ],
@@ -328,12 +388,18 @@
     "title": "Balanced rice and lentils",
     "servings": 3,
     "kcalPerServing": 700.0,
+    "macrosPerServing": {
+      "proteinG": 25.0,
+      "fatG": 4.0,
+      "carbsG": 125.0
+    },
     "calorieTarget": {
       "share": 0.35,
       "targetKcalPerServing": 700.0,
       "minKcalPerServing": 630.0,
       "maxKcalPerServing": 770.0000000000001
     },
+    "cookingTimeMinutes": 30,
     "ingredientIds": [
       "rice",
       "lentils"
@@ -363,12 +429,18 @@
     "title": "Lentil rice supper bowl",
     "servings": 3,
     "kcalPerServing": 740.0,
+    "macrosPerServing": {
+      "proteinG": 27.0,
+      "fatG": 4.0,
+      "carbsG": 126.0
+    },
     "calorieTarget": {
       "share": 0.4,
       "targetKcalPerServing": 800.0,
       "minKcalPerServing": 720.0,
       "maxKcalPerServing": 880.0000000000001
     },
+    "cookingTimeMinutes": 33,
     "ingredientIds": [
       "lentils",
       "rice"

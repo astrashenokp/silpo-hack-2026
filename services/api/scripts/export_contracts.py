@@ -20,7 +20,8 @@ from smart_basket.mcp.adapters import normalize_purchase_history
 
 ROOT = Path(__file__).resolve().parents[3]
 REQUEST = {"budgetMinor": 180000, "currency": "UAH", "days": 4, "people": 3,
-           "caloriesPerPersonPerDay": 2000, "preferences": ["vegetarian"], "restrictions": [],
+           "caloriesPerPersonPerDay": 2000, "healthConditions": [],
+           "cookingTimeLimit": None, "preferences": ["vegetarian"], "restrictions": [],
            "pets": [{"species": "cat", "count": 1}], "includeRecurring": True, "notes": ""}
 
 
@@ -77,7 +78,7 @@ def artifacts():
             model_name="RecurringSuggestion", many=True)
         failed = client.post("/api/plans", json=REQUEST, headers={"X-Demo-Scenario": "failed"}).json()
         add("run-failed", schemas.RunSnapshot, client.get(f"/api/plans/{failed['runId']}").json())
-        add("validation-error", schemas.ErrorEnvelope, client.post("/api/plans", json={**REQUEST, "days": 8}).json())
+        add("validation-error", schemas.ErrorEnvelope, client.post("/api/plans", json={**REQUEST, "days": 15}).json())
         for outcome in ("success", "partial", "failed"):
             initial = client.post("/api/plans", json=REQUEST).json()
             reference = {"runId": initial["runId"], "version": 1}
