@@ -75,6 +75,17 @@ RESTRICTION_LABELS = {
 }
 
 
+def display_label_map() -> dict:
+    """Return {label: display_name} for all supported preferences and restrictions.
+
+    Intended for Uliana's /api/filters endpoint and Ksiusha's UI labels.
+    """
+    return {
+        "preferences": {k: v["display"] for k, v in PREFERENCE_LABELS.items()},
+        "restrictions": {k: v["display"] for k, v in RESTRICTION_LABELS.items()},
+    }
+
+
 def resolve_meal_filters(request, effective_context) -> MealFilters:
     """Merge explicit request labels with trusted context labels.
 
