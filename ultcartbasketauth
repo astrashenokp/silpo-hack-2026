@@ -1,0 +1,31 @@
+* [33m9a10a20[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/ksiusha-frontend[m[33m)[m feat(web): add responsive and accessible planner layout
+* [33m14dd2ad[m chore(web): make API backend configurable
+* [33md9eb784[m feat(web): add profile context summary
+* [33mc13ce79[m feat(web): handle session and API errors
+* [33m4b52c31[m fix(web): prevent stale plan polling responses
+* [33m132e7b6[m feat(web): add planner form validation
+* [33m054c87f[m feat(web): connect planner form and poll plan status
+* [33m5be6380[m feat(web): connect planner form to plans API
+* [33m61beadf[m feat(web): add planner page shell and input form
+* [33m1cc647b[m feat(web): initialize Next.js frontend
+[31m|[m *   [33meb6b025[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #5 from astrashenokp/feature/arina-mcp-gateway
+[31m|[m [32m|[m[33m\[m  
+[31m|[m [32m|[m *   [33mf3dfbe8[m[33m ([m[1;31morigin/feature/arina-mcp-gateway[m[33m)[m fix(mcp): restore normalize_purchase_history
+[31m|[m [32m|[m [34m|[m[35m\[m  
+[31m|[m [32m|[m * [35m|[m [33mb7e44d8[m fix: address all PR review comments (dependencies, env, normalized products, raw fixtures)
+[31m|[m * [35m|[m [35m|[m   [33me287138[m Merge pull request #4 from astrashenokp/feature/arina-mcp-gateway
+[31m|[m [36m|[m[35m\[m [35m\[m [35m\[m  
+[31m|[m [36m|[m [35m|[m [35m|[m[35m/[m  
+[31m|[m [36m|[m [35m|[m[35m/[m[35m|[m   
+[31m|[m [36m|[m * [35m|[m   [33m7fd6993[m Merge branch 'main' into feature/arina-mcp-gateway
+[31m|[m [36m|[m [35m|[m[36m\[m [35m\[m  
+[31m|[m [36m|[m [35m|[m[36m/[m [35m/[m  
+[31m|[m [36m|[m[36m/[m[35m|[m [35m/[m   
+[31m|[m [36m|[m [35m|[m[35m/[m    
+[31m|[m * [35m/[m [33m75a7146[m Update README with Figma design link
+[31m|[m[31m/[m [35m/[m  
+* [35m|[m [33m6ee3676[m[33m ([m[1;32mmain[m[33m)[m feat: implement purchase history normalization and add related tests
+* [35m|[m [33md710074[m feat: update fixtures, restore the normalized user-context.json fixture and separate Arina’s raw examples
+* [35m|[m   [33m50bf089[m Merge pull request #3 from astrashenokp/feature/arina-mcp-gateway
+[1;34m|[m[1;35m\[m [35m\[m  
+* [1;35m|[m [35m|[m [33meb958b0[m feat: add report
