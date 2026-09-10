@@ -22,6 +22,9 @@ interface. The module covers:
 - unit normalization limited to `g`, `ml` and `piece`; unknown units are unresolved instead of guessed;
 - explicit warnings for cooking yield, oil/sauce/hidden-ingredient uncertainty and the fact that consumed-food Vision analysis is outside this planner boundary;
 - Edamam credential/settings boundary, request payload builder and selection/recipe response mapper.
+- bounded recalculation compatibility through Uliana: the same meal-planning
+  interface is rerun with the confirmed request, preserved portions and preserved
+  restrictions.
 
 ## Supported Dietary Labels (for Ksiusha)
 
@@ -176,6 +179,11 @@ The synthetic menu is deliberately simple and uses only ingredients that Rina's
 demo catalog and FatSecret demo mapping can resolve. It is a deterministic
 integration fallback, not a complete nutrition product. It exposes calorie target
 metadata and warnings but does not run ILP/PuLP optimization.
+
+Recalculation currently preserves the confirmed request and reruns the
+deterministic pipeline. It does not yet perform price-aware meal swaps, because
+that would require live catalog evidence from Rina/Vika before Sofiia can safely
+choose cheaper ingredient variants without guessing product prices.
 
 The attached AI Meal Planning specification also describes BMR/TDEE formulas,
 macro targets, inventory subtraction, meal swaps, hydration/recovery planning,

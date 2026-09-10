@@ -173,10 +173,13 @@ meal and fails the rest: select at least **two meals** to observe partial succes
 `unmatched` makes `canConfirm: false`; confirmation returns 409 `UNRESOLVED_FOODS`.
 
 Set `budgetMinor: 100` for an over-budget result, `days: 8` for 400 validation,
-or send an outdated `version` for 409 `STALE_PLAN`. Only `vegetarian` preference and
-`peanut-free` restriction labels are currently supported; unknown labels fail
-validation. Calorie targets are retained and surfaced, but synthetic meals do not
-optimize calories. Pet demand and notes are retained for the surrounding pipeline.
+or send an outdated `version` for 409 `STALE_PLAN`. Supported meal labels are
+returned by `GET /api/filters`: preferences are `vegetarian`, `vegan`, `paleo`,
+`high-protein` and `high-fiber`; restrictions are `peanut-free`, `gluten-free`,
+`dairy-free`, `tree-nut-free`, `shellfish-free`, `soy-free`, `egg-free` and
+`pork-free`. Unknown labels fail validation. Calorie targets are retained and
+surfaced, but synthetic meals do not optimize calories. Pet demand and notes are
+retained for the surrounding pipeline.
 
 All request failures use `{error: {code, message, retryable}}`. Per-item failures are
 successful HTTP responses containing operation outcomes, not an HTTP-level crash.
@@ -209,6 +212,9 @@ pre-existing contents. Preview `afterQuantity - beforeQuantity` is the addition.
 - Sofiia's `meals/` module owns meal filters, serving scaling, synthetic fallback
   and Edamam selection/recipe mapping. The demo still labels synthetic meal data
   honestly and does not store provider recipe payloads.
+- Recalculation preserves the confirmed request and reruns the deterministic
+  pipeline against current matching/optimization state. Price-aware meal swaps are
+  deferred until live catalog evidence can guide cheaper ingredient choices safely.
 
 Live mode is intentionally blocked. Real gateway writes, OAuth/token storage,
 persistent operation journals, timeout reconciliation, provider food matching and
