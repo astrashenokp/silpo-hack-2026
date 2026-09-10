@@ -191,7 +191,7 @@ async def get_purchase_history(session) -> List[Dict[str, Any]]:
                     if isinstance(order, dict):
                         history.append({**order, "channel": order.get("channel", channel)})
         except Exception as e:
-            logger.warning(f"Помилка отримання {channel} історії: {e}")
+            _handle_adapter_exception(e, None, f"{channel} історії")
             continue
             
     return history
