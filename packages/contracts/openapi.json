@@ -459,6 +459,104 @@
         }
       }
     },
+    "/api/filters": {
+      "get": {
+        "summary": "Filters",
+        "operationId": "filters_api_filters_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportedLabels"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/context": {
       "get": {
         "summary": "Context",
@@ -2013,6 +2111,85 @@
         ],
         "title": "Confirmation"
       },
+      "DayNutritionSummary": {
+        "properties": {
+          "day": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Day"
+          },
+          "targetKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetkcalperperson"
+          },
+          "plannedKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plannedkcalperperson"
+          },
+          "minKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minkcalperperson"
+          },
+          "maxKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxkcalperperson"
+          },
+          "withinTargetRange": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withintargetrange"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "day",
+          "targetKcalPerPerson",
+          "plannedKcalPerPerson",
+          "minKcalPerPerson",
+          "maxKcalPerPerson",
+          "withinTargetRange"
+        ],
+        "title": "DayNutritionSummary"
+      },
       "Error": {
         "properties": {
           "code": {
@@ -2579,6 +2756,16 @@
             ],
             "title": "Kcalperserving"
           },
+          "calorieTarget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealCalorieTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ingredientIds": {
             "items": {
               "type": "string"
@@ -2640,6 +2827,84 @@
           "attribution"
         ],
         "title": "Meal"
+      },
+      "MealCalorieTarget": {
+        "properties": {
+          "share": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Share"
+          },
+          "targetKcalPerServing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Targetkcalperserving"
+          },
+          "minKcalPerServing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Minkcalperserving"
+          },
+          "maxKcalPerServing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Maxkcalperserving"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "share",
+          "targetKcalPerServing",
+          "minKcalPerServing",
+          "maxKcalPerServing"
+        ],
+        "title": "MealCalorieTarget"
+      },
+      "NutritionSummary": {
+        "properties": {
+          "calorieTargetKcalPerPersonPerDay": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calorietargetkcalperpersonperday"
+          },
+          "tolerancePct": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Tolerancepct"
+          },
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/SlotCalorieShare"
+            },
+            "type": "array",
+            "title": "Distribution"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DayNutritionSummary"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "calorieTargetKcalPerPersonPerDay",
+          "tolerancePct",
+          "distribution",
+          "daily"
+        ],
+        "title": "NutritionSummary"
       },
       "Pet": {
         "properties": {
@@ -2798,6 +3063,9 @@
             "type": "array",
             "title": "Mealplan"
           },
+          "nutritionSummary": {
+            "$ref": "#/components/schemas/NutritionSummary"
+          },
           "ingredients": {
             "items": {
               "$ref": "#/components/schemas/IngredientRequirement"
@@ -2887,6 +3155,7 @@
           "dataMode",
           "effectiveRequest",
           "mealPlan",
+          "nutritionSummary",
           "ingredients",
           "recurringItems",
           "selectedProducts",
@@ -3379,6 +3648,32 @@
         ],
         "title": "SilpoStatus"
       },
+      "SlotCalorieShare": {
+        "properties": {
+          "slot": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner"
+            ],
+            "title": "Slot"
+          },
+          "share": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Share"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "slot",
+          "share"
+        ],
+        "title": "SlotCalorieShare"
+      },
       "Substitution": {
         "properties": {
           "requirementIds": {
@@ -3415,6 +3710,31 @@
           "deltaMinor"
         ],
         "title": "Substitution"
+      },
+      "SupportedLabels": {
+        "properties": {
+          "preferences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Preferences"
+          },
+          "restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Restrictions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "preferences",
+          "restrictions"
+        ],
+        "title": "SupportedLabels"
       },
       "UnresolvedFood": {
         "properties": {

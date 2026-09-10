@@ -29,6 +29,12 @@
       "title": "Oatmeal breakfast bowl",
       "servings": 3,
       "kcalPerServing": 420.0,
+      "calorieTarget": {
+        "share": 0.25,
+        "targetKcalPerServing": 500.0,
+        "minKcalPerServing": 450.0,
+        "maxKcalPerServing": 550.0
+      },
       "ingredientIds": [
         "oats"
       ],
@@ -51,6 +57,12 @@
       "title": "Rice and lentil lunch bowl",
       "servings": 3,
       "kcalPerServing": 680.0,
+      "calorieTarget": {
+        "share": 0.35,
+        "targetKcalPerServing": 700.0,
+        "minKcalPerServing": 630.0,
+        "maxKcalPerServing": 770.0000000000001
+      },
       "ingredientIds": [
         "rice",
         "lentils"
@@ -80,6 +92,12 @@
       "title": "Lentil dinner stew",
       "servings": 3,
       "kcalPerServing": 760.0,
+      "calorieTarget": {
+        "share": 0.4,
+        "targetKcalPerServing": 800.0,
+        "minKcalPerServing": 720.0,
+        "maxKcalPerServing": 880.0000000000001
+      },
       "ingredientIds": [
         "lentils",
         "rice"
@@ -109,6 +127,12 @@
       "title": "Warm oat porridge with fruit",
       "servings": 3,
       "kcalPerServing": 430.0,
+      "calorieTarget": {
+        "share": 0.25,
+        "targetKcalPerServing": 500.0,
+        "minKcalPerServing": 450.0,
+        "maxKcalPerServing": 550.0
+      },
       "ingredientIds": [
         "oats"
       ],
@@ -131,6 +155,12 @@
       "title": "Rice pilaf with lentils",
       "servings": 3,
       "kcalPerServing": 670.0,
+      "calorieTarget": {
+        "share": 0.35,
+        "targetKcalPerServing": 700.0,
+        "minKcalPerServing": 630.0,
+        "maxKcalPerServing": 770.0000000000001
+      },
       "ingredientIds": [
         "rice",
         "lentils"
@@ -160,6 +190,12 @@
       "title": "Lentil and rice soup",
       "servings": 3,
       "kcalPerServing": 730.0,
+      "calorieTarget": {
+        "share": 0.4,
+        "targetKcalPerServing": 800.0,
+        "minKcalPerServing": 720.0,
+        "maxKcalPerServing": 880.0000000000001
+      },
       "ingredientIds": [
         "lentils",
         "rice"
@@ -189,6 +225,12 @@
       "title": "Oat breakfast cup",
       "servings": 3,
       "kcalPerServing": 410.0,
+      "calorieTarget": {
+        "share": 0.25,
+        "targetKcalPerServing": 500.0,
+        "minKcalPerServing": 450.0,
+        "maxKcalPerServing": 550.0
+      },
       "ingredientIds": [
         "oats"
       ],
@@ -211,6 +253,12 @@
       "title": "Rice bowl with lentil topping",
       "servings": 3,
       "kcalPerServing": 690.0,
+      "calorieTarget": {
+        "share": 0.35,
+        "targetKcalPerServing": 700.0,
+        "minKcalPerServing": 630.0,
+        "maxKcalPerServing": 770.0000000000001
+      },
       "ingredientIds": [
         "rice",
         "lentils"
@@ -240,6 +288,12 @@
       "title": "Hearty lentil skillet",
       "servings": 3,
       "kcalPerServing": 780.0,
+      "calorieTarget": {
+        "share": 0.4,
+        "targetKcalPerServing": 800.0,
+        "minKcalPerServing": 720.0,
+        "maxKcalPerServing": 880.0000000000001
+      },
       "ingredientIds": [
         "lentils",
         "rice"
@@ -269,6 +323,12 @@
       "title": "Simple overnight oats",
       "servings": 3,
       "kcalPerServing": 420.0,
+      "calorieTarget": {
+        "share": 0.25,
+        "targetKcalPerServing": 500.0,
+        "minKcalPerServing": 450.0,
+        "maxKcalPerServing": 550.0
+      },
       "ingredientIds": [
         "oats"
       ],
@@ -291,6 +351,12 @@
       "title": "Balanced rice and lentils",
       "servings": 3,
       "kcalPerServing": 700.0,
+      "calorieTarget": {
+        "share": 0.35,
+        "targetKcalPerServing": 700.0,
+        "minKcalPerServing": 630.0,
+        "maxKcalPerServing": 770.0000000000001
+      },
       "ingredientIds": [
         "rice",
         "lentils"
@@ -320,6 +386,12 @@
       "title": "Lentil rice supper bowl",
       "servings": 3,
       "kcalPerServing": 740.0,
+      "calorieTarget": {
+        "share": 0.4,
+        "targetKcalPerServing": 800.0,
+        "minKcalPerServing": 720.0,
+        "maxKcalPerServing": 880.0000000000001
+      },
       "ingredientIds": [
         "lentils",
         "rice"
@@ -343,6 +415,58 @@
       "attribution": null
     }
   ],
+  "nutritionSummary": {
+    "calorieTargetKcalPerPersonPerDay": 2000.0,
+    "tolerancePct": 0.1,
+    "distribution": [
+      {
+        "slot": "breakfast",
+        "share": 0.25
+      },
+      {
+        "slot": "lunch",
+        "share": 0.35
+      },
+      {
+        "slot": "dinner",
+        "share": 0.4
+      }
+    ],
+    "daily": [
+      {
+        "day": 1,
+        "targetKcalPerPerson": 2000.0,
+        "plannedKcalPerPerson": 1860.0,
+        "minKcalPerPerson": 1800.0,
+        "maxKcalPerPerson": 2200.0,
+        "withinTargetRange": true
+      },
+      {
+        "day": 2,
+        "targetKcalPerPerson": 2000.0,
+        "plannedKcalPerPerson": 1830.0,
+        "minKcalPerPerson": 1800.0,
+        "maxKcalPerPerson": 2200.0,
+        "withinTargetRange": true
+      },
+      {
+        "day": 3,
+        "targetKcalPerPerson": 2000.0,
+        "plannedKcalPerPerson": 1880.0,
+        "minKcalPerPerson": 1800.0,
+        "maxKcalPerPerson": 2200.0,
+        "withinTargetRange": true
+      },
+      {
+        "day": 4,
+        "targetKcalPerPerson": 2000.0,
+        "plannedKcalPerPerson": 1860.0,
+        "minKcalPerPerson": 1800.0,
+        "maxKcalPerPerson": 2200.0,
+        "withinTargetRange": true
+      }
+    ]
+  },
   "ingredients": [
     {
       "id": "oats",
@@ -461,7 +585,9 @@
     "Purchase history is empty; coverage unavailable.",
     "Meal plan uses Sofiia synthetic fallback; live Edamam credentials are not configured.",
     "Synthetic recipes are original demo data and are not provider recipe payloads.",
-    "Calorie target is retained as a constraint, but synthetic fallback does not optimize calories."
+    "Meal calories are estimates; cooking yield, oil absorption, sauces and hidden ingredients are not recalculated from photos.",
+    "Vision-based consumed-food analysis is outside this planner boundary and must not overwrite planned nutrition without verified measurements.",
+    "Calorie target metadata uses a 25/35/40 breakfast/lunch/dinner split; synthetic fallback does not run ILP optimization."
   ],
   "canConfirmCart": true
 }
