@@ -23,9 +23,15 @@ REST_API_URL = "https://platform.fatsecret.com/rest/server.api"
 class FatSecretClientError(RuntimeError):
     """FatSecret rejected a request or returned a malformed response."""
 
-    def __init__(self, message: str, status_code: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        provider_code: int | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
+        self.provider_code = provider_code
 
 
 @dataclass(frozen=True)
@@ -218,7 +224,15 @@ class FatSecretClient:
         if "error" in data:
             error = data["error"]
             message = error.get("message") if isinstance(error, dict) else None
-            raise FatSecretClientError(message or "FatSecret rejected the API request.")
+            raw_code = error.get("code") if isinstance(error, dict) else None
+            try:
+                provider_code = int(raw_code)
+            except (TypeError, ValueError):
+                provider_code = None
+            raise FatSecretClientError(
+                message or "FatSecret rejected the API request.",
+                provider_code=provider_code,
+            )
         return data
 
     async def search_food(

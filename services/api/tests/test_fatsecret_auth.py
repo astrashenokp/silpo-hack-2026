@@ -86,9 +86,7 @@ def test_fatsecret_routes_connect_account_without_exposing_tokens():
             "connected": True,
             "accountLabel": "Connected FatSecret account",
             "exportAvailable": True,
-            "reason": (
-                "FatSecret account connected; Saved Meal exports are still simulated in demo mode."
-            ),
+            "reason": "Connected; Saved Meal previews, writes and read-back use FatSecret.",
         }
         assert "private-access" not in str(status)
 

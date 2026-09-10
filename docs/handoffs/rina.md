@@ -1,9 +1,18 @@
 # Handoff: Rina — first mock API and product matching
 
+Rina also completed the FatSecret OAuth/client assignment originally owned by
+Arina, by team agreement; the implementation remains documented in both handoffs.
+
+Live verification on September 11, 2026 completed the connected export path:
+one reviewed Saved Meal was created, its provider write was read back successfully,
+and the user found it in FatSecret under **Favorite Meals** in the same connected
+account. No account identity, token, secret, or remote identifier is recorded here.
+
 - Date: September 7, 2026.
 - Revision: local working-tree implementation; no PR or shared commit yet.
 - Receivers: Ksiusha, Alina, Uliana, Vika; Arina for provider adapter boundaries.
-- Status: ready for local mock integration; live integration remains incomplete.
+- Status: mock integration is complete; connected FatSecret export is implemented
+  and has passed its manual Saved Meal/app-visibility check.
 
 The Python API accepts the shared planning input, returns 202, stores progress and
 results per demo cookie session, and supports versioned recalculation. Cart and
@@ -26,9 +35,9 @@ duplicate cart confirmation, partial outcomes, personal portions, duplicate expo
 protection and fixture schema validation. Dependency deprecation warnings originate
 from Starlette's HTTPX test adapter and AnyIO alias; they do not fail the checks.
 
-Known limitations: process-local state, one worker, demo session instead of OAuth;
-no live writes, timeout recovery, nutrition/recurrence optimization, pet demand,
-Edamam export permissions or FatSecret app verification. The first menu is invented
+Known limitations: process-local state and operation journal, one worker;
+no durable encrypted FatSecret token storage, nutrition/recurrence optimization, pet demand,
+or verified Edamam export permissions. The first menu is invented
 and intentionally warns that it is not nutritionally complete. Nonempty recurring
 candidate lookup awaits Vika's input contract. Do not treat this as final delivery.
 

@@ -27,9 +27,11 @@
 * **`.env.example`**: Додано необхідні змінні оточення (`SILPO_CLIENT_ID`, `FATSECRET_CONSUMER_KEY` тощо) для розгортання у колег[cite: 8].
 
 ### 4. Інтеграція з FatSecret (`services/api/src/smart_basket/fatsecret/`)
+* **Авторство:** OAuth/client implementation below was completed by Rina under the team's agreement to cover Arina's FatSecret assignment.
 * **`client.py` та `auth.py`**: Реалізовано OAuth 1.0 request-token → browser authorization → access-token flow, перевірку callback token, ізольоване серверне зберігання токенів у сесії та HMAC-SHA1 transport для delegated API calls. Роути: `/api/auth/fatsecret/start`, `/api/auth/fatsecret/callback`, статус: `/api/integrations/fatsecret`.
-* Saved Meal export поки залишається чітко позначеною demo-симуляцією і не використовує підключений акаунт. Перед live export потрібні provider write/read-back, durable encrypted token storage та перевірка видимості у FatSecret app.
+* Rina's connected-session Saved Meal export now uses provider matching, write and read-back calls. Disconnected sessions retain a labelled demo. Durable encrypted token storage and manual visibility verification in the FatSecret app are still required for deployment.
 * **Live check, September 10, 2026:** browser request-token flow, FatSecret member login/authorization, callback access-token exchange and session-scoped `connected: true` status were verified against a real test account. No account identifier, token or secret was recorded. Saved Meal writes were not exercised by this check.
+* **Live export check, September 11, 2026:** after explicit candidate review, Rina confirmed one Saved Meal; provider read-back succeeded and the user found the meal under **Favorite Meals** in the same connected FatSecret account. No account identity, credential or remote ID was recorded.
 
 ### 5. Фікстури та Технічна Документація
 * **Фікстури (`fixtures/`)**: Створено синтетичні файли `user-context.json` та `purchase-history.json` із варіантами пустих історій і відсутніх полів для тестування без живого бекенду[cite: 8].

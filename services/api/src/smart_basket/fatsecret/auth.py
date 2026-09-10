@@ -90,6 +90,7 @@ class FatSecretOAuthManager:
             owner.fatsecret_access_secret = credentials.secret
             owner.fatsecret_connected = True
             owner.fatsecret_account_label = "Connected FatSecret account"
+            owner.fatsecret_connection_revision += 1
             owner.fatsecret_request_token = None
             owner.fatsecret_request_secret = None
 

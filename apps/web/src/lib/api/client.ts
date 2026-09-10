@@ -5,6 +5,7 @@ import type {
   ExportAccepted,
   FatSecretExport,
   FatSecretPreview,
+  FatSecretSelection,
   FatSecretStatus,
   Health,
   PlanningRequest,
@@ -112,10 +113,11 @@ export function apiPreviewFatSecret(
   runId: string,
   version: number,
   mealIds: string[],
-  scenario: DemoScenario,
+  scenario?: DemoScenario,
+  selections: FatSecretSelection[] = [],
 ): Promise<FatSecretPreview> {
   return request<FatSecretPreview>("/fatsecret/exports/preview", {
-    body: { runId, version, mealIds },
+    body: { runId, version, mealIds, selections },
     scenario,
   });
 }

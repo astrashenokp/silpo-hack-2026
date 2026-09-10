@@ -213,9 +213,25 @@ export interface FatSecretItem {
   sourceUnit: "g" | "ml" | "piece";
 }
 
+export interface FatSecretCandidate {
+  foodId: string;
+  servingId: string;
+  matchedName: string;
+  numberOfUnits: number;
+  calories: number | null;
+}
+
+export interface FatSecretSelection {
+  mealId: string;
+  ingredientId: string;
+  foodId: string;
+  servingId: string;
+}
+
 export interface UnresolvedFood {
   ingredientId: string;
   reason: string;
+  candidates: FatSecretCandidate[];
 }
 
 export interface FatSecretPreviewMeal {

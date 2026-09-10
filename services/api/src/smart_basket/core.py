@@ -60,6 +60,7 @@ class Session:
     fatsecret_access_secret: str | None = None
     fatsecret_connected: bool = False
     fatsecret_account_label: str | None = None
+    fatsecret_connection_revision: int = 0
 
     def get_run(self, run_id: str) -> RunSnapshot:
         if run_id not in self.runs:

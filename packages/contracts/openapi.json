@@ -2406,6 +2406,49 @@
         ],
         "title": "ExportMealOutcome"
       },
+      "FatSecretCandidate": {
+        "properties": {
+          "foodId": {
+            "type": "string",
+            "title": "Foodid"
+          },
+          "servingId": {
+            "type": "string",
+            "title": "Servingid"
+          },
+          "matchedName": {
+            "type": "string",
+            "title": "Matchedname"
+          },
+          "numberOfUnits": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Numberofunits"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "foodId",
+          "servingId",
+          "matchedName",
+          "numberOfUnits",
+          "calories"
+        ],
+        "title": "FatSecretCandidate"
+      },
       "FatSecretExport": {
         "properties": {
           "exportId": {
@@ -2657,6 +2700,13 @@
             "type": "array",
             "minItems": 1,
             "title": "Mealids"
+          },
+          "selections": {
+            "items": {
+              "$ref": "#/components/schemas/FatSecretSelection"
+            },
+            "type": "array",
+            "title": "Selections"
           }
         },
         "additionalProperties": false,
@@ -2667,6 +2717,35 @@
           "mealIds"
         ],
         "title": "FatSecretPreviewRequest"
+      },
+      "FatSecretSelection": {
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "title": "Mealid"
+          },
+          "ingredientId": {
+            "type": "string",
+            "title": "Ingredientid"
+          },
+          "foodId": {
+            "type": "string",
+            "title": "Foodid"
+          },
+          "servingId": {
+            "type": "string",
+            "title": "Servingid"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mealId",
+          "ingredientId",
+          "foodId",
+          "servingId"
+        ],
+        "title": "FatSecretSelection"
       },
       "FatSecretStatus": {
         "properties": {
@@ -3943,6 +4022,13 @@
           "reason": {
             "type": "string",
             "title": "Reason"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/FatSecretCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
           }
         },
         "additionalProperties": false,
