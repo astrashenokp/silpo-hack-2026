@@ -1,7 +1,7 @@
 import pytest
 
 from smart_basket.meals import build_meal_plan
-from smart_basket.meals.edamam import build_edamam_payload
+from smart_basket.meals.edamam import EdamamSettings, build_edamam_payload
 from smart_basket.meals.filters import UnsupportedMealFilter, resolve_meal_filters
 from smart_basket.meals.normalization import UnitNormalizationError, normalize_unit
 from smart_basket.schemas import Pet, PlanningRequest, UserContext
@@ -104,6 +104,29 @@ def test_edamam_payload_retains_days_slots_filters_and_calorie_bounds():
     assert set(payload["plan"]["sections"]) == {"Breakfast", "Lunch", "Dinner"}
     assert payload["plan"]["accept"]["all"] == [{"health": ["vegetarian", "peanut-free"]}]
     assert payload["plan"]["fit"]["ENERC_KCAL"] == {"min": 1700, "max": 2300}
+
+
+def test_edamam_settings_are_loaded_only_when_complete(monkeypatch):
+    for name in (
+        "EDAMAM_MEAL_PLANNER_APP_ID",
+        "EDAMAM_MEAL_PLANNER_APP_KEY",
+        "EDAMAM_ACCOUNT_USER",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    assert EdamamSettings.from_env() is None
+
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_ID", "app")
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_KEY", "key")
+    monkeypatch.setenv("EDAMAM_ACCOUNT_USER", "user")
+    monkeypatch.setenv("EDAMAM_TIMEOUT_SECONDS", "3")
+
+    settings = EdamamSettings.from_env()
+    assert settings is not None
+    assert settings.app_id == "app"
+    assert settings.app_key == "key"
+    assert settings.account_user == "user"
+    assert settings.timeout_seconds == 3
 
 
 def test_unknown_units_are_not_guessed():

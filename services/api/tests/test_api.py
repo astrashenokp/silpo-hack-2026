@@ -37,6 +37,7 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
         "lentils": 1200,
     }
     assert plan["mealPlan"][0]["ingredientAmounts"][0]["quantity"] == 150
+    assert "Sofiia synthetic fallback" in " ".join(plan["warnings"])
     assert plan["canConfirmCart"] is True
     assert client.get("/api/health").headers["X-Data-Mode"] == "demo"
 
