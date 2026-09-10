@@ -1,0 +1,16 @@
+[
+  {
+    "id": "rec-p-cat-1",
+    "productName": "Корм для кота 2кг",
+    "productId": "p-cat-1",
+    "category": "pet-food",
+    "species": "cat",
+    "suggestedQuantity": 1.0,
+    "unit": "piece",
+    "averageIntervalDays": 14.0,
+    "daysSinceLastPurchase": 12,
+    "confidence": 0.5,
+    "reason": "Куплено 3 рази за історію, середній інтервал 14 дн., минуло 12 дн. з останньої покупки.",
+    "selected": false
+  }
+]

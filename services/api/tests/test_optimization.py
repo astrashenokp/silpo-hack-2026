@@ -15,6 +15,7 @@ from smart_basket.schemas import (
     Pet,
     PlanningRequest,
     ProductCandidate,
+    RecurringSuggestion,
     UnresolvedRequirement,
 )
 
@@ -193,3 +194,45 @@ def test_already_unresolved_by_rina_is_not_duplicated():
     )
     result = optimize_basket(make_planning_request(100000), _oats_requirement(), candidates, [])
     assert len(result.unresolved_requirements) == 1
+
+
+def test_shared_candidate_aggregates_demand_before_rounding():
+    candidate = _oats_candidate()
+    candidate.requirement_ids = ["breakfast-oats", "snack-oats"]
+    ingredients = [
+        IngredientRequirement(
+            id="breakfast-oats", name="Breakfast oats", search_terms=["oats"],
+            quantity=300.0, unit="g", meal_ids=["m1"], restrictions=[],
+        ),
+        IngredientRequirement(
+            id="snack-oats", name="Snack oats", search_terms=["oats"],
+            quantity=300.0, unit="g", meal_ids=["m2"], restrictions=[],
+        ),
+    ]
+    result = optimize_basket(
+        make_planning_request(100000), ingredients,
+        CandidateResult(candidates=[candidate], unresolved_requirements=[]), [],
+    )
+    assert len(result.selected_products) == 1
+    assert result.selected_products[0].quantity == 2.0
+    assert result.selected_products[0].requirement_ids == ["breakfast-oats", "snack-oats"]
+    assert result.selected_products[0].line_total_minor == 12000
+
+
+def test_selected_recurring_product_already_in_meals_is_not_charged_twice():
+    candidate = _oats_candidate()
+    candidate.requirement_ids = ["oats", "rec-oats"]
+    recurring = RecurringSuggestion(
+        id="rec-oats", product_name="Demo dry oats, 500 g", product_id="demo-oats",
+        category="grocery", species=None, suggested_quantity=500.0, unit="g",
+        average_interval_days=14.0, days_since_last_purchase=14,
+        confidence=0.8, reason="Recurring evidence", selected=False,
+    )
+    result = optimize_basket(
+        make_planning_request(100000), _oats_requirement(),
+        CandidateResult(candidates=[candidate], unresolved_requirements=[]), [recurring],
+    )
+    assert len(result.selected_products) == 1
+    assert result.selected_products[0].quantity == 2.0
+    assert result.selected_products[0].recurring_suggestion_ids == ["rec-oats"]
+    assert result.selected_products[0].line_total_minor == 12000
