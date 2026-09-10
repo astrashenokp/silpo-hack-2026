@@ -54,6 +54,12 @@ class Session:
     silpo_branch_id: str | None = None
     silpo_delivery_type: str | None = None
     silpo_timeslot: object | None = None
+    fatsecret_request_token: str | None = None
+    fatsecret_request_secret: str | None = None
+    fatsecret_access_token: str | None = None
+    fatsecret_access_secret: str | None = None
+    fatsecret_connected: bool = False
+    fatsecret_account_label: str | None = None
 
     def get_run(self, run_id: str) -> RunSnapshot:
         if run_id not in self.runs:
