@@ -138,6 +138,12 @@ class CandidateResult(Model):
     unresolved_requirements: list[UnresolvedRequirement]
 
 
+class ProductSearchResponse(Model):
+    query: str
+    products: list[ProductCandidate]
+    warnings: list[str]
+
+
 class RecurringSuggestion(Model):
     id: str
     product_name: str

@@ -1,15 +1,16 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
 
 from smart_basket.catalog.matching import line_total
 from smart_basket.core import ApiError, Session, now, uid
-from smart_basket.mcp.adapters import get_user_context
+from smart_basket.mcp.adapters import get_user_context, search_products
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.schemas import (
     CartPreview, CartReceipt, Confirmation, ExportAccepted, FatSecretExport,
     FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health, PlanReference,
-    PlanningRequest, PlanningResult, ProgressEvent, RecalculateRequest, RunSnapshot, UserContext,
+    PlanningRequest, PlanningResult, ProductSearchResponse, ProgressEvent, RecalculateRequest,
+    RunSnapshot, UserContext,
 )
 
 router = APIRouter(prefix="/api")
@@ -115,6 +116,48 @@ async def context(request: Request, response: Response):
         raise ApiError("UPSTREAM_UNAVAILABLE", "Could not load context from Silpo.", 502, True) from exc
     response.headers["X-Data-Mode"] = "live"
     return live_context
+
+
+@router.get("/integrations/silpo/products", response_model=ProductSearchResponse)
+async def silpo_product_search(
+    request: Request,
+    response: Response,
+    owner: SessionDependency,
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+):
+    with owner.lock:
+        connected = owner.silpo_connected
+        branch_id = owner.silpo_branch_id
+        cart_id = owner.silpo_cart_id
+        delivery_type = owner.silpo_delivery_type
+        timeslot = owner.silpo_timeslot
+        tool_schemas = dict(owner.silpo_tool_schemas)
+    if not connected:
+        raise ApiError("AUTH_REQUIRED", "Connect the Silpo account before searching products.", 401)
+    if not branch_id:
+        raise ApiError("CART_CONTEXT_REQUIRED", "Load Silpo context before searching products.", 409)
+    try:
+        async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
+            result = await search_products(
+                mcp_session,
+                query,
+                branch_id,
+                cart_id=cart_id,
+                delivery_type=delivery_type,
+                timeslot=timeslot,
+                tool_schemas=tool_schemas,
+            )
+    except Exception as exc:
+        message = str(exc).lower()
+        if any(value in message for value in ("401", "403", "unauthorized", "invalid_token")):
+            with owner.lock:
+                owner.silpo_connected = False
+            raise ApiError("AUTH_REQUIRED", "Reconnect the Silpo account.", 401) from exc
+        if "429" in message or "rate limit" in message:
+            raise ApiError("RATE_LIMITED", "Silpo request limit was reached.", 429, True) from exc
+        raise ApiError("UPSTREAM_UNAVAILABLE", "Could not search Silpo products.", 502, True) from exc
+    response.headers["X-Data-Mode"] = "live"
+    return result
 
 
 @router.post("/plans", status_code=202, response_model=RunSnapshot)

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from conftest import create_plan
 from smart_basket.app import create_app
-from smart_basket.schemas import UserContext
+from smart_basket.schemas import ProductCandidate, ProductSearchResponse, UserContext
 
 
 def reference(plan):
@@ -242,6 +242,54 @@ def test_context_uses_silpo_after_connection(app, client, monkeypatch):
     assert response.status_code == 200
     assert response.headers["X-Data-Mode"] == "live"
     assert response.json()["historyAvailable"] is True
+
+
+def test_product_search_uses_stored_branch(app, client, monkeypatch):
+    session = owner(app, client)
+    session.silpo_connected = True
+    session.silpo_branch_id = "stored-branch"
+    session.silpo_cart_id = "stored-cart"
+    session.silpo_delivery_type = "SelfPickup"
+    session.silpo_timeslot = {"start": "start", "end": "end"}
+    session.silpo_tool_schemas["silpo_find_products_batch"] = {
+        "type": "object",
+        "properties": {"items": {"type": "array", "items": {"type": "string"}}},
+        "required": ["items"],
+    }
+
+    @asynccontextmanager
+    async def fake_mcp_session(storage):
+        yield object()
+
+    async def fake_search(
+        mcp_session, query, branch_id, *, cart_id, delivery_type, timeslot, tool_schemas,
+    ):
+        assert branch_id == "stored-branch"
+        assert cart_id == "stored-cart"
+        assert delivery_type == "SelfPickup"
+        assert timeslot == {"start": "start", "end": "end"}
+        assert "silpo_find_products_batch" in tool_schemas
+        return ProductSearchResponse(query=query, products=[ProductCandidate(
+            id="p1", name="Rice", requirement_ids=[], price_minor=8000,
+            selling_unit="package", quantity_step=1.0, content_quantity=1000.0,
+            content_unit="g", available=True, restriction_check="unknown",
+            regular_price_minor=None, source="silpo", checked_at="2026-09-10T12:00:00+00:00",
+        )], warnings=[])
+
+    monkeypatch.setattr("smart_basket.routes.api.get_mcp_session", fake_mcp_session)
+    monkeypatch.setattr("smart_basket.routes.api.search_products", fake_search)
+    response = client.get("/api/integrations/silpo/products?query=rice")
+    assert response.status_code == 200
+    assert response.headers["X-Data-Mode"] == "live"
+    assert response.json()["products"][0]["priceMinor"] == 8000
+
+
+def test_product_search_requires_cart_context(app, client):
+    session = owner(app, client)
+    session.silpo_connected = True
+    response = client.get("/api/integrations/silpo/products?query=rice")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CART_CONTEXT_REQUIRED"
 
 
 def test_live_mode_fails_closed(monkeypatch):
