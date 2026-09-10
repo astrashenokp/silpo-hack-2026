@@ -207,8 +207,19 @@ def cart_confirm(body: Confirmation, request: Request, owner: SessionDependency)
 
 @router.get("/integrations/fatsecret", response_model=FatSecretStatus)
 def fatsecret_status(owner: SessionDependency):
-    return FatSecretStatus(connected=False, account_label="Demo account (no FatSecret connection)",
-        export_available=True, reason="DEMO: only simulated export is available; no real account is connected.")
+    with owner.lock:
+        connected = owner.fatsecret_connected
+        account_label = owner.fatsecret_account_label
+    return FatSecretStatus(
+        connected=connected,
+        account_label=account_label if connected else None,
+        export_available=True,
+        reason=(
+            "FatSecret account connected; Saved Meal exports are still simulated in demo mode."
+            if connected
+            else "DEMO: only simulated export is available; no real account is connected."
+        ),
+    )
 
 
 @router.post("/fatsecret/exports/preview", response_model=FatSecretPreview)
@@ -232,10 +243,3 @@ def get_export(export_id: str, owner: SessionDependency):
         if export_id not in owner.exports:
             raise ApiError("NOT_FOUND", "Export not found in this session.", 404)
         return owner.exports[export_id].model_copy(deep=True)
-
-
-@router.get("/auth/{provider}/{action}")
-def unavailable_auth(provider: str, action: str):
-    if provider not in {"silpo", "fatsecret"} or action not in {"start", "callback"}:
-        raise ApiError("NOT_FOUND", "Route not found.", 404)
-    raise ApiError("INTEGRATION_UNAVAILABLE", "OAuth awaits Arina's adapter. Use /api/context for demo mode.", 503)

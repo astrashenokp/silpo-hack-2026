@@ -14,13 +14,14 @@ from smart_basket.core import ApiError
 from smart_basket.demo import DemoCatalog
 from smart_basket.agent import UlianaPlanner
 from smart_basket.fatsecret.export import DemoExportService
+from smart_basket.fatsecret.auth import FatSecretOAuthManager
 from smart_basket.routes.api import router
 from smart_basket.routes.auth import router as silpo_auth_router
 from smart_basket.mcp.oauth import SilpoOAuthManager
 from smart_basket.schemas import ErrorEnvelope
 
 
-def create_app(*, planner=None, catalog=None, silpo_oauth=None):
+def create_app(*, planner=None, catalog=None, silpo_oauth=None, fatsecret_oauth=None):
     if os.getenv("SMART_BASKET_MODE", "demo") != "demo":
         raise RuntimeError("Only demo mode is implemented. Live adapters and durable storage are required first.")
     app = FastAPI(title="Smart Basket API (demo)", version="0.2.0",
@@ -33,6 +34,9 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None):
     app.state.cart_service = DemoCartService(app.state.catalog)
     app.state.export_service = DemoExportService()
     app.state.silpo_oauth = silpo_oauth if silpo_oauth is not None else SilpoOAuthManager()
+    app.state.fatsecret_oauth = (
+        fatsecret_oauth if fatsecret_oauth is not None else FatSecretOAuthManager()
+    )
     origins = [s.strip() for s in os.getenv("SMART_BASKET_CORS_ORIGINS", "http://localhost:3000").split(",") if s.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-Demo-Scenario"])

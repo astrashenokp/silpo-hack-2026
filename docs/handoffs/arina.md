@@ -27,7 +27,9 @@
 * **`.env.example`**: Додано необхідні змінні оточення (`SILPO_CLIENT_ID`, `FATSECRET_CONSUMER_KEY` тощо) для розгортання у колег[cite: 8].
 
 ### 4. Інтеграція з FatSecret (`services/api/src/smart_basket/fatsecret/`)
-* **`client.py` та `auth.py`**: Реалізовано клієнт для роботи з калорійністю та нутрієнтами через API FatSecret (підтримка OAuth 1.0 / Client Credentials)[cite: 8].
+* **`client.py` та `auth.py`**: Реалізовано OAuth 1.0 request-token → browser authorization → access-token flow, перевірку callback token, ізольоване серверне зберігання токенів у сесії та HMAC-SHA1 transport для delegated API calls. Роути: `/api/auth/fatsecret/start`, `/api/auth/fatsecret/callback`, статус: `/api/integrations/fatsecret`.
+* Saved Meal export поки залишається чітко позначеною demo-симуляцією і не використовує підключений акаунт. Перед live export потрібні provider write/read-back, durable encrypted token storage та перевірка видимості у FatSecret app.
+* **Live check, September 10, 2026:** browser request-token flow, FatSecret member login/authorization, callback access-token exchange and session-scoped `connected: true` status were verified against a real test account. No account identifier, token or secret was recorded. Saved Meal writes were not exercised by this check.
 
 ### 5. Фікстури та Технічна Документація
 * **Фікстури (`fixtures/`)**: Створено синтетичні файли `user-context.json` та `purchase-history.json` із варіантами пустих історій і відсутніх полів для тестування без живого бекенду[cite: 8].
