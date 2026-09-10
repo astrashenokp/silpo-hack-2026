@@ -390,3 +390,34 @@ def test_no_calorie_target_still_produces_meals_and_warning():
     assert len(result["meals"]) == 6
     warnings_text = " ".join(result["warnings"])
     assert "calorie" not in warnings_text.lower() or result["source"] == "synthetic"
+
+
+def test_high_protein_and_high_fiber_preferences_produce_edamam_payload():
+    filters = resolve_meal_filters(
+        request(preferences=["high-protein", "high-fiber"], restrictions=[]),
+        context(),
+    )
+    assert set(filters.edamam_health_labels) == {"high-protein", "high-fiber"}
+    payload = build_edamam_payload(request(preferences=["high-protein", "high-fiber"], calories=None), filters)
+    health = payload["plan"]["accept"]["all"][0]["health"]
+    assert "high-protein" in health and "high-fiber" in health
+
+
+def test_edamam_payload_carries_all_new_restriction_labels():
+    filters = resolve_meal_filters(
+        request(preferences=[], restrictions=["gluten-free", "soy-free"]),
+        context(),
+    )
+    payload = build_edamam_payload(request(preferences=[], calories=None), filters)
+    health = payload["plan"]["accept"]["all"][0]["health"]
+    assert "gluten-free" in health
+    assert "soy-free" in health
+
+
+def test_vegan_plus_restrictions_deduplication_in_edamam_payload():
+    filters = resolve_meal_filters(
+        request(preferences=["vegan"], restrictions=["dairy-free", "egg-free"]),
+        context(preferences=["vegan"]),
+    )
+    assert filters.preferences == ("vegan",)
+    assert set(filters.edamam_health_labels) == {"vegan", "dairy-free", "egg-free"}
