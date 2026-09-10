@@ -1,7 +1,9 @@
 # Smart Basket API — Rina's demo implementation
 
 Python 3.12+; verified on Windows with Python 3.14.6. FastAPI + Pydantic + Uvicorn.
-All integrations are synthetic. No Silpo, Edamam or FatSecret credentials are needed.
+The default run is synthetic. No Silpo, Edamam or FatSecret credentials are needed
+for the local demo, but Sofiia's Edamam adapter boundary and setting names are in
+place for the live access check.
 Use one Uvicorn worker: sessions, runs and operation receipts are stored in memory
 and disappear on restart. This is a local integration starter, not a live deployment.
 
@@ -32,18 +34,24 @@ during development but loses all demo state on each code change.
 
 ## Configuration
 
-`.env.example` lists the two supported variables. Defaults already work; `.env`
+`.env.example` lists the supported variables. Defaults already work; `.env`
 files are **not automatically loaded**. Set environment variables in PowerShell
 before launch if changing them:
 
 ```powershell
 $env:SMART_BASKET_MODE = 'demo'
 $env:SMART_BASKET_CORS_ORIGINS = 'http://localhost:3000'
+$env:SMART_BASKET_MEALS_SOURCE = 'synthetic'
 ```
 
 Any mode other than `demo` fails startup. Use `localhost` consistently on both
 browser services; mixing it with `127.0.0.1` breaks same-site cookie assumptions.
 Bind only to loopback for this demo. A shared hosted URL is not supplied yet.
+Live Edamam planning is not enabled until the actual account fields, attribution
+rules and data-use permissions are verified. Required server-side names are
+`EDAMAM_MEAL_PLANNER_APP_ID`, `EDAMAM_MEAL_PLANNER_APP_KEY`,
+`EDAMAM_ACCOUNT_USER`, optional `EDAMAM_MEAL_PLANNER_BASE_URL` and
+`EDAMAM_TIMEOUT_SECONDS`.
 
 ## Ksiusha and Alina: HTTP connection
 
@@ -166,8 +174,8 @@ meal and fails the rest: select at least **two meals** to observe partial succes
 Set `budgetMinor: 100` for an over-budget result, `days: 8` for 400 validation,
 or send an outdated `version` for 409 `STALE_PLAN`. Only `vegetarian` preference and
 `peanut-free` restriction labels are currently supported; unknown labels fail
-validation. Calorie targets, pet demand and notes are retained but not implemented
-by the synthetic planner; every result warns about these limitations.
+validation. Calorie targets are retained and surfaced, but synthetic meals do not
+optimize calories. Pet demand and notes are retained for the surrounding pipeline.
 
 All request failures use `{error: {code, message, retryable}}`. Per-item failures are
 successful HTTP responses containing operation outcomes, not an HTTP-level crash.
@@ -197,8 +205,9 @@ pre-existing contents. Preview `afterQuantity - beforeQuantity` is the addition.
 - Nonempty `selectedRecurring` currently raises an explicit unsupported error.
   Demo history is empty and recurring suggestions are `[]`. Vika's normalized
   recurring-demand input is still needed; the server rejects invented selection IDs.
-- Temporary meal/catalog/planner substitutes live in `demo.py`; teammates' owned
-  `mcp/`, `agent/`, `meals/` and `optimization/` modules have not been implemented.
+- Sofiia's `meals/` module owns meal filters, serving scaling, synthetic fallback
+  and the Edamam adapter boundary. The demo still labels synthetic meal data
+  honestly and does not store provider recipe payloads.
 
 Live mode is intentionally blocked. Real gateway writes, OAuth/token storage,
 persistent operation journals, timeout reconciliation, provider food matching and
