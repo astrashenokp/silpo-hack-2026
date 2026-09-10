@@ -13,7 +13,7 @@ import json
 import os
 from urllib import error, parse, request
 
-from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal
+from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal, MealMacros
 
 from .nutrition import (
     ACCURACY_WARNINGS,
@@ -21,6 +21,7 @@ from .nutrition import (
     build_nutrition_summary,
     calorie_target_for_slot,
     calorie_target_warnings,
+    planning_constraint_warnings,
 )
 
 
@@ -248,10 +249,12 @@ def map_edamam_plan_response(
                 title=str(recipe.get("label") or assignment.link_title or "Edamam recipe"),
                 servings=request_model.people,
                 kcal_per_serving=(calories / yield_count) if calories is not None else None,
+                macros_per_serving=_recipe_macros_per_serving(recipe, yield_count),
                 calorie_target=calorie_target_for_slot(
                     request_model.calories_per_person_per_day,
                     assignment.slot,
                 ),
+                cooking_time_minutes=_positive_int(recipe.get("totalTime")),
                 ingredient_ids=ingredient_ids,
                 ingredient_amounts=amounts,
                 source="edamam",
@@ -274,6 +277,7 @@ def map_edamam_plan_response(
     ]
     nutrition_summary = build_nutrition_summary(request_model, meals)
     warnings.extend(ACCURACY_WARNINGS)
+    warnings.extend(planning_constraint_warnings(request_model, meals))
     warnings.extend(calorie_target_warnings(nutrition_summary))
 
     return {
@@ -353,6 +357,37 @@ def _positive_float(value) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if number > 0 else None
+
+
+def _positive_int(value) -> int | None:
+    number = _positive_float(value)
+    if number is None:
+        return None
+    return int(round(number))
+
+
+def _recipe_macros_per_serving(recipe: dict, yield_count: float) -> MealMacros | None:
+    total_nutrients = recipe.get("totalNutrients")
+    if not isinstance(total_nutrients, dict):
+        return None
+
+    protein = _nutrient_quantity(total_nutrients, "PROCNT")
+    fat = _nutrient_quantity(total_nutrients, "FAT")
+    carbs = _nutrient_quantity(total_nutrients, "CHOCDF")
+    if protein is None or fat is None or carbs is None:
+        return None
+    return MealMacros(
+        protein_g=protein / yield_count,
+        fat_g=fat / yield_count,
+        carbs_g=carbs / yield_count,
+    )
+
+
+def _nutrient_quantity(total_nutrients: dict, code: str) -> float | None:
+    value = total_nutrients.get(code)
+    if not isinstance(value, dict):
+        return None
+    return _positive_float(value.get("quantity"))
 
 
 def _with_credentials(href: str, settings: EdamamSettings) -> str:

@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from .normalization import IngredientSpec, MealTemplate, aggregate_ingredients, build_meal_from_template
-from .nutrition import ACCURACY_WARNINGS, calorie_target_for_slot, calorie_target_warnings, build_nutrition_summary
+from .nutrition import (
+    ACCURACY_WARNINGS,
+    build_nutrition_summary,
+    calorie_target_for_slot,
+    calorie_target_warnings,
+    planning_constraint_warnings,
+)
 from smart_basket.schemas import MealMacros
 
 
@@ -597,6 +603,7 @@ def build_synthetic_meal_plan(request, filters):
         "Meal plan uses Sofiia synthetic fallback; live Edamam credentials are not configured.",
         "Synthetic recipes are original demo data and are not provider recipe payloads.",
         *ACCURACY_WARNINGS,
+        *planning_constraint_warnings(request, meals),
         *calorie_target_warnings(nutrition_summary),
     ]
     if request.calories_per_person_per_day is not None:

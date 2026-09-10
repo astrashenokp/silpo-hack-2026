@@ -145,7 +145,9 @@ def test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart(monkeypatch):
             title="Live oats",
             servings=request.people,
             kcal_per_serving=200.0,
+            macros_per_serving=None,
             calorie_target=None,
+            cooking_time_minutes=None,
             ingredient_ids=["oats"],
             ingredient_amounts=[
                 IngredientAmount(
