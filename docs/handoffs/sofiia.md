@@ -11,7 +11,7 @@ Sofiia's code now lives in `services/api/src/smart_basket/meals/` and is called 
 `UlianaPlanner` through the shared `build_meal_plan(request, effective_context)`
 interface. The module covers:
 
-- supported filter mapping for `vegetarian` and `peanut-free`;
+- supported filter mapping: 5 preferences and 8 restrictions (see table below);
 - explicit failure for unsupported hard restrictions from saved context;
 - original synthetic fallback meals covering every requested day and breakfast/lunch/dinner slot;
 - serving scaling for household portions;
@@ -19,6 +19,40 @@ interface. The module covers:
 - aggregate `IngredientRequirement` records with stable `mealIds`;
 - unit normalization limited to `g`, `ml` and `piece`; unknown units are unresolved instead of guessed;
 - Edamam credential/settings boundary, request payload builder and selection/recipe response mapper.
+
+## Supported Dietary Labels (for Ksiusha)
+
+These machine labels are accepted by `PlanningRequest.preferences` and `PlanningRequest.restrictions`.
+Each maps to an Edamam health label sent in the `accept.all[].health` array.
+Unlisted labels are rejected with a `VALIDATION_ERROR`; do not invent new ones without updating
+`filters.py`, `schemas/__init__.py` and this table.
+
+### Preferences
+
+| Label | Display | Edamam health label |
+|---|---|---|
+| `vegetarian` | Vegetarian | `vegetarian` |
+| `vegan` | Vegan | `vegan` |
+| `paleo` | Paleo | `paleo` |
+| `high-protein` | High-protein | `high-protein` |
+| `high-fiber` | High-fiber | `high-fiber` |
+
+### Restrictions (hard — reject unsupported ones; never silently ignore)
+
+| Label | Display | Edamam health label |
+|---|---|---|
+| `peanut-free` | Peanut-free | `peanut-free` |
+| `gluten-free` | Gluten-free | `gluten-free` |
+| `dairy-free` | Dairy-free | `dairy-free` |
+| `tree-nut-free` | Tree-nut-free | `tree-nut-free` |
+| `shellfish-free` | Shellfish-free | `shellfish-free` |
+| `soy-free` | Soy-free | `soy-free` |
+| `egg-free` | Egg-free | `egg-free` |
+| `pork-free` | Pork-free | `pork-free` |
+
+In demo mode the `DemoCatalog.check_restrictions` only verifies `peanut-free`; all other
+restrictions return `"unknown"` on product candidates. This is correct demo behaviour — it
+does not indicate a filter mapping error.
 
 ## Contract Shape
 
@@ -118,7 +152,7 @@ services/api/.venv/bin/python -m pytest services/api/tests -q
 services/api/.venv/bin/python services/api/scripts/export_contracts.py --check
 ```
 
-Current local result: 97 backend tests pass with one Starlette/AnyIO deprecation warning.
+Current local result: 106 backend tests pass with one Starlette/AnyIO deprecation warning.
 
 ## Known Limits
 
