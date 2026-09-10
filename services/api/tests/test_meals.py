@@ -1,7 +1,7 @@
 import pytest
 
 from smart_basket.meals import build_meal_plan
-from smart_basket.meals.edamam import EdamamSettings, build_edamam_payload
+from smart_basket.meals.edamam import EdamamSettings, EdamamUnavailable, build_edamam_payload
 from smart_basket.meals.filters import UnsupportedMealFilter, resolve_meal_filters
 from smart_basket.meals.normalization import UnitNormalizationError, normalize_unit
 from smart_basket.schemas import Pet, PlanningRequest, UserContext
@@ -127,6 +127,29 @@ def test_edamam_settings_are_loaded_only_when_complete(monkeypatch):
     assert settings.app_key == "key"
     assert settings.account_user == "user"
     assert settings.timeout_seconds == 3
+
+
+def test_requested_edamam_source_uses_explicit_synthetic_fallback(monkeypatch):
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+    monkeypatch.delenv("EDAMAM_MEAL_PLANNER_APP_ID", raising=False)
+    monkeypatch.delenv("EDAMAM_MEAL_PLANNER_APP_KEY", raising=False)
+    monkeypatch.delenv("EDAMAM_ACCOUNT_USER", raising=False)
+
+    result = build_meal_plan(request(), context())
+
+    assert result["source"] == "synthetic"
+    assert "credentials are incomplete" in result["warnings"][0]
+
+
+def test_requested_edamam_source_can_fail_without_fallback(monkeypatch):
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+    monkeypatch.setenv("EDAMAM_SYNTHETIC_FALLBACK", "false")
+    monkeypatch.delenv("EDAMAM_MEAL_PLANNER_APP_ID", raising=False)
+    monkeypatch.delenv("EDAMAM_MEAL_PLANNER_APP_KEY", raising=False)
+    monkeypatch.delenv("EDAMAM_ACCOUNT_USER", raising=False)
+
+    with pytest.raises(EdamamUnavailable):
+        build_meal_plan(request(), context())
 
 
 def test_unknown_units_are_not_guessed():

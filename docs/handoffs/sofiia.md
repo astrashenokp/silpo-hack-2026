@@ -74,6 +74,7 @@ Server-side environment variable names:
 
 ```text
 SMART_BASKET_MEALS_SOURCE=synthetic
+EDAMAM_SYNTHETIC_FALLBACK=true
 EDAMAM_MEAL_PLANNER_APP_ID=...
 EDAMAM_MEAL_PLANNER_APP_KEY=...
 EDAMAM_ACCOUNT_USER=...
@@ -91,7 +92,9 @@ Live Edamam is not claimed as verified. Before enabling it for the demo, verify:
 - timeout/rate-limit behavior using redacted errors.
 
 Until those checks pass, keep `SMART_BASKET_MEALS_SOURCE=synthetic` and label the
-flow as demo data.
+flow as demo data. For live failure drills, set `SMART_BASKET_MEALS_SOURCE=edamam`
+and `EDAMAM_SYNTHETIC_FALLBACK=false` so missing credentials or provider errors
+fail explicitly instead of returning synthetic meals.
 
 ## Fixtures And Checks
 

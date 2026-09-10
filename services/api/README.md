@@ -51,7 +51,8 @@ Live Edamam planning is not enabled until the actual account fields, attribution
 rules and data-use permissions are verified. Required server-side names are
 `EDAMAM_MEAL_PLANNER_APP_ID`, `EDAMAM_MEAL_PLANNER_APP_KEY`,
 `EDAMAM_ACCOUNT_USER`, optional `EDAMAM_MEAL_PLANNER_BASE_URL` and
-`EDAMAM_TIMEOUT_SECONDS`.
+`EDAMAM_TIMEOUT_SECONDS` and `EDAMAM_SYNTHETIC_FALLBACK`. Keep fallback enabled
+for demos unless the goal is to verify a hard live failure path.
 
 ## Ksiusha and Alina: HTTP connection
 
