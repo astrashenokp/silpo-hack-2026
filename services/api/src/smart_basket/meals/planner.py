@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import os
 
-from .edamam import EdamamMealPlannerClient, EdamamSettings, EdamamUnavailable, build_edamam_payload
+from .edamam import (
+    EdamamMealPlannerClient,
+    EdamamSettings,
+    EdamamUnavailable,
+    build_edamam_payload,
+    collect_assignments,
+    map_edamam_plan_response,
+)
 from .filters import resolve_meal_filters
 from .synthetic import build_synthetic_meal_plan
 
@@ -35,7 +42,18 @@ def build_meal_plan(request, effective_context):
         client = EdamamMealPlannerClient(settings)
         payload = build_edamam_payload(request, filters)
         try:
-            client.request_plan(payload)
+            response = client.request_plan(payload)
+            assignments = collect_assignments(response)
+            recipe_details = {
+                assignment.uri: client.request_recipe(assignment.href, assignment.uri)
+                for assignment in assignments
+            }
+            return map_edamam_plan_response(
+                response=response,
+                recipe_details=recipe_details,
+                request_model=request,
+                filters=filters,
+            )
         except EdamamUnavailable as exc:
             if not fallback_enabled:
                 raise
@@ -45,12 +63,5 @@ def build_meal_plan(request, effective_context):
                 *result["warnings"],
             ]
             return result
-        result = build_synthetic_meal_plan(request, filters)
-        result["warnings"] = [
-            "Edamam credentials are configured, but provider response mapping is not enabled until account fields are verified.",
-            *result["warnings"],
-        ]
-        result["source"] = "mixed"
-        return result
 
     return build_synthetic_meal_plan(request, filters)

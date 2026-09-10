@@ -68,6 +68,156 @@ DAY_TEMPLATES: tuple[tuple[MealTemplate, MealTemplate, MealTemplate], ...] = (
             ),
         ),
     ),
+    (
+        MealTemplate(
+            slot="breakfast",
+            title="Warm oat porridge with fruit",
+            kcal_per_serving=430.0,
+            ingredients=(INGREDIENTS["oats"],),
+        ),
+        MealTemplate(
+            slot="lunch",
+            title="Rice pilaf with lentils",
+            kcal_per_serving=670.0,
+            ingredients=(
+                IngredientSpec(
+                    id="rice",
+                    name="Dry rice",
+                    search_terms=("rice",),
+                    quantity_per_serving=70.0,
+                    unit="g",
+                ),
+                IngredientSpec(
+                    id="lentils",
+                    name="Dry lentils",
+                    search_terms=("lentils",),
+                    quantity_per_serving=40.0,
+                    unit="g",
+                ),
+            ),
+        ),
+        MealTemplate(
+            slot="dinner",
+            title="Lentil and rice soup",
+            kcal_per_serving=730.0,
+            ingredients=(
+                IngredientSpec(
+                    id="lentils",
+                    name="Dry lentils",
+                    search_terms=("lentils",),
+                    quantity_per_serving=60.0,
+                    unit="g",
+                ),
+                IngredientSpec(
+                    id="rice",
+                    name="Dry rice",
+                    search_terms=("rice",),
+                    quantity_per_serving=50.0,
+                    unit="g",
+                ),
+            ),
+        ),
+    ),
+    (
+        MealTemplate(
+            slot="breakfast",
+            title="Oat breakfast cup",
+            kcal_per_serving=410.0,
+            ingredients=(INGREDIENTS["oats"],),
+        ),
+        MealTemplate(
+            slot="lunch",
+            title="Rice bowl with lentil topping",
+            kcal_per_serving=690.0,
+            ingredients=(
+                IngredientSpec(
+                    id="rice",
+                    name="Dry rice",
+                    search_terms=("rice",),
+                    quantity_per_serving=90.0,
+                    unit="g",
+                ),
+                IngredientSpec(
+                    id="lentils",
+                    name="Dry lentils",
+                    search_terms=("lentils",),
+                    quantity_per_serving=20.0,
+                    unit="g",
+                ),
+            ),
+        ),
+        MealTemplate(
+            slot="dinner",
+            title="Hearty lentil skillet",
+            kcal_per_serving=780.0,
+            ingredients=(
+                IngredientSpec(
+                    id="lentils",
+                    name="Dry lentils",
+                    search_terms=("lentils",),
+                    quantity_per_serving=80.0,
+                    unit="g",
+                ),
+                IngredientSpec(
+                    id="rice",
+                    name="Dry rice",
+                    search_terms=("rice",),
+                    quantity_per_serving=30.0,
+                    unit="g",
+                ),
+            ),
+        ),
+    ),
+    (
+        MealTemplate(
+            slot="breakfast",
+            title="Simple overnight oats",
+            kcal_per_serving=420.0,
+            ingredients=(INGREDIENTS["oats"],),
+        ),
+        MealTemplate(
+            slot="lunch",
+            title="Balanced rice and lentils",
+            kcal_per_serving=700.0,
+            ingredients=(
+                IngredientSpec(
+                    id="rice",
+                    name="Dry rice",
+                    search_terms=("rice",),
+                    quantity_per_serving=60.0,
+                    unit="g",
+                ),
+                IngredientSpec(
+                    id="lentils",
+                    name="Dry lentils",
+                    search_terms=("lentils",),
+                    quantity_per_serving=50.0,
+                    unit="g",
+                ),
+            ),
+        ),
+        MealTemplate(
+            slot="dinner",
+            title="Lentil rice supper bowl",
+            kcal_per_serving=740.0,
+            ingredients=(
+                IngredientSpec(
+                    id="lentils",
+                    name="Dry lentils",
+                    search_terms=("lentils",),
+                    quantity_per_serving=50.0,
+                    unit="g",
+                ),
+                IngredientSpec(
+                    id="rice",
+                    name="Dry rice",
+                    search_terms=("rice",),
+                    quantity_per_serving=60.0,
+                    unit="g",
+                ),
+            ),
+        ),
+    ),
 )
 
 

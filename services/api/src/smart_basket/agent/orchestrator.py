@@ -175,6 +175,22 @@ class UlianaPlanner:
                 [],
             )
         )
+        meal_source = meal_result.get(
+            "source",
+            "synthetic",
+        )
+        data_mode = (
+            "mixed"
+            if meal_source in {
+                "edamam",
+                "mixed",
+            }
+            else "demo"
+        )
+        if data_mode == "mixed":
+            warnings.append(
+                "Meal data is live or mixed while catalog/cart data remains demo; cart confirmation is disabled."
+            )
 
         emit_progress(
             "meals",
@@ -254,6 +270,11 @@ class UlianaPlanner:
         # ====================================================
 
         can_confirm_cart = (
+            data_mode
+            == "demo"
+
+            and
+
             optimization.budget_status
             == "within_budget"
 
@@ -277,7 +298,7 @@ class UlianaPlanner:
 
             version=1,
 
-            data_mode="demo",
+            data_mode=data_mode,
 
             effective_request=request,
 

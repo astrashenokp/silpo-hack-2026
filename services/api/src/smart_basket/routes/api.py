@@ -56,8 +56,8 @@ def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=Fal
         result = PlanningResult.model_validate(result).model_copy(deep=True)
         result.run_id = run_id
         result.version = previous.version + 1 if previous else 1
-        if result.data_mode != "demo" or result.effective_request != request:
-            raise ValueError("Mock service requires a demo result retaining the confirmed request.")
+        if result.data_mode not in {"demo", "mixed"} or result.effective_request != request:
+            raise ValueError("Planner must retain the confirmed request and return a supported data mode.")
         if result.basket_total_minor != sum(p.line_total_minor for p in result.selected_products):
             raise ValueError("Planner returned inconsistent totals.")
         if any(p.line_total_minor != line_total(p.quantity, p.unit_price_minor) for p in result.selected_products):
