@@ -96,7 +96,7 @@ def test_uliana_reports_unsupported_context_restriction():
         def get_user_context(self, session):
             return UserContext(
                 preferences=[],
-                restrictions=["gluten-free"],
+                restrictions=["wheat-free"],
                 pets=[],
                 history_available=False,
                 cart_context_ready=True,
@@ -132,7 +132,7 @@ def test_uliana_reports_unsupported_context_restriction():
 
     assert run["status"] == "failed"
     assert run["error"]["code"] == "VALIDATION_ERROR"
-    assert "gluten-free" in run["error"]["message"]
+    assert "wheat-free" in run["error"]["message"]
 
 
 def test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart(monkeypatch):

@@ -108,7 +108,7 @@ def test_context_and_request_filters_merge_and_map_to_edamam_labels():
 
 def test_unsupported_context_restriction_fails_closed():
     with pytest.raises(UnsupportedMealFilter):
-        resolve_meal_filters(request(), context(restrictions=["gluten-free"]))
+        resolve_meal_filters(request(), context(restrictions=["wheat-free"]))
 
 
 def test_edamam_payload_retains_days_slots_filters_and_calorie_bounds():
