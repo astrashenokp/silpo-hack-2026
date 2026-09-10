@@ -19,7 +19,8 @@ def client(app):
 @pytest.fixture
 def planning_request():
     return {"budgetMinor": 180000, "currency": "UAH", "days": 4, "people": 3,
-            "caloriesPerPersonPerDay": 2000, "preferences": ["vegetarian"],
+            "caloriesPerPersonPerDay": 2000, "healthConditions": [],
+            "cookingTimeLimit": None, "preferences": ["vegetarian"],
             "restrictions": [], "pets": [{"species": "cat", "count": 1}],
             "includeRecurring": True, "notes": ""}
 

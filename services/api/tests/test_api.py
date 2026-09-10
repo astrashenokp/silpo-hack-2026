@@ -58,10 +58,11 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
 
 @pytest.mark.parametrize("field,value", [
     ("budgetMinor", 0), ("budgetMinor", 12.5), ("budgetMinor", "180000"),
-    ("budgetMinor", True), ("days", 8), ("people", 0), ("days", True),
+    ("budgetMinor", True), ("days", 15), ("people", 0), ("days", True),
     ("currency", "USD"), ("restrictions", ["unrecognized"]),
     ("preferences", ["unsupported"]), ("includeRecurring", "true"),
-    ("caloriesPerPersonPerDay", -1), ("pets", [{"species": "cat", "count": 0}]),
+    ("caloriesPerPersonPerDay", -1), ("healthConditions", ["unknown"]),
+    ("cookingTimeLimit", 4), ("pets", [{"species": "cat", "count": 0}]),
     ("accountId", "user-supplied"),
 ])
 def test_strict_request_validation(client, planning_request, field, value):
@@ -84,6 +85,11 @@ def test_null_calories_and_no_restrictions(client, planning_request):
 def test_new_dietary_labels_accepted_by_api(client, planning_request, preferences, restrictions):
     body = {**planning_request, "preferences": preferences, "restrictions": restrictions}
     response = client.post("/api/plans", json=body)
+    assert response.status_code == 202
+
+
+def test_fourteen_day_request_is_accepted_by_api(client, planning_request):
+    response = client.post("/api/plans", json={**planning_request, "days": 14})
     assert response.status_code == 202
 
 

@@ -13,13 +13,23 @@ from smart_basket.meals.normalization import UnitNormalizationError, normalize_u
 from smart_basket.schemas import Pet, PlanningRequest, UserContext
 
 
-def request(days=4, people=3, calories=2000, preferences=None, restrictions=None):
+def request(
+    days=4,
+    people=3,
+    calories=2000,
+    preferences=None,
+    restrictions=None,
+    health_conditions=None,
+    cooking_time_limit=None,
+):
     return PlanningRequest(
         budget_minor=180000,
         currency="UAH",
         days=days,
         people=people,
         calories_per_person_per_day=calories,
+        health_conditions=[] if health_conditions is None else health_conditions,
+        cooking_time_limit=cooking_time_limit,
         preferences=["vegetarian"] if preferences is None else preferences,
         restrictions=[] if restrictions is None else restrictions,
         pets=[Pet(species="cat", count=1)],
@@ -52,6 +62,8 @@ def test_synthetic_plan_covers_every_day_and_slot():
     assert {meal.source for meal in meals} == {"synthetic"}
     assert all(meal.servings == 3 for meal in meals)
     assert all(meal.kcal_per_serving is not None for meal in meals)
+    assert all(meal.macros_per_serving is not None for meal in meals)
+    assert all(meal.cooking_time_minutes is not None for meal in meals)
 
 
 def test_synthetic_plan_exposes_chrononutrition_calorie_targets():
@@ -87,6 +99,33 @@ def test_meal_plan_warnings_cover_cooking_and_vision_accuracy_boundaries():
 
     assert "cooking yield" in warnings
     assert "Vision-based consumed-food analysis is outside this planner boundary" in warnings
+
+
+def test_synthetic_plan_exposes_macros_and_cooking_time():
+    result = build_meal_plan(request(days=1, people=1), context())
+    breakfast = next(meal for meal in result["meals"] if meal.slot == "breakfast")
+
+    assert breakfast.macros_per_serving.protein_g == 13.5
+    assert breakfast.macros_per_serving.fat_g == 7.0
+    assert breakfast.macros_per_serving.carbs_g == 69.0
+    assert breakfast.cooking_time_minutes == 12
+
+
+def test_health_conditions_and_cooking_limit_are_retained_as_warnings():
+    result = build_meal_plan(
+        request(
+            days=1,
+            people=1,
+            health_conditions=["diabetes", "hypercholesterolemia"],
+            cooking_time_limit=10,
+        ),
+        context(),
+    )
+    warnings = " ".join(result["warnings"])
+
+    assert "Diabetes condition is retained" in warnings
+    assert "Hypercholesterolemia condition is retained" in warnings
+    assert "10-minute cooking limit" in warnings
 
 
 def test_synthetic_plan_has_demo_variety_without_changing_totals():
@@ -221,6 +260,10 @@ def test_edamam_selection_and_recipe_details_map_to_contract_models():
     assert breakfast.kcal_per_serving == 200
     assert breakfast.calorie_target.target_kcal_per_serving == 500
     assert breakfast.ingredient_amounts[0].quantity == 100
+    assert breakfast.macros_per_serving.protein_g == 12.5
+    assert breakfast.macros_per_serving.fat_g == 5.0
+    assert breakfast.macros_per_serving.carbs_g == 55.0
+    assert breakfast.cooking_time_minutes == 20
 
     ingredient = result["ingredients"][0]
     assert ingredient.quantity == 300
@@ -330,6 +373,12 @@ def _recipe_detail(label, url):
             "url": url,
             "yield": 4,
             "calories": 800,
+            "totalTime": 20,
+            "totalNutrients": {
+                "PROCNT": {"quantity": 50},
+                "FAT": {"quantity": 20},
+                "CHOCDF": {"quantity": 220},
+            },
             "ingredients": [
                 {
                     "foodId": "food-oats",
@@ -403,12 +452,13 @@ def test_unsupported_restriction_from_context_still_fails_closed_with_expanded_s
 # Boundary tests: max and min plan sizes
 # ---------------------------------------------------------------------------
 
-def test_max_boundary_seven_days_six_people():
-    result = build_meal_plan(request(days=7, people=6), context())
+def test_max_boundary_fourteen_days_six_people():
+    result = build_meal_plan(request(days=14, people=6), context())
     meals = result["meals"]
-    assert len(meals) == 21
-    assert {meal.day for meal in meals} == set(range(1, 8))
+    assert len(meals) == 42
+    assert {meal.day for meal in meals} == set(range(1, 15))
     assert all(meal.servings == 6 for meal in meals)
+    assert len({meal.title for meal in meals}) == 42
 
 
 def test_min_boundary_one_day_one_person():
