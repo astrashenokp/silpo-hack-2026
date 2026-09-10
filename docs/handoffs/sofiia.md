@@ -13,8 +13,10 @@ interface. The module covers:
 
 - supported filter mapping: 5 preferences and 8 restrictions (see table below);
 - explicit failure for unsupported hard restrictions from saved context;
-- original synthetic fallback meals covering every requested day and breakfast/lunch/dinner slot;
+- original synthetic fallback meals covering every requested day up to 14 days and breakfast/lunch/dinner slot;
 - serving scaling for household portions;
+- per-meal `macrosPerServing` with protein/fat/carbs estimates when known;
+- per-meal `cookingTimeMinutes` and request-level `cookingTimeLimit` warnings;
 - per-meal `calorieTarget` metadata using a 25% breakfast, 35% lunch and 40% dinner split when a daily calorie target is provided;
 - `nutritionSummary` with daily planned calories, target range and whether each day lands within the configured +/-10% tolerance;
 - per-meal `ingredientAmounts` for FatSecret one-person export preview;
@@ -88,7 +90,14 @@ Returned mapping:
 }
 ```
 
-`Meal.calorieTarget` is `null` when the request has no calorie target. Otherwise it
+`PlanningRequest.days` accepts 1–14 days. `PlanningRequest.healthConditions`
+accepts `diabetes` and `hypercholesterolemia`; those values are retained and
+reported with warnings, but this branch does not enforce medical ILP constraints.
+`PlanningRequest.cookingTimeLimit` accepts 5–240 minutes and reports meals over
+the configured time limit.
+
+`Meal.macrosPerServing` contains protein/fat/carbs grams per person when those
+values are known from the synthetic template or Edamam nutrients. `Meal.calorieTarget` is `null` when the request has no calorie target. Otherwise it
 contains the slot share, target calories per serving and the +/-10% range for that
 meal slot. `nutritionSummary.daily[]` compares each day's available planned
 calories against the daily target. Missing provider calories remain `null`; the
@@ -171,14 +180,16 @@ services/api/.venv/bin/python -m pytest services/api/tests -q
 services/api/.venv/bin/python services/api/scripts/export_contracts.py --check
 ```
 
-Current local result: 119 backend tests pass with one Starlette/AnyIO deprecation warning.
+Current local result: 124 backend tests pass with one Starlette/AnyIO deprecation warning.
 
 ## Known Limits
 
 The synthetic menu is deliberately simple and uses only ingredients that Rina's
-demo catalog and FatSecret demo mapping can resolve. It is a deterministic
-integration fallback, not a complete nutrition product. It exposes calorie target
-metadata and warnings but does not run ILP/PuLP optimization.
+demo catalog and FatSecret demo mapping can resolve. It now provides 14 distinct
+demo days, but it is a deterministic integration fallback, not a 244-recipe
+validated diet library or a complete nutrition product. It exposes calories,
+macro estimates, cooking-time metadata and warnings but does not run ILP/PuLP
+optimization.
 
 Recalculation currently preserves the confirmed request and reruns the
 deterministic pipeline. It does not yet perform price-aware meal swaps, because
