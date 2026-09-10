@@ -61,6 +61,18 @@ def test_null_calories_and_no_restrictions(client, planning_request):
     assert plan["effectiveRequest"]["caloriesPerPersonPerDay"] is None
 
 
+@pytest.mark.parametrize("preferences,restrictions", [
+    (["vegan"], []),
+    (["paleo"], ["gluten-free"]),
+    (["high-protein", "high-fiber"], ["soy-free", "dairy-free"]),
+    ([], ["pork-free", "shellfish-free", "egg-free", "tree-nut-free"]),
+])
+def test_new_dietary_labels_accepted_by_api(client, planning_request, preferences, restrictions):
+    body = {**planning_request, "preferences": preferences, "restrictions": restrictions}
+    response = client.post("/api/plans", json=body)
+    assert response.status_code == 202
+
+
 def test_auth_and_session_isolation(app, client, planning_request):
     plan = create_plan(client, planning_request)
     cart = client.post("/api/cart/preview", json=reference(plan)).json()
