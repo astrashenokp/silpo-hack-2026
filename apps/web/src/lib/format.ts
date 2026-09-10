@@ -1,13 +1,9 @@
 const uah = new Intl.NumberFormat("uk-UA", {
-  style: "currency",
-  currency: "UAH",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
 const uahWhole = new Intl.NumberFormat("uk-UA", {
-  style: "currency",
-  currency: "UAH",
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 });
@@ -17,11 +13,11 @@ const number = new Intl.NumberFormat("uk-UA", {
 });
 
 export function formatUah(minor: number): string {
-  return uah.format(minor / 100);
+  return `${uah.format(minor / 100)} грн`;
 }
 
 export function formatUahLabel(minor: number): string {
-  return `${uahWhole.format(minor / 100)}`;
+  return `${uahWhole.format(minor / 100)} грн`;
 }
 
 export function formatNumber(value: number): string {

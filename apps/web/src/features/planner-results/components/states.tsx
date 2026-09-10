@@ -65,12 +65,13 @@ export function SyncFailureModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="sync-failure-dialog-title"
     >
       <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-xl">
         <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-danger text-xl text-white">
           !
         </span>
-        <h3 className="mt-4 text-lg font-semibold text-danger">
+        <h3 id="sync-failure-dialog-title" className="mt-4 text-lg font-semibold text-danger">
           Помилка синхронізації кошика Сільпо
         </h3>
         <p className="mt-2 text-sm leading-relaxed text-muted">

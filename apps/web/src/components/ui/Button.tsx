@@ -1,6 +1,10 @@
 "use client";
 
-import type { PropsWithChildren } from "react";
+import type {
+  PropsWithChildren,
+  ButtonHTMLAttributes,
+  ReactNode,
+} from "react";
 
 type ButtonVariant = "primary" | "outline" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
@@ -24,9 +28,11 @@ export function Button({
   size = "md",
   className = "",
   loading = false,
+  children,
+  disabled,
   ...props
 }: PropsWithChildren<
-  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  ButtonHTMLAttributes<HTMLButtonElement> & {
     variant?: ButtonVariant;
     size?: ButtonSize;
     loading?: boolean;
@@ -35,11 +41,11 @@ export function Button({
   return (
     <button
       className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed ${variantClass[variant]} ${sizeClass[size]} ${className}`}
-      disabled={props.disabled || loading}
+      disabled={disabled || loading}
       {...props}
     >
       {loading && <Spinner className="size-4" />}
-      {props.children}
+      {children}
     </button>
   );
 }
@@ -142,10 +148,11 @@ export function ChatBubble({
     <div className={`flex items-start gap-2 ${role === "user" ? "flex-row-reverse" : ""}`}>
       {role === "agent" && <AgentAvatar size="md" />}
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${role === "agent"
-          ? "rounded-tl-none border border-line bg-white text-foreground"
-          : "rounded-tr-none bg-brand text-white"
-          }`}
+        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+          role === "agent"
+            ? "rounded-tl-none border border-line bg-white text-foreground"
+            : "rounded-tr-none bg-brand text-white"
+        }`}
       >
         {children}
       </div>
@@ -158,7 +165,7 @@ export function Section({
   right,
   children,
   className = "",
-}: PropsWithChildren<{ title: string; right?: React.ReactNode; className?: string }>) {
+}: PropsWithChildren<{ title: string; right?: ReactNode; className?: string }>) {
   return (
     <section className={`rounded-lg border border-line bg-white p-5 ${className}`}>
       <div className="mb-3 flex items-center justify-between gap-2">
