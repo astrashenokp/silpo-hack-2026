@@ -140,6 +140,7 @@ Rina owns these Python routes except auth, which Arina implements in the same Py
 | `GET /api/auth/silpo/start` | Browser navigation | Starts OAuth flow; Arina implements callback/session handling |
 | `GET /api/auth/silpo/callback` | Provider redirect | Validates OAuth state/PKCE and returns user to the app |
 | `GET /api/context` | Authenticated session | `UserContext`; 401 if sign-in needed |
+| `GET /api/integrations/silpo/products?query=...` | Authenticated session and search text | `ProductSearchResponse`; store context is taken from the server session |
 | `POST /api/plans` | `PlanningRequest` | 202 with initial `RunSnapshot` |
 | `GET /api/plans/:runId` | Session-scoped run ID | 200 `RunSnapshot`; poll approximately every 2 seconds until terminal state |
 | `POST /api/plans/:runId/recalculate` | `{ version, selectedRecurringIds }` | 202 new `RunSnapshot`; original confirmed request remains unchanged, costs are recomputed server-side |

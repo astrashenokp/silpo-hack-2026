@@ -39,9 +39,11 @@ class SilpoOAuthFlow:
         ) as session:
             result = await session.list_tools()
             tools = tuple(tool.name for tool in result.tools)
+            tool_schemas = {tool.name: tool.input_schema for tool in result.tools}
         with self.owner.lock:
             self.owner.silpo_connected = True
             self.owner.silpo_tools = tools
+            self.owner.silpo_tool_schemas = tool_schemas
 
     async def wait_for_authorization_url(self) -> str | None:
         done, _ = await asyncio.wait(
