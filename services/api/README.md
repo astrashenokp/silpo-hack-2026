@@ -47,25 +47,53 @@ Bind only to loopback for this demo. A shared hosted URL is not supplied yet.
 
 ## Ksiusha and Alina: HTTP connection
 
-Until Next.js exists, use the API documentation or HTTP examples below. Recommended
-Next.js configuration (Ksiusha owns the actual `next.config.ts`):
+The frontend communicates with the Python API through Next.js rewrites. Browser
+requests use same-origin `/api/...` URLs, and Next.js forwards them to the backend.
+
+The current `apps/web/next.config.ts` configuration is:
 
 ```ts
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
+
+const apiBaseUrl =
+  process.env.API_BASE_URL ??
+  "http://127.0.0.1:8000";
 
 const config: NextConfig = {
   async rewrites() {
-    return [{ source: '/api/:path*', destination: 'http://127.0.0.1:8000/api/:path*' }];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiBaseUrl}/api/:path*`,
+      },
+    ];
   },
 };
+
 export default config;
 ```
 
-Launch Python first, then the frontend on port 3000 once Ksiusha provides its package
-and launch command. No frontend has been created in this backend delivery.
+### Local launch
+
+Start the Python backend first using the command from the **Install and start**
+section above.
+
+Then, in a second terminal, start the Next.js frontend from the repository root:
+
+```powershell
+cd apps/web
+npm.cmd install
+npm.cmd run dev
+```
+
+`npm.cmd install` is only required on the first launch or after dependency changes.
+
+Open the frontend at `http://localhost:3000`.
+
+Keep both the Python backend and the Next.js frontend running during local development.
 
 ```ts
-// With the Next.js forwarding above, use same-origin /api URLs.
+// With the Next.js forwarding above...
 // For direct local API access instead, set base = 'http://localhost:8000'.
 const base = '';
 async function api(path: string, body?: unknown, scenario?: string) {
