@@ -3,7 +3,7 @@
 This is a starting handoff for Polina's September 12 intake, **not a release-ready
 declaration**. No shared revision or merged PR is recorded yet. Rina's demo backend
 is implemented locally; Uliana's orchestration, Vika's optimization and Sofiia's
-synthetic meal-planning boundary are connected in the backend pipeline.
+meal-planning module are connected in the backend pipeline.
 
 Start with [Rina's handoff](rina.md) and the [backend launch guide](../../services/api/README.md).
 Backend: Python 3.12+, local `.venv`, Uvicorn port 8000, one worker. Health:
@@ -13,7 +13,7 @@ documented `/api/...` forwarding on port 3000 before a combined launch is possib
 
 Available: validated HTTP contracts; synthetic planning, cart and Saved Meal
 operations; product matching helpers; Sofiia `meal-plan`/`ingredients` fixtures
-under `fixtures/`; 91 passing backend tests. All external providers remain
+under `fixtures/`; 97 passing backend tests. All external providers remain
 unverified in live mode, and `SMART_BASKET_MODE=live` deliberately refuses
 startup. No credentials or external account access are necessary for this demo.
 

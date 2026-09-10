@@ -18,7 +18,7 @@ interface. The module covers:
 - per-meal `ingredientAmounts` for FatSecret one-person export preview;
 - aggregate `IngredientRequirement` records with stable `mealIds`;
 - unit normalization limited to `g`, `ml` and `piece`; unknown units are unresolved instead of guessed;
-- Edamam credential/settings boundary and request payload builder.
+- Edamam credential/settings boundary, request payload builder and selection/recipe response mapper.
 
 ## Contract Shape
 
@@ -82,7 +82,9 @@ EDAMAM_MEAL_PLANNER_BASE_URL=https://api.edamam.com
 EDAMAM_TIMEOUT_SECONDS=8
 ```
 
-Live Edamam is not claimed as verified. Before enabling it for the demo, verify:
+Live Edamam is not claimed as verified. The code can map Meal Planner selections
+and Recipe Search recipe details when credentials are configured, but before
+presenting it as live-ready verify:
 
 - the actual account plan, user/call limits and active-user requirement;
 - request sections for breakfast/lunch/dinner;
@@ -90,6 +92,11 @@ Live Edamam is not claimed as verified. Before enabling it for the demo, verify:
 - attribution text and source-link display requirements;
 - whether Edamam-derived fields may be exported/persisted into FatSecret;
 - timeout/rate-limit behavior using redacted errors.
+
+Reference material used for the mapper: Edamam Meal Planner docs describe
+`selection` assignments and recipe access by URI; the Recipe Search response
+ingredient structure exposes `weight` as grams. Edamam's plan page documents
+attribution and caching/data-use constraints.
 
 Until those checks pass, keep `SMART_BASKET_MEALS_SOURCE=synthetic` and label the
 flow as demo data. For live failure drills, set `SMART_BASKET_MEALS_SOURCE=edamam`
@@ -111,12 +118,13 @@ services/api/.venv/bin/python -m pytest services/api/tests -q
 services/api/.venv/bin/python services/api/scripts/export_contracts.py --check
 ```
 
-Current local result: 91 backend tests pass with one Starlette/AnyIO deprecation warning.
+Current local result: 97 backend tests pass with one Starlette/AnyIO deprecation warning.
 
 ## Known Limits
 
 The synthetic menu is deliberately simple and uses only ingredients that Rina's
 demo catalog and FatSecret demo mapping can resolve. It is a deterministic
-integration fallback, not a complete nutrition product. Live Edamam response
-mapping, recipe attribution verification and export permission verification remain
-credential-gated blockers, not work for Polina to discover from scratch.
+integration fallback, not a complete nutrition product. Real-account Edamam
+request verification, recipe attribution verification and export permission
+verification remain credential-gated blockers, not work for Polina to discover
+from scratch.

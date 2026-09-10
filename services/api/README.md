@@ -2,8 +2,8 @@
 
 Python 3.12+; verified on Windows with Python 3.14.6. FastAPI + Pydantic + Uvicorn.
 The default run is synthetic. No Silpo, Edamam or FatSecret credentials are needed
-for the local demo, but Sofiia's Edamam adapter boundary and setting names are in
-place for the live access check.
+for the local demo, but Sofiia's Edamam selection/recipe mapper and setting names
+are in place for the live access check.
 Use one Uvicorn worker: sessions, runs and operation receipts are stored in memory
 and disappear on restart. This is a local integration starter, not a live deployment.
 
@@ -47,8 +47,8 @@ $env:SMART_BASKET_MEALS_SOURCE = 'synthetic'
 Any mode other than `demo` fails startup. Use `localhost` consistently on both
 browser services; mixing it with `127.0.0.1` breaks same-site cookie assumptions.
 Bind only to loopback for this demo. A shared hosted URL is not supplied yet.
-Live Edamam planning is not enabled until the actual account fields, attribution
-rules and data-use permissions are verified. Required server-side names are
+Live Edamam planning should not be presented as verified until the actual account
+fields, attribution rules and data-use permissions are checked. Required server-side names are
 `EDAMAM_MEAL_PLANNER_APP_ID`, `EDAMAM_MEAL_PLANNER_APP_KEY`,
 `EDAMAM_ACCOUNT_USER`, optional `EDAMAM_MEAL_PLANNER_BASE_URL` and
 `EDAMAM_TIMEOUT_SECONDS` and `EDAMAM_SYNTHETIC_FALLBACK`. Keep fallback enabled
@@ -207,7 +207,7 @@ pre-existing contents. Preview `afterQuantity - beforeQuantity` is the addition.
   Demo history is empty and recurring suggestions are `[]`. Vika's normalized
   recurring-demand input is still needed; the server rejects invented selection IDs.
 - Sofiia's `meals/` module owns meal filters, serving scaling, synthetic fallback
-  and the Edamam adapter boundary. The demo still labels synthetic meal data
+  and Edamam selection/recipe mapping. The demo still labels synthetic meal data
   honestly and does not store provider recipe payloads.
 
 Live mode is intentionally blocked. Real gateway writes, OAuth/token storage,
