@@ -21,12 +21,56 @@ PREFERENCE_LABELS = {
         "display": "Vegetarian",
         "edamam_health": ("vegetarian",),
     },
+    "vegan": {
+        "display": "Vegan",
+        "edamam_health": ("vegan",),
+    },
+    "paleo": {
+        "display": "Paleo",
+        "edamam_health": ("paleo",),
+    },
+    "high-protein": {
+        "display": "High-protein",
+        "edamam_health": ("high-protein",),
+    },
+    "high-fiber": {
+        "display": "High-fiber",
+        "edamam_health": ("high-fiber",),
+    },
 }
 
 RESTRICTION_LABELS = {
     "peanut-free": {
         "display": "Peanut-free",
         "edamam_health": ("peanut-free",),
+    },
+    "gluten-free": {
+        "display": "Gluten-free",
+        "edamam_health": ("gluten-free",),
+    },
+    "dairy-free": {
+        "display": "Dairy-free",
+        "edamam_health": ("dairy-free",),
+    },
+    "tree-nut-free": {
+        "display": "Tree-nut-free",
+        "edamam_health": ("tree-nut-free",),
+    },
+    "shellfish-free": {
+        "display": "Shellfish-free",
+        "edamam_health": ("shellfish-free",),
+    },
+    "soy-free": {
+        "display": "Soy-free",
+        "edamam_health": ("soy-free",),
+    },
+    "egg-free": {
+        "display": "Egg-free",
+        "edamam_health": ("egg-free",),
+    },
+    "pork-free": {
+        "display": "Pork-free",
+        "edamam_health": ("pork-free",),
     },
 }
 
