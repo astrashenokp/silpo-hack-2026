@@ -3,6 +3,10 @@ from datetime import (
     timezone,
 )
 
+from smart_basket.core import (
+    ApiError,
+)
+
 from smart_basket.catalog.matching import (
     MatchingContext,
     find_product_candidates,
@@ -18,6 +22,14 @@ from smart_basket.optimization.recurrence import (
 
 from smart_basket.meals import (
     build_meal_plan,
+)
+
+from smart_basket.meals.edamam import (
+    EdamamUnavailable,
+)
+
+from smart_basket.meals.filters import (
+    UnsupportedMealFilter,
 )
 
 from smart_basket.schemas import (
@@ -129,10 +141,25 @@ class UlianaPlanner:
         # Sofiia owns Edamam/fallback meal planning.
         # ====================================================
 
-        meal_result = build_meal_plan(
-            request=request,
-            effective_context=context,
-        )
+        try:
+            meal_result = build_meal_plan(
+                request=request,
+                effective_context=context,
+            )
+        except UnsupportedMealFilter as exc:
+            raise ApiError(
+                "VALIDATION_ERROR",
+                str(exc),
+                400,
+                False,
+            ) from exc
+        except EdamamUnavailable as exc:
+            raise ApiError(
+                "UPSTREAM_UNAVAILABLE",
+                str(exc),
+                502,
+                True,
+            ) from exc
 
         meals = meal_result[
             "meals"

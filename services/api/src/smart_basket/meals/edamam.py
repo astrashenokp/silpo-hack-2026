@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
-from urllib import error, request
+from urllib import error, parse, request
 
 
 class EdamamUnavailable(RuntimeError):
@@ -37,7 +37,7 @@ class EdamamSettings:
             app_key=app_key,
             account_user=account_user,
             base_url=os.getenv("EDAMAM_MEAL_PLANNER_BASE_URL", "https://api.edamam.com"),
-            timeout_seconds=float(os.getenv("EDAMAM_TIMEOUT_SECONDS", "8")),
+            timeout_seconds=_timeout_from_env(),
         )
 
 
@@ -45,11 +45,6 @@ def build_edamam_payload(request_model, filters) -> dict:
     payload: dict = {
         "size": request_model.days,
         "plan": {
-            "accept": {
-                "all": [
-                    {"health": list(filters.edamam_health_labels)},
-                ],
-            },
             "sections": {
                 "Breakfast": {},
                 "Lunch": {},
@@ -57,6 +52,12 @@ def build_edamam_payload(request_model, filters) -> dict:
             },
         },
     }
+    if filters.edamam_health_labels:
+        payload["plan"]["accept"] = {
+            "all": [
+                {"health": list(filters.edamam_health_labels)},
+            ],
+        }
     if request_model.calories_per_person_per_day is not None:
         payload["plan"]["fit"] = {
             "ENERC_KCAL": {
@@ -67,6 +68,17 @@ def build_edamam_payload(request_model, filters) -> dict:
     return payload
 
 
+def _timeout_from_env() -> float:
+    raw = os.getenv("EDAMAM_TIMEOUT_SECONDS", "8")
+    try:
+        timeout = float(raw)
+    except ValueError as exc:
+        raise EdamamUnavailable("EDAMAM_TIMEOUT_SECONDS must be a number.") from exc
+    if timeout <= 0:
+        raise EdamamUnavailable("EDAMAM_TIMEOUT_SECONDS must be positive.")
+    return timeout
+
+
 class EdamamMealPlannerClient:
     def __init__(self, settings: EdamamSettings):
         self.settings = settings
@@ -75,7 +87,7 @@ class EdamamMealPlannerClient:
         url = (
             f"{self.settings.base_url.rstrip('/')}/api/meal-planner/v1/"
             f"{self.settings.account_user}/select"
-            f"?app_id={self.settings.app_id}&app_key={self.settings.app_key}"
+            f"?{parse.urlencode({'app_id': self.settings.app_id, 'app_key': self.settings.app_key})}"
         )
         data = json.dumps(payload).encode("utf-8")
         http_request = request.Request(

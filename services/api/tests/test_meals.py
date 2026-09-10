@@ -14,8 +14,8 @@ def request(days=4, people=3, calories=2000, preferences=None, restrictions=None
         days=days,
         people=people,
         calories_per_person_per_day=calories,
-        preferences=preferences or ["vegetarian"],
-        restrictions=restrictions or [],
+        preferences=["vegetarian"] if preferences is None else preferences,
+        restrictions=[] if restrictions is None else restrictions,
         pets=[Pet(species="cat", count=1)],
         include_recurring=True,
         notes="",
@@ -24,8 +24,8 @@ def request(days=4, people=3, calories=2000, preferences=None, restrictions=None
 
 def context(preferences=None, restrictions=None):
     return UserContext(
-        preferences=preferences or [],
-        restrictions=restrictions or [],
+        preferences=[] if preferences is None else preferences,
+        restrictions=[] if restrictions is None else restrictions,
         pets=[],
         history_available=False,
         cart_context_ready=True,
@@ -127,6 +127,24 @@ def test_edamam_settings_are_loaded_only_when_complete(monkeypatch):
     assert settings.app_key == "key"
     assert settings.account_user == "user"
     assert settings.timeout_seconds == 3
+
+
+def test_edamam_settings_reject_invalid_timeout(monkeypatch):
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_ID", "app")
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_KEY", "key")
+    monkeypatch.setenv("EDAMAM_ACCOUNT_USER", "user")
+    monkeypatch.setenv("EDAMAM_TIMEOUT_SECONDS", "zero")
+
+    with pytest.raises(EdamamUnavailable):
+        EdamamSettings.from_env()
+
+
+def test_edamam_payload_omits_empty_accept_filters():
+    filters = resolve_meal_filters(request(preferences=[]), context())
+    payload = build_edamam_payload(request(preferences=[], calories=None), filters)
+
+    assert "accept" not in payload["plan"]
+    assert "fit" not in payload["plan"]
 
 
 def test_requested_edamam_source_uses_explicit_synthetic_fallback(monkeypatch):

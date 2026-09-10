@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from smart_basket.agent import UlianaPlanner
 from smart_basket.app import create_app
 from smart_basket.demo import DemoCatalog
+from smart_basket.schemas import UserContext
 
 
 def test_uliana_planner_through_api():
@@ -88,3 +89,47 @@ def test_uliana_planner_through_api():
 
     assert result["unresolvedRequirements"] == []
     assert result["canConfirmCart"] is True
+
+
+def test_uliana_reports_unsupported_context_restriction():
+    class RestrictedCatalog(DemoCatalog):
+        def get_user_context(self, session):
+            return UserContext(
+                preferences=[],
+                restrictions=["gluten-free"],
+                pets=[],
+                history_available=False,
+                cart_context_ready=True,
+                warnings=[],
+            )
+
+    catalog = RestrictedCatalog()
+    app = create_app(
+        planner=UlianaPlanner(catalog),
+        catalog=catalog,
+    )
+
+    client = TestClient(app)
+    client.get("/api/context")
+
+    response = client.post(
+        "/api/plans",
+        json={
+            "budgetMinor": 180000,
+            "currency": "UAH",
+            "days": 1,
+            "people": 1,
+            "caloriesPerPersonPerDay": None,
+            "preferences": [],
+            "restrictions": [],
+            "pets": [],
+            "includeRecurring": False,
+            "notes": "",
+        },
+    )
+
+    run = client.get(f"/api/plans/{response.json()['runId']}").json()
+
+    assert run["status"] == "failed"
+    assert run["error"]["code"] == "VALIDATION_ERROR"
+    assert "gluten-free" in run["error"]["message"]
