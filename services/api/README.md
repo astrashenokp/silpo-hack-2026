@@ -1,7 +1,9 @@
 # Smart Basket API — Rina's demo implementation
 
 Python 3.12+; verified on Windows with Python 3.14.6. FastAPI + Pydantic + Uvicorn.
-All integrations are synthetic. No Silpo, Edamam or FatSecret credentials are needed.
+The default run is synthetic. No Silpo, Edamam or FatSecret credentials are needed
+for the local demo, but Sofiia's Edamam selection/recipe mapper and setting names
+are in place for the live access check.
 Use one Uvicorn worker: sessions, runs and operation receipts are stored in memory
 and disappear on restart. This is a local integration starter, not a live deployment.
 
@@ -32,40 +34,87 @@ during development but loses all demo state on each code change.
 
 ## Configuration
 
-`.env.example` lists the two supported variables. Defaults already work; `.env`
+`.env.example` lists the supported variables. Defaults already work; `.env`
 files are **not automatically loaded**. Set environment variables in PowerShell
 before launch if changing them:
 
 ```powershell
 $env:SMART_BASKET_MODE = 'demo'
 $env:SMART_BASKET_CORS_ORIGINS = 'http://localhost:3000'
+$env:SMART_BASKET_MEALS_SOURCE = 'synthetic'
 ```
 
 Any mode other than `demo` fails startup. Use `localhost` consistently on both
 browser services; mixing it with `127.0.0.1` breaks same-site cookie assumptions.
 Bind only to loopback for this demo. A shared hosted URL is not supplied yet.
+Live Edamam planning should not be presented as verified until the actual account
+fields, attribution rules and data-use permissions are checked. Required server-side names are
+`EDAMAM_MEAL_PLANNER_APP_ID`, `EDAMAM_MEAL_PLANNER_APP_KEY`,
+`EDAMAM_ACCOUNT_USER`, optional `EDAMAM_MEAL_PLANNER_BASE_URL` and
+`EDAMAM_TIMEOUT_SECONDS` and `EDAMAM_SYNTHETIC_FALLBACK`. Keep fallback enabled
+for demos unless the goal is to verify a hard live failure path.
+
+FatSecret account connection uses three-legged OAuth 1.0. Set
+`FATSECRET_CONSUMER_KEY`, `FATSECRET_CONSUMER_SECRET` and the exact registered
+`FATSECRET_OAUTH_CALLBACK_URL` (default
+`http://localhost:8000/api/auth/fatsecret/callback`) in the terminal that starts
+the backend. `FATSECRET_TIMEOUT_SECONDS` defaults to 10. The consumer secret and
+user access-token secret stay server-side and are never returned by the status
+endpoint. This demo stores them only in its process-local session, so restart
+disconnects the account; durable encrypted storage is required for deployment.
+The connection flow was verified with a real test member account on September 10,
+2026: authorization returned through the callback and the session status reported
+`connected: true`. This does not verify Saved Meal creation or app visibility.
 
 ## Ksiusha and Alina: HTTP connection
 
-Until Next.js exists, use the API documentation or HTTP examples below. Recommended
-Next.js configuration (Ksiusha owns the actual `next.config.ts`):
+The frontend communicates with the Python API through Next.js rewrites. Browser
+requests use same-origin `/api/...` URLs, and Next.js forwards them to the backend.
+
+The current `apps/web/next.config.ts` configuration is:
 
 ```ts
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
+
+const apiBaseUrl =
+  process.env.API_BASE_URL ??
+  "http://127.0.0.1:8000";
 
 const config: NextConfig = {
   async rewrites() {
-    return [{ source: '/api/:path*', destination: 'http://127.0.0.1:8000/api/:path*' }];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiBaseUrl}/api/:path*`,
+      },
+    ];
   },
 };
+
 export default config;
 ```
 
-Launch Python first, then the frontend on port 3000 once Ksiusha provides its package
-and launch command. No frontend has been created in this backend delivery.
+### Local launch
+
+Start the Python backend first using the command from the **Install and start**
+section above.
+
+Then, in a second terminal, start the Next.js frontend from the repository root:
+
+```powershell
+cd apps/web
+npm.cmd install
+npm.cmd run dev
+```
+
+`npm.cmd install` is only required on the first launch or after dependency changes.
+
+Open the frontend at `http://localhost:3000`.
+
+Keep both the Python backend and the Next.js frontend running during local development.
 
 ```ts
-// With the Next.js forwarding above, use same-origin /api URLs.
+// With the Next.js forwarding above...
 // For direct local API access instead, set base = 'http://localhost:8000'.
 const base = '';
 async function api(path: string, body?: unknown, scenario?: string) {
@@ -108,16 +157,18 @@ Cart and export flow:
 | Recalculate | `POST /api/plans/:runId/recalculate`, `{version, selectedRecurringIds}` | 202 new run; old previews become stale; new version increments |
 | Cart preview | `POST /api/cart/preview`, `{runId, version}` | Existing quantities, additions, projected total and expiry |
 | Cart confirm | `POST /api/cart/confirm`, `{previewId, idempotencyKey}` | Receipt: `success`, `partial` or `failed` |
-| FatSecret status | `GET /api/integrations/fatsecret` | `connected: false`, `exportAvailable: true` **for simulation only**; show `reason` |
+| FatSecret connect | `GET /api/auth/fatsecret/start` | Redirects through FatSecret OAuth 1.0 when developer credentials are configured |
+| FatSecret status | `GET /api/integrations/fatsecret` | Reports the session's real connection status; export remains **simulation only**; show `reason` |
 | FatSecret preview | `POST /api/fatsecret/exports/preview`, `{runId, version, mealIds}` | Personal portions, matches, unresolved foods, `canConfirm` |
 | FatSecret confirm | `POST /api/fatsecret/exports/confirm`, `{previewId, idempotencyKey}` | 202 `{exportId}` |
 | FatSecret outcome | `GET /api/fatsecret/exports/:exportId` | Poll until `success`, `partial` or `failed` |
 
 Every API response carries `X-Data-Mode: demo`; the plan includes `dataMode`, products
-include `source`, and operation payloads include demo warnings. OAuth start/callback
-routes return 503 `INTEGRATION_UNAVAILABLE` until Arina supplies authentication.
-An absent/unknown session yields 401; other sessions' IDs yield 404. Demo `/context`
-is the documented exception that creates a session rather than requiring OAuth.
+include `source`, and operation payloads include demo warnings. FatSecret OAuth
+connection is implemented, but Saved Meal writes remain simulated and never use the
+connected account. An absent/unknown session yields 401; other sessions' IDs yield
+404. Demo `/context` is the documented exception that creates a session rather than
+requiring OAuth.
 
 ## Exercise error states
 
@@ -135,11 +186,16 @@ for the first product and fails the rest. Partial export saves the first selecte
 meal and fails the rest: select at least **two meals** to observe partial success.
 `unmatched` makes `canConfirm: false`; confirmation returns 409 `UNRESOLVED_FOODS`.
 
-Set `budgetMinor: 100` for an over-budget result, `days: 8` for 400 validation,
-or send an outdated `version` for 409 `STALE_PLAN`. Only `vegetarian` preference and
-`peanut-free` restriction labels are currently supported; unknown labels fail
-validation. Calorie targets, pet demand and notes are retained but not implemented
-by the synthetic planner; every result warns about these limitations.
+Set `budgetMinor: 100` for an over-budget result, `days: 15` for 400 validation,
+or send an outdated `version` for 409 `STALE_PLAN`. Supported meal labels are
+returned by `GET /api/filters`: preferences are `vegetarian`, `vegan`, `paleo`,
+`high-protein` and `high-fiber`; restrictions are `peanut-free`, `gluten-free`,
+`dairy-free`, `tree-nut-free`, `shellfish-free`, `soy-free`, `egg-free` and
+`pork-free`. Unknown labels fail validation. `healthConditions` accepts
+`diabetes` and `hypercholesterolemia`; `cookingTimeLimit` accepts 5–240 minutes.
+Calories, macros and cooking times are surfaced, but synthetic meals do not run
+medical ILP optimization. Pet demand and notes are retained for the surrounding
+pipeline.
 
 All request failures use `{error: {code, message, retryable}}`. Per-item failures are
 successful HTTP responses containing operation outcomes, not an HTTP-level crash.
@@ -169,14 +225,21 @@ pre-existing contents. Preview `afterQuantity - beforeQuantity` is the addition.
 - Nonempty `selectedRecurring` currently raises an explicit unsupported error.
   Demo history is empty and recurring suggestions are `[]`. Vika's normalized
   recurring-demand input is still needed; the server rejects invented selection IDs.
-- Temporary meal/catalog/planner substitutes live in `demo.py`; teammates' owned
-  `mcp/`, `agent/`, `meals/` and `optimization/` modules have not been implemented.
+- Sofiia's `meals/` module owns meal filters, serving scaling, synthetic fallback
+  and Edamam selection/recipe mapping. The demo still labels synthetic meal data
+  honestly and does not store provider recipe payloads.
+- Recalculation preserves the confirmed request and reruns the deterministic
+  pipeline against current matching/optimization state. Price-aware meal swaps are
+  deferred until live catalog evidence can guide cheaper ingredient choices safely.
 
-Live mode is intentionally blocked. Real gateway writes, OAuth/token storage,
-persistent operation journals, timeout reconciliation, provider food matching and
-FatSecret app visibility must be implemented/verified before enabling it. Cart and
-export services currently simulate deterministic outcomes in memory. Retrying a
-partial operation returns its stored receipt; automated partial recovery is deferred.
+Live mode is intentionally blocked. FatSecret OAuth request/access-token exchange and
+signed delegated transport are implemented, but credentials and provider behavior
+still require a real-account check. Real gateway writes, durable encrypted token
+storage, persistent operation journals, timeout reconciliation, provider food
+matching and FatSecret app visibility must be implemented/verified before enabling
+live exports. Cart and export services currently simulate deterministic outcomes in
+memory. Retrying a partial operation returns its stored receipt; automated partial
+recovery is deferred.
 
 ## Verification and generated contracts
 

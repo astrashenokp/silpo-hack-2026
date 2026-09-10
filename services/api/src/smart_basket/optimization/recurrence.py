@@ -38,7 +38,8 @@ def analyze_recurring(
             continue
 
         species = entries_sorted[-1].get("species")
-        if species is not None and species not in selected_species:
+        is_pet_product = entries_sorted[-1]["category"].strip().lower() == "pet-food"
+        if is_pet_product and species is not None and species not in selected_species:
             continue
 
         intervals = [
@@ -47,6 +48,8 @@ def analyze_recurring(
         ]
         avg_interval = median(intervals)
         days_since = (as_of - distinct_dates[-1]).days
+        if days_since < 0:
+            continue
         confidence = _confidence_score(intervals)
 
         if days_since < avg_interval * RESTOCK_THRESHOLD_RATIO:
@@ -81,10 +84,18 @@ def analyze_recurring(
 
 def _group_by_product(purchases: list[dict]) -> dict[str, list[dict]]:
     groups: dict[str, list[dict]] = {}
+    seen_receipts: set[tuple[str, str]] = set()
     for p in purchases:
         enriched = dict(p)
         enriched["_purchased_date"] = _parse_date(p["purchasedAt"])
-        key = f"{p['category'].strip().lower()}::{p['name'].strip().lower()}"
+        product_id = str(p.get("productId") or "").strip()
+        key = product_id or f"{p['category'].strip().lower()}::{p['name'].strip().lower()}"
+        receipt_id = str(p.get("receiptId") or "").strip()
+        receipt_key = (receipt_id, key)
+        if receipt_id and receipt_key in seen_receipts:
+            continue
+        if receipt_id:
+            seen_receipts.add(receipt_key)
         groups.setdefault(key, []).append(enriched)
     return groups
 

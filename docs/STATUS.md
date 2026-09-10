@@ -10,7 +10,7 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Arina | Not reported | — | MCP/OAuth access check 6th | — |
 | Rina | Ready to connect on mocks; September 7 | [Handoff](handoffs/rina.md), local implementation | Frontend/module connection check next; live integration September 8–9 | Live adapters/auth from Arina; planner from Uliana; meals from Sofiia; optimization/recurring input from Vika. Mock work complete for first connection. |
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
-| Sofiia | Not reported | — | Edamam access check 6th | — |
+| Sofiia | Ready to connect on synthetic meals; September 10 | [Handoff](handoffs/sofiia.md), local implementation | Live Edamam account/field verification next | Needs Edamam credentials/account limits and export permissions; independent synthetic module is complete and tested. |
 | Vika | Not reported | — | Algorithm fixtures 7th | — |
 | Polina | Scheduled; starts September 12 | — | Intake and final integration 12th | Requires complete September 11 handoff |
 

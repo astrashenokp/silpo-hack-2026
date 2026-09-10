@@ -27,9 +27,11 @@ Backend and AI modules call each other as Python functions inside the same servi
 type PlanningRequest = {
   budgetMinor: number;              // integer > 0, all selected goods
   currency: "UAH";
-  days: number;                     // integer 1–7 for this MVP
-  people: number;                   // integer 1–6 for this MVP
+  days: number;                     // integer 1–14
+  people: number;                   // integer 1–6
   caloriesPerPersonPerDay: number | null; // positive integer if provided
+  healthConditions: Array<"diabetes" | "hypercholesterolemia">;
+  cookingTimeLimit: number | null;  // minutes, 5–240 if provided
   preferences: string[];            // agreed machine labels, e.g. vegetarian
   restrictions: string[];           // agreed machine labels, e.g. peanut-free
   pets: { species: "cat" | "dog"; count: number }[]; // positive integer count
@@ -38,7 +40,7 @@ type PlanningRequest = {
 };
 ```
 
-The 1–7 day and 1–6 person limits are proposed MVP scope, not provider limits. Sofiia supplies the supported preference/restriction mapping to Ksiusha by September 7. Reject unsupported restriction labels with an explanation rather than ignoring them. Input validation runs on frontend and backend.
+The 1–14 day and 1–6 person limits are application scope, not provider limits. Sofiia supplies the supported preference/restriction mapping to Ksiusha by September 7. Reject unsupported restriction labels with an explanation rather than ignoring them. Input validation runs on frontend and backend.
 
 Example main demo request:
 
@@ -49,6 +51,8 @@ Example main demo request:
   "days": 4,
   "people": 3,
   "caloriesPerPersonPerDay": 2000,
+  "healthConditions": [],
+  "cookingTimeLimit": null,
   "preferences": ["vegetarian"],
   "restrictions": [],
   "pets": [{ "species": "cat", "count": 1 }],
@@ -64,7 +68,8 @@ Example main demo request:
 | `UserContext` | `preferences`, `restrictions`, `pets`, `historyAvailable`, `cartContextReady`, `warnings`; optional household size; no unnecessary contact data | Arina → Ksiusha, Uliana |
 | `Purchase` | `receiptId`, `purchasedAt`, `channel` (online/offline), `productId`, `name`, `category`, `quantity`, `unit`; optional `unitPriceMinor` in integer kopiykas; documented deduplication key | Arina → Vika |
 | `IngredientRequirement` | `id`, `name`, `searchTerms`, `quantity`, `unit`, `mealIds`, `restrictions` | Sofiia → Rina, Vika |
-| `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `ingredientIds`, `ingredientAmounts` (per-meal quantities as defined in v0.2), `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina/Rina |
+| `Meal` | `id`, `day` (1-based), `slot` (breakfast/lunch/dinner), `title`, `servings`, `kcalPerServing` (nullable), `macrosPerServing` (nullable), `calorieTarget` (nullable), `cookingTimeMinutes` (nullable), `ingredientIds`, `ingredientAmounts` (per-meal quantities as defined in v0.2), `source` (edamam/synthetic), `sourceUrl` (nullable), `attribution` (nullable) | Sofiia → Uliana → Alina/Rina |
+| `NutritionSummary` | `calorieTargetKcalPerPersonPerDay` (nullable), `tolerancePct`, `distribution`, `daily`; exposes the 25/35/40 meal split and daily +/-10% calorie target check when calories are available | Sofiia → Uliana → Alina |
 | `ProductCandidate` | `id`, `name`, `requirementIds`, `priceMinor` per selling unit, `sellingUnit`, `quantityStep`, `contentQuantity`, `contentUnit`, `available`, `restrictionCheck` (pass/fail/unknown), `regularPriceMinor` (nullable), `source` (silpo/synthetic), `checkedAt` | Rina using Arina's reads → Vika |
 | `RecurringSuggestion` | `id`, `productName`, `productId` (nullable), `category`, `species` (nullable), `suggestedQuantity`, `unit`, `averageIntervalDays`, `daysSinceLastPurchase`, `confidence` (0–1), `reason`, `selected` | Vika → Uliana → Alina |
 | `ProductSelection` | `productId`, `name`, `requirementIds`, `recurringSuggestionIds`, `quantity`, `sellingUnit`, `unitPriceMinor`, `lineTotalMinor`, `source`, `reason`, `restrictionCheck` | Vika → Uliana → Alina/Rina |
@@ -84,7 +89,7 @@ These names are our wrappers; discover actual MCP tool names and parameters thro
 | Arina | `search_products(session, query)`, `get_product_details(session, id)`, `get_promotions(session)` | Normalized raw catalog information, not the matching algorithm |
 | Arina | `get_cart_context(session)`, `get_cart_snapshot(session)` | Validated store/cart context and existing contents |
 | Arina | Shared authenticated MCP gateway | Read/write transport for Rina; explicit allowed tools, session isolation, normalized failures |
-| Sofiia | `build_meal_plan(request, effectiveContext)` | `{ meals, ingredients, warnings, source }` |
+| Sofiia | `build_meal_plan(request, effectiveContext)` | `{ meals, nutritionSummary, ingredients, warnings, source }` |
 | Vika | `analyze_recurring(purchases, pets, asOf)` | Suggestions with evidence/confidence; empty when insufficient history |
 | Rina | `find_product_candidates(ingredients, selectedRecurring, context)` | Candidate sets plus unresolved requirements |
 | Rina | `find_replacement(requirement, rejectedIds, context)` | Suitable alternatives; reuses Arina's catalog adapters |
@@ -104,6 +109,7 @@ type PlanningResult = {
   dataMode: "live" | "demo" | "mixed";
   effectiveRequest: PlanningRequest;
   mealPlan: Meal[];
+  nutritionSummary: NutritionSummary;
   ingredients: IngredientRequirement[];
   recurringItems: RecurringSuggestion[];
   selectedProducts: ProductSelection[];
@@ -140,6 +146,7 @@ Rina owns these Python routes except auth, which Arina implements in the same Py
 | `GET /api/auth/silpo/start` | Browser navigation | Starts OAuth flow; Arina implements callback/session handling |
 | `GET /api/auth/silpo/callback` | Provider redirect | Validates OAuth state/PKCE and returns user to the app |
 | `GET /api/context` | Authenticated session | `UserContext`; 401 if sign-in needed |
+| `GET /api/integrations/silpo/products?query=...` | Authenticated session and search text | `ProductSearchResponse`; store context is taken from the server session |
 | `POST /api/plans` | `PlanningRequest` | 202 with initial `RunSnapshot` |
 | `GET /api/plans/:runId` | Session-scoped run ID | 200 `RunSnapshot`; poll approximately every 2 seconds until terminal state |
 | `POST /api/plans/:runId/recalculate` | `{ version, selectedRecurringIds }` | 202 new `RunSnapshot`; original confirmed request remains unchanged, costs are recomputed server-side |

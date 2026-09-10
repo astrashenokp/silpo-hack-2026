@@ -1,1 +1,1 @@
-"""Rina's export policy; provider auth/client modules remain owned by Arina."""
+"""FatSecret OAuth transport and isolated Saved Meal export policy."""

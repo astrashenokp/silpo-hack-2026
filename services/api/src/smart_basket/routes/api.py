@@ -1,13 +1,17 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
 
 from smart_basket.catalog.matching import line_total
 from smart_basket.core import ApiError, Session, now, uid
+from smart_basket.mcp.adapters import get_user_context, search_products
+from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
+from smart_basket.meals import supported_labels
 from smart_basket.schemas import (
     CartPreview, CartReceipt, Confirmation, ExportAccepted, FatSecretExport,
     FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health, PlanReference,
-    PlanningRequest, PlanningResult, ProgressEvent, RecalculateRequest, RunSnapshot, UserContext,
+    PlanningRequest, PlanningResult, ProductSearchResponse, ProgressEvent, RecalculateRequest,
+    RunSnapshot, SupportedLabels, UserContext,
 )
 
 router = APIRouter(prefix="/api")
@@ -53,8 +57,8 @@ def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=Fal
         result = PlanningResult.model_validate(result).model_copy(deep=True)
         result.run_id = run_id
         result.version = previous.version + 1 if previous else 1
-        if result.data_mode != "demo" or result.effective_request != request:
-            raise ValueError("Mock service requires a demo result retaining the confirmed request.")
+        if result.data_mode not in {"demo", "mixed"} or result.effective_request != request:
+            raise ValueError("Planner must retain the confirmed request and return a supported data mode.")
         if result.basket_total_minor != sum(p.line_total_minor for p in result.selected_products):
             raise ValueError("Planner returned inconsistent totals.")
         if any(p.line_total_minor != line_total(p.quantity, p.unit_price_minor) for p in result.selected_products):
@@ -88,8 +92,13 @@ def health():
     return Health()
 
 
+@router.get("/filters", response_model=SupportedLabels)
+def filters():
+    return SupportedLabels(**supported_labels())
+
+
 @router.get("/context", response_model=UserContext)
-def context(request: Request, response: Response):
+async def context(request: Request, response: Response):
     with request.app.state.sessions_lock:
         id = request.cookies.get("smart_basket_demo")
         owner = request.app.state.sessions.get(id)
@@ -97,7 +106,64 @@ def context(request: Request, response: Response):
             owner = Session(uid("session"))
             request.app.state.sessions[owner.id] = owner
             response.set_cookie("smart_basket_demo", owner.id, httponly=True, samesite="lax", path="/")
-    return request.app.state.catalog.get_user_context(owner)
+    if not owner.silpo_connected:
+        return request.app.state.catalog.get_user_context(owner)
+    try:
+        async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
+            live_context = await get_user_context(mcp_session, owner)
+    except Exception as exc:
+        message = str(exc).lower()
+        if any(value in message for value in ("401", "403", "unauthorized", "invalid_token")):
+            with owner.lock:
+                owner.silpo_connected = False
+            raise ApiError("AUTH_REQUIRED", "Reconnect the Silpo account.", 401) from exc
+        if "429" in message or "rate limit" in message:
+            raise ApiError("RATE_LIMITED", "Silpo request limit was reached.", 429, True) from exc
+        raise ApiError("UPSTREAM_UNAVAILABLE", "Could not load context from Silpo.", 502, True) from exc
+    response.headers["X-Data-Mode"] = "live"
+    return live_context
+
+
+@router.get("/integrations/silpo/products", response_model=ProductSearchResponse)
+async def silpo_product_search(
+    request: Request,
+    response: Response,
+    owner: SessionDependency,
+    query: Annotated[str, Query(min_length=1, max_length=200)],
+):
+    with owner.lock:
+        connected = owner.silpo_connected
+        branch_id = owner.silpo_branch_id
+        cart_id = owner.silpo_cart_id
+        delivery_type = owner.silpo_delivery_type
+        timeslot = owner.silpo_timeslot
+        tool_schemas = dict(owner.silpo_tool_schemas)
+    if not connected:
+        raise ApiError("AUTH_REQUIRED", "Connect the Silpo account before searching products.", 401)
+    if not branch_id:
+        raise ApiError("CART_CONTEXT_REQUIRED", "Load Silpo context before searching products.", 409)
+    try:
+        async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
+            result = await search_products(
+                mcp_session,
+                query,
+                branch_id,
+                cart_id=cart_id,
+                delivery_type=delivery_type,
+                timeslot=timeslot,
+                tool_schemas=tool_schemas,
+            )
+    except Exception as exc:
+        message = str(exc).lower()
+        if any(value in message for value in ("401", "403", "unauthorized", "invalid_token")):
+            with owner.lock:
+                owner.silpo_connected = False
+            raise ApiError("AUTH_REQUIRED", "Reconnect the Silpo account.", 401) from exc
+        if "429" in message or "rate limit" in message:
+            raise ApiError("RATE_LIMITED", "Silpo request limit was reached.", 429, True) from exc
+        raise ApiError("UPSTREAM_UNAVAILABLE", "Could not search Silpo products.", 502, True) from exc
+    response.headers["X-Data-Mode"] = "live"
+    return result
 
 
 @router.post("/plans", status_code=202, response_model=RunSnapshot)
@@ -141,8 +207,19 @@ def cart_confirm(body: Confirmation, request: Request, owner: SessionDependency)
 
 @router.get("/integrations/fatsecret", response_model=FatSecretStatus)
 def fatsecret_status(owner: SessionDependency):
-    return FatSecretStatus(connected=False, account_label="Demo account (no FatSecret connection)",
-        export_available=True, reason="DEMO: only simulated export is available; no real account is connected.")
+    with owner.lock:
+        connected = owner.fatsecret_connected
+        account_label = owner.fatsecret_account_label
+    return FatSecretStatus(
+        connected=connected,
+        account_label=account_label if connected else None,
+        export_available=True,
+        reason=(
+            "FatSecret account connected; Saved Meal exports are still simulated in demo mode."
+            if connected
+            else "DEMO: only simulated export is available; no real account is connected."
+        ),
+    )
 
 
 @router.post("/fatsecret/exports/preview", response_model=FatSecretPreview)
@@ -166,10 +243,3 @@ def get_export(export_id: str, owner: SessionDependency):
         if export_id not in owner.exports:
             raise ApiError("NOT_FOUND", "Export not found in this session.", 404)
         return owner.exports[export_id].model_copy(deep=True)
-
-
-@router.get("/auth/{provider}/{action}")
-def unavailable_auth(provider: str, action: str):
-    if provider not in {"silpo", "fatsecret"} or action not in {"start", "callback"}:
-        raise ApiError("NOT_FOUND", "Route not found.", 404)
-    raise ApiError("INTEGRATION_UNAVAILABLE", "OAuth awaits Arina's adapter. Use /api/context for demo mode.", 503)

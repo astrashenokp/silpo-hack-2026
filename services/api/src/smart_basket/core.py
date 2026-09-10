@@ -44,6 +44,22 @@ class Session:
     export_keys: dict = field(default_factory=dict)
     export_operations: dict = field(default_factory=dict)
     saved_meals: dict = field(default_factory=dict)
+    silpo_tokens: object | None = None
+    silpo_client_info: object | None = None
+    silpo_auth_flow: object | None = None
+    silpo_connected: bool = False
+    silpo_tools: tuple[str, ...] = ()
+    silpo_tool_schemas: dict[str, dict] = field(default_factory=dict)
+    silpo_cart_id: str | None = None
+    silpo_branch_id: str | None = None
+    silpo_delivery_type: str | None = None
+    silpo_timeslot: object | None = None
+    fatsecret_request_token: str | None = None
+    fatsecret_request_secret: str | None = None
+    fatsecret_access_token: str | None = None
+    fatsecret_access_secret: str | None = None
+    fatsecret_connected: bool = False
+    fatsecret_account_label: str | None = None
 
     def get_run(self, run_id: str) -> RunSnapshot:
         if run_id not in self.runs:

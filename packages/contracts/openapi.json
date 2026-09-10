@@ -6,6 +6,599 @@
     "version": "0.2.0"
   },
   "paths": {
+    "/api/auth/silpo/start": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Silpo Oauth Start",
+        "operationId": "silpo_oauth_start_api_auth_silpo_start_get",
+        "responses": {
+          "307": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/silpo/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Silpo Oauth Callback",
+        "operationId": "silpo_oauth_callback_api_auth_silpo_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "iss",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Iss"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/integrations/silpo": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Silpo Status",
+        "operationId": "silpo_status_api_integrations_silpo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SilpoStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/fatsecret/start": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Fatsecret Oauth Start",
+        "operationId": "fatsecret_oauth_start_api_auth_fatsecret_start_get",
+        "responses": {
+          "307": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/fatsecret/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Fatsecret Oauth Callback",
+        "operationId": "fatsecret_oauth_callback_api_auth_fatsecret_callback_get",
+        "parameters": [
+          {
+            "name": "oauth_token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Oauth Token"
+            }
+          },
+          {
+            "name": "oauth_verifier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Oauth Verifier"
+            }
+          },
+          {
+            "name": "denied",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Denied"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health",
@@ -17,6 +610,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/filters": {
+      "get": {
+        "summary": "Filters",
+        "operationId": "filters_api_filters_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportedLabels"
                 }
               }
             }
@@ -198,6 +889,117 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/integrations/silpo/products": {
+      "get": {
+        "summary": "Silpo Product Search",
+        "operationId": "silpo_product_search_api_integrations_silpo_products_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Query"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         }
       }
@@ -1212,122 +2014,6 @@
           }
         }
       }
-    },
-    "/api/auth/{provider}/{action}": {
-      "get": {
-        "summary": "Unavailable Auth",
-        "operationId": "unavailable_auth_api_auth__provider___action__get",
-        "parameters": [
-          {
-            "name": "provider",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Provider"
-            }
-          },
-          {
-            "name": "action",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Action"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Too Many Requests"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Internal Server Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        }
-      }
     }
   },
   "components": {
@@ -1546,6 +2232,85 @@
           "idempotencyKey"
         ],
         "title": "Confirmation"
+      },
+      "DayNutritionSummary": {
+        "properties": {
+          "day": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Day"
+          },
+          "targetKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetkcalperperson"
+          },
+          "plannedKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plannedkcalperperson"
+          },
+          "minKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minkcalperperson"
+          },
+          "maxKcalPerPerson": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxkcalperperson"
+          },
+          "withinTargetRange": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withintargetrange"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "day",
+          "targetKcalPerPerson",
+          "plannedKcalPerPerson",
+          "minKcalPerPerson",
+          "maxKcalPerPerson",
+          "withinTargetRange"
+        ],
+        "title": "DayNutritionSummary"
       },
       "Error": {
         "properties": {
@@ -2113,6 +2878,38 @@
             ],
             "title": "Kcalperserving"
           },
+          "macrosPerServing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealMacros"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calorieTarget": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealCalorieTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cookingTimeMinutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cookingtimeminutes"
+          },
           "ingredientIds": {
             "items": {
               "type": "string"
@@ -2167,6 +2964,9 @@
           "title",
           "servings",
           "kcalPerServing",
+          "macrosPerServing",
+          "calorieTarget",
+          "cookingTimeMinutes",
           "ingredientIds",
           "ingredientAmounts",
           "source",
@@ -2174,6 +2974,111 @@
           "attribution"
         ],
         "title": "Meal"
+      },
+      "MealCalorieTarget": {
+        "properties": {
+          "share": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Share"
+          },
+          "targetKcalPerServing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Targetkcalperserving"
+          },
+          "minKcalPerServing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Minkcalperserving"
+          },
+          "maxKcalPerServing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Maxkcalperserving"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "share",
+          "targetKcalPerServing",
+          "minKcalPerServing",
+          "maxKcalPerServing"
+        ],
+        "title": "MealCalorieTarget"
+      },
+      "MealMacros": {
+        "properties": {
+          "proteinG": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Proteing"
+          },
+          "fatG": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Fatg"
+          },
+          "carbsG": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Carbsg"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "proteinG",
+          "fatG",
+          "carbsG"
+        ],
+        "title": "MealMacros"
+      },
+      "NutritionSummary": {
+        "properties": {
+          "calorieTargetKcalPerPersonPerDay": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calorietargetkcalperpersonperday"
+          },
+          "tolerancePct": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Tolerancepct"
+          },
+          "distribution": {
+            "items": {
+              "$ref": "#/components/schemas/SlotCalorieShare"
+            },
+            "type": "array",
+            "title": "Distribution"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DayNutritionSummary"
+            },
+            "type": "array",
+            "title": "Daily"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "calorieTargetKcalPerPersonPerDay",
+          "tolerancePct",
+          "distribution",
+          "daily"
+        ],
+        "title": "NutritionSummary"
       },
       "Pet": {
         "properties": {
@@ -2233,7 +3138,7 @@
           },
           "days": {
             "type": "integer",
-            "maximum": 7.0,
+            "maximum": 14.0,
             "minimum": 1.0,
             "title": "Days"
           },
@@ -2254,6 +3159,30 @@
               }
             ],
             "title": "Caloriesperpersonperday"
+          },
+          "healthConditions": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "diabetes",
+                "hypercholesterolemia"
+              ]
+            },
+            "type": "array",
+            "title": "Healthconditions"
+          },
+          "cookingTimeLimit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 240.0,
+                "minimum": 5.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cookingtimelimit"
           },
           "preferences": {
             "items": {
@@ -2331,6 +3260,9 @@
             },
             "type": "array",
             "title": "Mealplan"
+          },
+          "nutritionSummary": {
+            "$ref": "#/components/schemas/NutritionSummary"
           },
           "ingredients": {
             "items": {
@@ -2421,6 +3353,7 @@
           "dataMode",
           "effectiveRequest",
           "mealPlan",
+          "nutritionSummary",
           "ingredients",
           "recurringItems",
           "selectedProducts",
@@ -2435,6 +3368,152 @@
           "canConfirmCart"
         ],
         "title": "PlanningResult"
+      },
+      "ProductCandidate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "requirementIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requirementids"
+          },
+          "priceMinor": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Priceminor"
+          },
+          "sellingUnit": {
+            "type": "string",
+            "title": "Sellingunit"
+          },
+          "quantityStep": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantitystep"
+          },
+          "contentQuantity": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contentquantity"
+          },
+          "contentUnit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "g",
+                  "ml",
+                  "piece"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contentunit"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "restrictionCheck": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "unknown"
+            ],
+            "title": "Restrictioncheck"
+          },
+          "regularPriceMinor": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regularpriceminor"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "silpo",
+              "synthetic"
+            ],
+            "title": "Source"
+          },
+          "checkedAt": {
+            "type": "string",
+            "title": "Checkedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "requirementIds",
+          "priceMinor",
+          "sellingUnit",
+          "quantityStep",
+          "contentQuantity",
+          "contentUnit",
+          "available",
+          "restrictionCheck",
+          "regularPriceMinor",
+          "source",
+          "checkedAt"
+        ],
+        "title": "ProductCandidate"
+      },
+      "ProductSearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductCandidate"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "products",
+          "warnings"
+        ],
+        "title": "ProductSearchResponse"
       },
       "ProductSelection": {
         "properties": {
@@ -2733,6 +3812,66 @@
         ],
         "title": "RunSnapshot"
       },
+      "SilpoStatus": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "toolsAvailable": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Toolsavailable"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "connected",
+          "toolsAvailable",
+          "reason"
+        ],
+        "title": "SilpoStatus"
+      },
+      "SlotCalorieShare": {
+        "properties": {
+          "slot": {
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner"
+            ],
+            "title": "Slot"
+          },
+          "share": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Share"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "slot",
+          "share"
+        ],
+        "title": "SlotCalorieShare"
+      },
       "Substitution": {
         "properties": {
           "requirementIds": {
@@ -2769,6 +3908,31 @@
           "deltaMinor"
         ],
         "title": "Substitution"
+      },
+      "SupportedLabels": {
+        "properties": {
+          "preferences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Preferences"
+          },
+          "restrictions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Restrictions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "preferences",
+          "restrictions"
+        ],
+        "title": "SupportedLabels"
       },
       "UnresolvedFood": {
         "properties": {

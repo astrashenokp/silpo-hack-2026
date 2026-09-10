@@ -12,7 +12,8 @@ def test_all_fixtures_validate_against_executable_models():
     manifest = json.loads((ROOT / "fixtures/manifest.json").read_text(encoding="utf-8"))
     assert set(manifest) == {
         "user-context.json", "planning-request.json", "run-queued.json",
-        "planning-result.json", "product-candidates.json", "run-failed.json",
+        "planning-result.json", "meal-plan.json", "ingredients.json",
+        "product-candidates.json", "recurring-items.json", "run-failed.json",
         "validation-error.json", "cart-preview.json", "cart-success.json",
         "cart-partial.json", "cart-failed.json", "fatsecret-preview.json",
         "fatsecret-success.json", "fatsecret-partial.json", "fatsecret-failed.json",
@@ -28,5 +29,11 @@ def test_http_schema_uses_camel_case_and_400_validation(client):
     schema = client.get("/openapi.json").json()
     properties = schema["components"]["schemas"]["PlanningRequest"]["properties"]
     assert "budgetMinor" in properties and "budget_minor" not in properties
+    assert "healthConditions" in properties
+    assert "cookingTimeLimit" in properties
+    assert properties["days"]["maximum"] == 14
+    meal_properties = schema["components"]["schemas"]["Meal"]["properties"]
+    assert "macrosPerServing" in meal_properties
+    assert "cookingTimeMinutes" in meal_properties
     assert "400" in schema["paths"]["/api/plans"]["post"]["responses"]
     assert "422" not in schema["paths"]["/api/plans"]["post"]["responses"]

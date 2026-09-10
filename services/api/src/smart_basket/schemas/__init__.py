@@ -11,6 +11,7 @@ PositiveNumber = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 Unit = Literal["g", "ml", "piece"]
 Source = Literal["silpo", "synthetic"]
 Stage = Literal["context", "history", "meals", "matching", "optimization", "ready"]
+HealthCondition = Literal["diabetes", "hypercholesterolemia"]
 
 
 class Model(BaseModel):
@@ -26,9 +27,11 @@ class Pet(Model):
 class PlanningRequest(Model):
     budget_minor: PositiveInt
     currency: Literal["UAH"]
-    days: Annotated[int, Field(ge=1, le=7)]
+    days: Annotated[int, Field(ge=1, le=14)]
     people: Annotated[int, Field(ge=1, le=6)]
     calories_per_person_per_day: PositiveInt | None
+    health_conditions: list[HealthCondition] = Field(default_factory=list)
+    cooking_time_limit: Annotated[int, Field(ge=5, le=240)] | None = None
     preferences: list[str]
     restrictions: list[str]
     pets: list[Pet]
@@ -38,7 +41,13 @@ class PlanningRequest(Model):
     @field_validator("preferences", "restrictions")
     @classmethod
     def supported_labels(cls, value, info):
-        allowed = {"preferences": {"vegetarian"}, "restrictions": {"peanut-free"}}
+        allowed = {
+            "preferences": {"vegetarian", "vegan", "paleo", "high-protein", "high-fiber"},
+            "restrictions": {
+                "peanut-free", "gluten-free", "dairy-free",
+                "tree-nut-free", "shellfish-free", "soy-free", "egg-free", "pork-free",
+            },
+        }
         unknown = set(value) - allowed[info.field_name]
         if unknown:
             raise ValueError(f"Unsupported {info.field_name}: {', '.join(sorted(unknown))}")
@@ -58,6 +67,11 @@ class ErrorEnvelope(Model):
 class Health(Model):
     status: Literal["ok"] = "ok"
     mode: Literal["demo"] = "demo"
+
+
+class SupportedLabels(Model):
+    preferences: list[str]
+    restrictions: list[str]
 
 
 class UserContext(Model):
@@ -98,6 +112,19 @@ class IngredientAmount(Model):
     unit: Unit
 
 
+class MealCalorieTarget(Model):
+    share: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+    target_kcal_per_serving: PositiveNumber
+    min_kcal_per_serving: PositiveNumber
+    max_kcal_per_serving: PositiveNumber
+
+
+class MealMacros(Model):
+    protein_g: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    fat_g: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    carbs_g: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+
+
 class Meal(Model):
     id: str
     day: PositiveInt
@@ -105,6 +132,9 @@ class Meal(Model):
     title: str
     servings: PositiveInt
     kcal_per_serving: PositiveNumber | None
+    macros_per_serving: MealMacros | None
+    calorie_target: MealCalorieTarget | None
+    cooking_time_minutes: PositiveInt | None
     ingredient_ids: list[str]
     ingredient_amounts: list[IngredientAmount]
     source: Literal["edamam", "synthetic"]
@@ -136,6 +166,12 @@ class UnresolvedRequirement(Model):
 class CandidateResult(Model):
     candidates: list[ProductCandidate]
     unresolved_requirements: list[UnresolvedRequirement]
+
+
+class ProductSearchResponse(Model):
+    query: str
+    products: list[ProductCandidate]
+    warnings: list[str]
 
 
 class RecurringSuggestion(Model):
@@ -175,12 +211,34 @@ class Substitution(Model):
     delta_minor: int
 
 
+class SlotCalorieShare(Model):
+    slot: Literal["breakfast", "lunch", "dinner"]
+    share: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
+
+class DayNutritionSummary(Model):
+    day: PositiveInt
+    target_kcal_per_person: PositiveNumber | None
+    planned_kcal_per_person: PositiveNumber | None
+    min_kcal_per_person: PositiveNumber | None
+    max_kcal_per_person: PositiveNumber | None
+    within_target_range: bool | None
+
+
+class NutritionSummary(Model):
+    calorie_target_kcal_per_person_per_day: PositiveNumber | None
+    tolerance_pct: PositiveNumber
+    distribution: list[SlotCalorieShare]
+    daily: list[DayNutritionSummary]
+
+
 class PlanningResult(Model):
     run_id: str
     version: PositiveInt
     data_mode: Literal["live", "demo", "mixed"]
     effective_request: PlanningRequest
     meal_plan: list[Meal]
+    nutrition_summary: NutritionSummary
     ingredients: list[IngredientRequirement]
     recurring_items: list[RecurringSuggestion]
     selected_products: list[ProductSelection]
@@ -265,6 +323,12 @@ class FatSecretStatus(Model):
     connected: bool
     account_label: str | None
     export_available: bool
+    reason: str | None
+
+
+class SilpoStatus(Model):
+    connected: bool
+    tools_available: list[str]
     reason: str | None
 
 

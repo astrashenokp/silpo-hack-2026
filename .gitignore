@@ -10,3 +10,5 @@ services/api/server*.log
 .DS_Store
 services/api/build/
 *.code-workspace
+/.next/
+/apps/web/apps/

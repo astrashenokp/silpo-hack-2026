@@ -36,8 +36,9 @@ Frontend
 - Реалізовано етап отримання user context.
 - Реалізовано етап отримання purchase history.
 - Підключено модуль Віки `analyze_recurring()` для аналізу повторюваних покупок.
-- Поки реальний Edamam-модуль Софії не підключений, використовується `build_meal_plan()` mock.
-- Mock Софії повертає структуроване меню та нормалізовані інгредієнти.
+- Підключено модуль Софії `smart_basket.meals.build_meal_plan()`.
+- Модуль Софії повертає структуроване меню, per-meal `ingredientAmounts`
+  та нормалізовані агреговані інгредієнти через synthetic fallback.
 - Підключено product matching Ріни через `find_product_candidates()`.
 - Підключено модуль Віки `optimize_basket()` для розрахунку кошика та бюджету.
 - Формується спільний `PlanningResult`.
@@ -78,8 +79,8 @@ ready
     "recurringItems": [],
     "selectedProducts": [...],
     "substitutions": [],
-    "basketTotalMinor": 34000,
-    "budgetRemainingMinor": 146000,
+    "basketTotalMinor": 49000,
+    "budgetRemainingMinor": 131000,
     "budgetStatus": "within_budget",
     "unresolvedRequirements": [],
     "warnings": [...],
@@ -159,15 +160,15 @@ context → history → meals → matching → optimization → ready
 
 ### Sofiia — Edamam / Meals
 
-Зараз місце модуля Софії в orchestration займає:
+Зараз orchestration викликає модуль Софії:
 
 ```python
-build_meal_plan()
+smart_basket.meals.build_meal_plan()
 ```
 
-Це тимчасовий mock.
-
-Коли Edamam adapter буде готовий, mock потрібно буде замінити реальним модулем Софії, який повертає сумісні `meals` та `ingredients`.
+Це сумісний backend boundary для synthetic fallback і майбутнього Edamam path.
+Live Edamam mapping потрібно увімкнути після перевірки credentials, доступних
+recipe/ingredient fields, attribution rules і export permissions.
 
 Інший orchestration flow при цьому перебудовувати не потрібно.
 
@@ -216,8 +217,8 @@ Live adapters можна поступово підключати замість 
     "recurringItems": [],
     "selectedProducts": [...],
     "substitutions": [],
-    "basketTotalMinor": 34000,
-    "budgetRemainingMinor": 146000,
+    "basketTotalMinor": 49000,
+    "budgetRemainingMinor": 131000,
     "budgetStatus": "within_budget",
     "unresolvedRequirements": [],
     "warnings": [...],
@@ -287,7 +288,7 @@ tests/test_uliana_integration.py
 | Rina product matching | ✅ Connected |
 | Vika recurrence analysis | ✅ Connected |
 | Vika basket optimization | ✅ Connected |
-| Sofiia meal planning | 🟡 Mock |
+| Sofiia meal planning | ✅ Synthetic module connected |
 | Arina context/history | 🟡 Demo adapter |
 | Live Edamam | ⏳ Pending |
 | Live Silpo MCP | ⏳ Pending |
@@ -311,7 +312,7 @@ parameters
 
 Backend тепер має центральний `UlianaPlanner`, до якого інші готові модулі можуть підключатися поступово.
 
-Неготові інтеграції ізольовані через mock/demo реалізації, тому їх можна замінювати live-модулями без перебудови всього planning flow.
+Неготові live інтеграції ізольовані через demo/synthetic реалізації, тому їх можна замінювати live-модулями без перебудови всього planning flow.
 
 # Uliana — AI Chat & Recalculation Update
 
