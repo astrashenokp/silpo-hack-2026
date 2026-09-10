@@ -1,0 +1,322 @@
+[
+  {
+    "id": "synthetic-day-1-breakfast-1",
+    "day": 1,
+    "slot": "breakfast",
+    "title": "Oatmeal breakfast bowl",
+    "servings": 3,
+    "kcalPerServing": 420.0,
+    "ingredientIds": [
+      "oats"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "oats",
+        "name": "Dry oats",
+        "quantity": 150.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-1-lunch-2",
+    "day": 1,
+    "slot": "lunch",
+    "title": "Rice and lentil lunch bowl",
+    "servings": 3,
+    "kcalPerServing": 680.0,
+    "ingredientIds": [
+      "rice",
+      "lentils"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 240.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 90.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-1-dinner-3",
+    "day": 1,
+    "slot": "dinner",
+    "title": "Lentil dinner stew",
+    "servings": 3,
+    "kcalPerServing": 760.0,
+    "ingredientIds": [
+      "lentils",
+      "rice"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 210.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 120.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-2-breakfast-1",
+    "day": 2,
+    "slot": "breakfast",
+    "title": "Oatmeal breakfast bowl",
+    "servings": 3,
+    "kcalPerServing": 420.0,
+    "ingredientIds": [
+      "oats"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "oats",
+        "name": "Dry oats",
+        "quantity": 150.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-2-lunch-2",
+    "day": 2,
+    "slot": "lunch",
+    "title": "Rice and lentil lunch bowl",
+    "servings": 3,
+    "kcalPerServing": 680.0,
+    "ingredientIds": [
+      "rice",
+      "lentils"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 240.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 90.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-2-dinner-3",
+    "day": 2,
+    "slot": "dinner",
+    "title": "Lentil dinner stew",
+    "servings": 3,
+    "kcalPerServing": 760.0,
+    "ingredientIds": [
+      "lentils",
+      "rice"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 210.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 120.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-3-breakfast-1",
+    "day": 3,
+    "slot": "breakfast",
+    "title": "Oatmeal breakfast bowl",
+    "servings": 3,
+    "kcalPerServing": 420.0,
+    "ingredientIds": [
+      "oats"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "oats",
+        "name": "Dry oats",
+        "quantity": 150.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-3-lunch-2",
+    "day": 3,
+    "slot": "lunch",
+    "title": "Rice and lentil lunch bowl",
+    "servings": 3,
+    "kcalPerServing": 680.0,
+    "ingredientIds": [
+      "rice",
+      "lentils"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 240.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 90.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-3-dinner-3",
+    "day": 3,
+    "slot": "dinner",
+    "title": "Lentil dinner stew",
+    "servings": 3,
+    "kcalPerServing": 760.0,
+    "ingredientIds": [
+      "lentils",
+      "rice"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 210.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 120.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-4-breakfast-1",
+    "day": 4,
+    "slot": "breakfast",
+    "title": "Oatmeal breakfast bowl",
+    "servings": 3,
+    "kcalPerServing": 420.0,
+    "ingredientIds": [
+      "oats"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "oats",
+        "name": "Dry oats",
+        "quantity": 150.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-4-lunch-2",
+    "day": 4,
+    "slot": "lunch",
+    "title": "Rice and lentil lunch bowl",
+    "servings": 3,
+    "kcalPerServing": 680.0,
+    "ingredientIds": [
+      "rice",
+      "lentils"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 240.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 90.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  },
+  {
+    "id": "synthetic-day-4-dinner-3",
+    "day": 4,
+    "slot": "dinner",
+    "title": "Lentil dinner stew",
+    "servings": 3,
+    "kcalPerServing": 760.0,
+    "ingredientIds": [
+      "lentils",
+      "rice"
+    ],
+    "ingredientAmounts": [
+      {
+        "ingredientId": "lentils",
+        "name": "Dry lentils",
+        "quantity": 210.0,
+        "unit": "g"
+      },
+      {
+        "ingredientId": "rice",
+        "name": "Dry rice",
+        "quantity": 120.0,
+        "unit": "g"
+      }
+    ],
+    "source": "synthetic",
+    "sourceUrl": null,
+    "attribution": null
+  }
+]

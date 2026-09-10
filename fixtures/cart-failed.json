@@ -12,19 +12,19 @@
     {
       "productId": "demo-rice",
       "status": "failed",
-      "requestedQuantity": 2.0,
-      "actualQuantity": 1.0,
+      "requestedQuantity": 4.0,
+      "actualQuantity": 2.0,
       "message": "Simulated provider failure; no addition."
     },
     {
       "productId": "demo-lentils",
       "status": "failed",
-      "requestedQuantity": 4.0,
-      "actualQuantity": 2.0,
+      "requestedQuantity": 6.0,
+      "actualQuantity": 3.0,
       "message": "Simulated provider failure; no addition."
     }
   ],
-  "verifiedCartTotalMinor": 49500,
+  "verifiedCartTotalMinor": 64500,
   "warnings": [
     "DEMO: synthetic data; no provider account, cart or Saved Meal is changed."
   ]
