@@ -268,6 +268,12 @@ class FatSecretStatus(Model):
     reason: str | None
 
 
+class SilpoStatus(Model):
+    connected: bool
+    tools_available: list[str]
+    reason: str | None
+
+
 class FatSecretPreviewRequest(PlanReference):
     meal_ids: Annotated[list[str], Field(min_length=1)]
 

@@ -4,6 +4,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request, Respon
 
 from smart_basket.catalog.matching import line_total
 from smart_basket.core import ApiError, Session, now, uid
+from smart_basket.mcp.adapters import get_user_context
+from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.schemas import (
     CartPreview, CartReceipt, Confirmation, ExportAccepted, FatSecretExport,
     FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health, PlanReference,
@@ -89,7 +91,7 @@ def health():
 
 
 @router.get("/context", response_model=UserContext)
-def context(request: Request, response: Response):
+async def context(request: Request, response: Response):
     with request.app.state.sessions_lock:
         id = request.cookies.get("smart_basket_demo")
         owner = request.app.state.sessions.get(id)
@@ -97,7 +99,22 @@ def context(request: Request, response: Response):
             owner = Session(uid("session"))
             request.app.state.sessions[owner.id] = owner
             response.set_cookie("smart_basket_demo", owner.id, httponly=True, samesite="lax", path="/")
-    return request.app.state.catalog.get_user_context(owner)
+    if not owner.silpo_connected:
+        return request.app.state.catalog.get_user_context(owner)
+    try:
+        async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
+            live_context = await get_user_context(mcp_session, owner)
+    except Exception as exc:
+        message = str(exc).lower()
+        if any(value in message for value in ("401", "403", "unauthorized", "invalid_token")):
+            with owner.lock:
+                owner.silpo_connected = False
+            raise ApiError("AUTH_REQUIRED", "Reconnect the Silpo account.", 401) from exc
+        if "429" in message or "rate limit" in message:
+            raise ApiError("RATE_LIMITED", "Silpo request limit was reached.", 429, True) from exc
+        raise ApiError("UPSTREAM_UNAVAILABLE", "Could not load context from Silpo.", 502, True) from exc
+    response.headers["X-Data-Mode"] = "live"
+    return live_context
 
 
 @router.post("/plans", status_code=202, response_model=RunSnapshot)
