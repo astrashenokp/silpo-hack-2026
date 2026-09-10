@@ -97,3 +97,39 @@ def calorie_target_warnings(summary: NutritionSummary) -> list[str]:
                 f"Day {day.day} planned calories are outside the configured +/-10% daily target range."
             )
     return warnings
+
+
+def planning_constraint_warnings(request, meals: list[Meal]) -> list[str]:
+    warnings = []
+    health_conditions = set(getattr(request, "health_conditions", []) or [])
+    if "diabetes" in health_conditions:
+        warnings.append(
+            "Diabetes condition is retained and meal macros are exposed, but this planner does not replace medical nutrition advice or glycemic-load verification."
+        )
+    if "hypercholesterolemia" in health_conditions:
+        warnings.append(
+            "Hypercholesterolemia condition is retained, but saturated fat and cholesterol constraints require verified provider nutrients before live enforcement."
+        )
+
+    cooking_time_limit = getattr(request, "cooking_time_limit", None)
+    if cooking_time_limit is not None:
+        over_limit = [
+            meal
+            for meal in meals
+            if meal.cooking_time_minutes is not None
+            and meal.cooking_time_minutes > cooking_time_limit
+        ]
+        unknown_time = [
+            meal
+            for meal in meals
+            if meal.cooking_time_minutes is None
+        ]
+        if over_limit:
+            warnings.append(
+                f"{len(over_limit)} planned meals exceed the requested {cooking_time_limit}-minute cooking limit."
+            )
+        if unknown_time:
+            warnings.append(
+                f"{len(unknown_time)} planned meals have no verified cooking-time estimate."
+            )
+    return warnings

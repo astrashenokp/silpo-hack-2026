@@ -172,14 +172,16 @@ for the first product and fails the rest. Partial export saves the first selecte
 meal and fails the rest: select at least **two meals** to observe partial success.
 `unmatched` makes `canConfirm: false`; confirmation returns 409 `UNRESOLVED_FOODS`.
 
-Set `budgetMinor: 100` for an over-budget result, `days: 8` for 400 validation,
+Set `budgetMinor: 100` for an over-budget result, `days: 15` for 400 validation,
 or send an outdated `version` for 409 `STALE_PLAN`. Supported meal labels are
 returned by `GET /api/filters`: preferences are `vegetarian`, `vegan`, `paleo`,
 `high-protein` and `high-fiber`; restrictions are `peanut-free`, `gluten-free`,
 `dairy-free`, `tree-nut-free`, `shellfish-free`, `soy-free`, `egg-free` and
-`pork-free`. Unknown labels fail validation. Calorie targets are retained and
-surfaced, but synthetic meals do not optimize calories. Pet demand and notes are
-retained for the surrounding pipeline.
+`pork-free`. Unknown labels fail validation. `healthConditions` accepts
+`diabetes` and `hypercholesterolemia`; `cookingTimeLimit` accepts 5–240 minutes.
+Calories, macros and cooking times are surfaced, but synthetic meals do not run
+medical ILP optimization. Pet demand and notes are retained for the surrounding
+pipeline.
 
 All request failures use `{error: {code, message, retryable}}`. Per-item failures are
 successful HTTP responses containing operation outcomes, not an HTTP-level crash.

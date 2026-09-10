@@ -9,6 +9,8 @@ export type PlanningRequest = {
   days: number;
   people: number;
   caloriesPerPersonPerDay: number | null;
+  healthConditions: Array<"diabetes" | "hypercholesterolemia">;
+  cookingTimeLimit: number | null;
   preferences: string[];
   restrictions: string[];
   pets: Pet[];
@@ -30,6 +32,12 @@ export type MealCalorieTarget = {
   maxKcalPerServing: number;
 };
 
+export type MealMacros = {
+  proteinG: number;
+  fatG: number;
+  carbsG: number;
+};
+
 export type Meal = {
   id: string;
   day: number;
@@ -37,7 +45,9 @@ export type Meal = {
   title: string;
   servings: number;
   kcalPerServing: number | null;
+  macrosPerServing: MealMacros | null;
   calorieTarget: MealCalorieTarget | null;
+  cookingTimeMinutes: number | null;
   ingredientIds: string[];
   ingredientAmounts: IngredientAmount[];
   source: "edamam" | "synthetic";

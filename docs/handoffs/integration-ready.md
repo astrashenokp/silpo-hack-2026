@@ -15,7 +15,7 @@ warnings, aggregate ingredients and selected basket products.
 
 Available: validated HTTP contracts; synthetic planning, cart and Saved Meal
 operations; product matching helpers; Sofiia `meal-plan`/`ingredients` fixtures
-under `fixtures/`; 119 passing backend tests. All external providers remain
+under `fixtures/`; 124 passing backend tests. All external providers remain
 unverified in live mode, and `SMART_BASKET_MODE=live` deliberately refuses
 startup. No credentials or external account access are necessary for this demo.
 

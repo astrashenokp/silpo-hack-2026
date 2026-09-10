@@ -51,6 +51,20 @@ function formatKcal(value: number | null | undefined) {
   return `${Math.round(value)} ккал`;
 }
 
+function formatMacros(
+  macros: {
+    proteinG: number;
+    fatG: number;
+    carbsG: number;
+  } | null,
+) {
+  if (!macros) {
+    return null;
+  }
+
+  return `Б ${Math.round(macros.proteinG)} г · Ж ${Math.round(macros.fatG)} г · В ${Math.round(macros.carbsG)} г`;
+}
+
 function formatQuantity(value: number, unit: string) {
   const rounded = Number.isInteger(value)
     ? value.toString()
@@ -398,6 +412,10 @@ export default function PlannerForm({
       caloriesPerPersonPerDay:
         caloriesNumber,
 
+      healthConditions: [],
+
+      cookingTimeLimit: null,
+
       preferences: normalizedPreferences,
 
       restrictions: normalizedRestrictions,
@@ -671,7 +689,16 @@ export default function PlannerForm({
                           Ціль: {formatKcal(meal.calorieTarget.targetKcalPerServing)}
                         </span>
                       ) : null}
+                      {meal.cookingTimeMinutes ? (
+                        <span>{meal.cookingTimeMinutes} хв</span>
+                      ) : null}
                     </div>
+
+                    {formatMacros(meal.macrosPerServing) ? (
+                      <p className="mt-2 text-[12px] leading-5 text-[#667085]">
+                        {formatMacros(meal.macrosPerServing)}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>

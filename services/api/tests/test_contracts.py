@@ -29,5 +29,11 @@ def test_http_schema_uses_camel_case_and_400_validation(client):
     schema = client.get("/openapi.json").json()
     properties = schema["components"]["schemas"]["PlanningRequest"]["properties"]
     assert "budgetMinor" in properties and "budget_minor" not in properties
+    assert "healthConditions" in properties
+    assert "cookingTimeLimit" in properties
+    assert properties["days"]["maximum"] == 14
+    meal_properties = schema["components"]["schemas"]["Meal"]["properties"]
+    assert "macrosPerServing" in meal_properties
+    assert "cookingTimeMinutes" in meal_properties
     assert "400" in schema["paths"]["/api/plans"]["post"]["responses"]
     assert "422" not in schema["paths"]["/api/plans"]["post"]["responses"]
