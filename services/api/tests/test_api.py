@@ -21,8 +21,8 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
     plan = create_plan(client, planning_request)
     assert plan["dataMode"] == "demo"
     assert len(plan["mealPlan"]) == 12
-    assert plan["basketTotalMinor"] == 34000
-    assert plan["budgetRemainingMinor"] == 146000
+    assert plan["basketTotalMinor"] == 49000
+    assert plan["budgetRemainingMinor"] == 131000
     assert plan["savingsMinor"] is None
     assert plan["effectiveRequest"] == planning_request
     assert plan["recurringItems"] == []
@@ -33,10 +33,11 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
 
     assert ingredient_quantities == {
         "oats": 600,
-        "rice": 960,
-        "lentils": 840,
+        "rice": 1440,
+        "lentils": 1200,
     }
     assert plan["mealPlan"][0]["ingredientAmounts"][0]["quantity"] == 150
+    assert "Sofiia synthetic fallback" in " ".join(plan["warnings"])
     assert plan["canConfirmCart"] is True
     assert client.get("/api/health").headers["X-Data-Mode"] == "demo"
 
@@ -60,6 +61,18 @@ def test_null_calories_and_no_restrictions(client, planning_request):
     assert plan["effectiveRequest"]["caloriesPerPersonPerDay"] is None
 
 
+@pytest.mark.parametrize("preferences,restrictions", [
+    (["vegan"], []),
+    (["paleo"], ["gluten-free"]),
+    (["high-protein", "high-fiber"], ["soy-free", "dairy-free"]),
+    ([], ["pork-free", "shellfish-free", "egg-free", "tree-nut-free"]),
+])
+def test_new_dietary_labels_accepted_by_api(client, planning_request, preferences, restrictions):
+    body = {**planning_request, "preferences": preferences, "restrictions": restrictions}
+    response = client.post("/api/plans", json=body)
+    assert response.status_code == 202
+
+
 def test_auth_and_session_isolation(app, client, planning_request):
     plan = create_plan(client, planning_request)
     cart = client.post("/api/cart/preview", json=reference(plan)).json()
@@ -80,13 +93,13 @@ def test_planning_failure_and_over_budget(client, planning_request):
     assert failed["error"]["code"] == "UPSTREAM_UNAVAILABLE"
     plan = create_plan(client, {**planning_request, "budgetMinor": 100})
     assert plan["budgetStatus"] == "over_budget"
-    assert plan["budgetRemainingMinor"] == -33900
+    assert plan["budgetRemainingMinor"] == -48900
     assert not plan["canConfirmCart"]
     assert client.post("/api/cart/preview", json=reference(plan)).status_code == 409
 
 
 @pytest.mark.parametrize("scenario,expected_total,status", [
-    ("success", 37500, "success"), ("partial", 15500, "partial"), ("failed", 3500, "failed"),
+    ("success", 52500, "success"), ("partial", 15500, "partial"), ("failed", 3500, "failed"),
 ])
 def test_cart_outcomes_are_idempotent(app, client, planning_request, scenario, expected_total, status):
     plan = create_plan(client, planning_request)
@@ -94,8 +107,8 @@ def test_cart_outcomes_are_idempotent(app, client, planning_request, scenario, e
     assert session.cart == {"demo-existing-soap": (1.0, 3500)}
     preview = client.post("/api/cart/preview", json=reference(plan), headers={"X-Demo-Scenario": scenario}).json()
     assert preview["existingCartTotalMinor"] == 3500
-    assert preview["addedGoodsTotalMinor"] == 34000
-    assert preview["projectedGoodsTotalMinor"] == 37500
+    assert preview["addedGoodsTotalMinor"] == 49000
+    assert preview["projectedGoodsTotalMinor"] == 52500
     body = {"previewId": preview["previewId"], "idempotencyKey": "once"}
     first = client.post("/api/cart/confirm", json=body)
     assert first.status_code == 200
@@ -307,3 +320,14 @@ def test_injected_planner_failure_does_not_expose_details(app, client, planning_
     run = client.get(f"/api/plans/{queued['runId']}").json()
     assert run["status"] == "failed"
     assert "private" not in str(run)
+
+
+def test_filters_endpoint_returns_all_supported_labels(client):
+    response = client.get("/api/filters")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["preferences"]) == {"vegetarian", "vegan", "paleo", "high-protein", "high-fiber"}
+    assert set(body["restrictions"]) == {
+        "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
+        "shellfish-free", "soy-free", "egg-free", "pork-free",
+    }

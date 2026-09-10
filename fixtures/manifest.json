@@ -19,6 +19,14 @@
     "model": "PlanningResult",
     "many": false
   },
+  "meal-plan.json": {
+    "model": "Meal",
+    "many": true
+  },
+  "ingredients.json": {
+    "model": "IngredientRequirement",
+    "many": true
+  },
   "product-candidates.json": {
     "model": "ProductCandidate",
     "many": true

@@ -3,6 +3,10 @@ from datetime import (
     timezone,
 )
 
+from smart_basket.core import (
+    ApiError,
+)
+
 from smart_basket.catalog.matching import (
     MatchingContext,
     find_product_candidates,
@@ -16,12 +20,20 @@ from smart_basket.optimization.recurrence import (
     analyze_recurring,
 )
 
-from smart_basket.schemas import (
-    PlanningResult,
+from smart_basket.meals import (
+    build_meal_plan,
 )
 
-from .mocks import (
-    build_meal_plan,
+from smart_basket.meals.edamam import (
+    EdamamUnavailable,
+)
+
+from smart_basket.meals.filters import (
+    UnsupportedMealFilter,
+)
+
+from smart_basket.schemas import (
+    PlanningResult,
 )
 
 
@@ -126,13 +138,28 @@ class UlianaPlanner:
 
         # ====================================================
         # STAGE 3 — MEALS
-        # Still mock Sofiia
+        # Sofiia owns Edamam/fallback meal planning.
         # ====================================================
 
-        meal_result = build_meal_plan(
-            request=request,
-            effective_context=context,
-        )
+        try:
+            meal_result = build_meal_plan(
+                request=request,
+                effective_context=context,
+            )
+        except UnsupportedMealFilter as exc:
+            raise ApiError(
+                "VALIDATION_ERROR",
+                str(exc),
+                400,
+                False,
+            ) from exc
+        except EdamamUnavailable as exc:
+            raise ApiError(
+                "UPSTREAM_UNAVAILABLE",
+                str(exc),
+                502,
+                True,
+            ) from exc
 
         meals = meal_result[
             "meals"
@@ -148,6 +175,22 @@ class UlianaPlanner:
                 [],
             )
         )
+        meal_source = meal_result.get(
+            "source",
+            "synthetic",
+        )
+        data_mode = (
+            "mixed"
+            if meal_source in {
+                "edamam",
+                "mixed",
+            }
+            else "demo"
+        )
+        if data_mode == "mixed":
+            warnings.append(
+                "Meal data is live or mixed while catalog/cart data remains demo; cart confirmation is disabled."
+            )
 
         emit_progress(
             "meals",
@@ -227,6 +270,11 @@ class UlianaPlanner:
         # ====================================================
 
         can_confirm_cart = (
+            data_mode
+            == "demo"
+
+            and
+
             optimization.budget_status
             == "within_budget"
 
@@ -250,7 +298,7 @@ class UlianaPlanner:
 
             version=1,
 
-            data_mode="demo",
+            data_mode=data_mode,
 
             effective_request=request,
 

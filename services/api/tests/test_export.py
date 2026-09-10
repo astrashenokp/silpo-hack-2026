@@ -17,6 +17,11 @@ def test_export_outcomes_portions_and_duplicate_protection(app, client, planning
     item = preview["meals"][0]["items"][0]
     assert item["sourceQuantity"] == 50
     assert item["numberOfUnits"] == 0.5
+    lunch_items = preview["meals"][1]["items"]
+    assert {item["ingredientId"]: item["sourceQuantity"] for item in lunch_items} == {
+        "rice": 80,
+        "lentils": 30,
+    }
     assert preview["portionBasis"] == "one_person"
     assert preview["destination"] == "saved_meals"
     body = {"previewId": preview["previewId"], "idempotencyKey": "save-once"}

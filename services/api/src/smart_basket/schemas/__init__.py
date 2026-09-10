@@ -38,7 +38,13 @@ class PlanningRequest(Model):
     @field_validator("preferences", "restrictions")
     @classmethod
     def supported_labels(cls, value, info):
-        allowed = {"preferences": {"vegetarian"}, "restrictions": {"peanut-free"}}
+        allowed = {
+            "preferences": {"vegetarian", "vegan", "paleo", "high-protein", "high-fiber"},
+            "restrictions": {
+                "peanut-free", "gluten-free", "dairy-free",
+                "tree-nut-free", "shellfish-free", "soy-free", "egg-free", "pork-free",
+            },
+        }
         unknown = set(value) - allowed[info.field_name]
         if unknown:
             raise ValueError(f"Unsupported {info.field_name}: {', '.join(sorted(unknown))}")
@@ -58,6 +64,11 @@ class ErrorEnvelope(Model):
 class Health(Model):
     status: Literal["ok"] = "ok"
     mode: Literal["demo"] = "demo"
+
+
+class SupportedLabels(Model):
+    preferences: list[str]
+    restrictions: list[str]
 
 
 class UserContext(Model):

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "oats",
+    "name": "Dry oats",
+    "searchTerms": [
+      "oats"
+    ],
+    "quantity": 600.0,
+    "unit": "g",
+    "mealIds": [
+      "synthetic-day-1-breakfast-1",
+      "synthetic-day-2-breakfast-1",
+      "synthetic-day-3-breakfast-1",
+      "synthetic-day-4-breakfast-1"
+    ],
+    "restrictions": []
+  },
+  {
+    "id": "rice",
+    "name": "Dry rice",
+    "searchTerms": [
+      "rice"
+    ],
+    "quantity": 1440.0,
+    "unit": "g",
+    "mealIds": [
+      "synthetic-day-1-lunch-2",
+      "synthetic-day-1-dinner-3",
+      "synthetic-day-2-lunch-2",
+      "synthetic-day-2-dinner-3",
+      "synthetic-day-3-lunch-2",
+      "synthetic-day-3-dinner-3",
+      "synthetic-day-4-lunch-2",
+      "synthetic-day-4-dinner-3"
+    ],
+    "restrictions": []
+  },
+  {
+    "id": "lentils",
+    "name": "Dry lentils",
+    "searchTerms": [
+      "lentils"
+    ],
+    "quantity": 1200.0,
+    "unit": "g",
+    "mealIds": [
+      "synthetic-day-1-lunch-2",
+      "synthetic-day-1-dinner-3",
+      "synthetic-day-2-lunch-2",
+      "synthetic-day-2-dinner-3",
+      "synthetic-day-3-lunch-2",
+      "synthetic-day-3-dinner-3",
+      "synthetic-day-4-lunch-2",
+      "synthetic-day-4-dinner-3"
+    ],
+    "restrictions": []
+  }
+]

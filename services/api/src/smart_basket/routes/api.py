@@ -6,11 +6,12 @@ from smart_basket.catalog.matching import line_total
 from smart_basket.core import ApiError, Session, now, uid
 from smart_basket.mcp.adapters import get_user_context, search_products
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
+from smart_basket.meals import supported_labels
 from smart_basket.schemas import (
     CartPreview, CartReceipt, Confirmation, ExportAccepted, FatSecretExport,
     FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health, PlanReference,
     PlanningRequest, PlanningResult, ProductSearchResponse, ProgressEvent, RecalculateRequest,
-    RunSnapshot, UserContext,
+    RunSnapshot, SupportedLabels, UserContext,
 )
 
 router = APIRouter(prefix="/api")
@@ -56,8 +57,8 @@ def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=Fal
         result = PlanningResult.model_validate(result).model_copy(deep=True)
         result.run_id = run_id
         result.version = previous.version + 1 if previous else 1
-        if result.data_mode != "demo" or result.effective_request != request:
-            raise ValueError("Mock service requires a demo result retaining the confirmed request.")
+        if result.data_mode not in {"demo", "mixed"} or result.effective_request != request:
+            raise ValueError("Planner must retain the confirmed request and return a supported data mode.")
         if result.basket_total_minor != sum(p.line_total_minor for p in result.selected_products):
             raise ValueError("Planner returned inconsistent totals.")
         if any(p.line_total_minor != line_total(p.quantity, p.unit_price_minor) for p in result.selected_products):
@@ -89,6 +90,11 @@ def queue_plan(request, tasks, app, owner, *, previous=None, selected_ids=None, 
 @router.get("/health", response_model=Health)
 def health():
     return Health()
+
+
+@router.get("/filters", response_model=SupportedLabels)
+def filters():
+    return SupportedLabels(**supported_labels())
 
 
 @router.get("/context", response_model=UserContext)
