@@ -5,7 +5,7 @@ from .planner import build_meal_plan
 
 
 def supported_labels() -> dict:
-    """Return machine labels and their display names for preferences and restrictions.
+    """Return supported machine labels for preferences and restrictions.
 
     Uliana and Ksiusha can use this to render the UI list or validate
     programmatically without importing internal filter constants.

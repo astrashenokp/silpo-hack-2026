@@ -168,7 +168,7 @@ services/api/.venv/bin/python -m pytest services/api/tests -q
 services/api/.venv/bin/python services/api/scripts/export_contracts.py --check
 ```
 
-Current local result: 115 backend tests pass with one Starlette/AnyIO deprecation warning.
+Current local result: 119 backend tests pass with one Starlette/AnyIO deprecation warning.
 
 ## Known Limits
 
