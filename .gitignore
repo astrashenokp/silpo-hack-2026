@@ -9,3 +9,4 @@ __pycache__/
 services/api/server*.log
 .DS_Store
 services/api/build/
+*.code-workspace
