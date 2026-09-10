@@ -715,7 +715,7 @@ export default function PlannerForm({
                 </h3>
 
                 <ul className="mt-3 space-y-2 text-sm leading-5 text-[#667085]">
-                  {warnings.slice(0, 4).map((warning) => (
+                  {warnings.map((warning) => (
                     <li key={warning}>
                       {warning}
                     </li>
