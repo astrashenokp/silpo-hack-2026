@@ -52,7 +52,7 @@ FatSecret automatic diary entries, date-based weekly-plan synchronization and co
 1. MVP uses one shared set of dietary restrictions for the household. If one person is vegetarian, offer a shared vegetarian menu and make that assumption visible. Individual menus are future work.
 2. Restrictions take priority over cost. Unknown ingredient/allergen information must not be treated as verified suitability. Unresolved required products block cart confirmation.
 3. Merge saved and explicit restrictions; surface conflicts. Confirmed form values control budget, period, people and preferences.
-4. Calories are estimates. Display targets and available estimates separately; do not invent missing nutrition. Pet food and household items do not contribute to human meal calories.
+4. Calories are estimates. Display targets and available estimates separately; do not invent missing nutrition. Meal calorie targets use the MVP 25% breakfast, 35% lunch and 40% dinner split with a +/-10% daily range. Pet food and household items do not contribute to human meal calories.
 5. The budget covers meal products plus selected recurring/pet items. Delivery is excluded and labeled separately. Do not claim the goods total is the checkout total.
 6. If the budget is unrealistic, show the shortfall or incomplete result. Do not silently reduce people, necessary portions or restrictions.
 7. Restocking suggestions require selection. Selecting/removing them recalculates the proposal before cart confirmation.
