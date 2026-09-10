@@ -66,6 +66,11 @@ class Health(Model):
     mode: Literal["demo"] = "demo"
 
 
+class SupportedLabels(Model):
+    preferences: list[str]
+    restrictions: list[str]
+
+
 class UserContext(Model):
     preferences: list[str]
     restrictions: list[str]

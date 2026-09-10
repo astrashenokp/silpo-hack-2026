@@ -6,11 +6,12 @@ from smart_basket.catalog.matching import line_total
 from smart_basket.core import ApiError, Session, now, uid
 from smart_basket.mcp.adapters import get_user_context, search_products
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
+from smart_basket.meals import supported_labels
 from smart_basket.schemas import (
     CartPreview, CartReceipt, Confirmation, ExportAccepted, FatSecretExport,
     FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health, PlanReference,
     PlanningRequest, PlanningResult, ProductSearchResponse, ProgressEvent, RecalculateRequest,
-    RunSnapshot, UserContext,
+    RunSnapshot, SupportedLabels, UserContext,
 )
 
 router = APIRouter(prefix="/api")
@@ -89,6 +90,11 @@ def queue_plan(request, tasks, app, owner, *, previous=None, selected_ids=None, 
 @router.get("/health", response_model=Health)
 def health():
     return Health()
+
+
+@router.get("/filters", response_model=SupportedLabels)
+def filters():
+    return SupportedLabels(**supported_labels())
 
 
 @router.get("/context", response_model=UserContext)
