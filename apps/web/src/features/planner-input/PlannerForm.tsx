@@ -51,6 +51,14 @@ function formatKcal(value: number | null | undefined) {
   return `${Math.round(value)} ккал`;
 }
 
+function formatQuantity(value: number, unit: string) {
+  const rounded = Number.isInteger(value)
+    ? value.toString()
+    : value.toFixed(1).replace(/\.0$/, "");
+
+  return `${rounded} ${unit}`;
+}
+
 function slotLabel(slot: string) {
   const labels: Record<string, string> = {
     breakfast: "Сніданок",
@@ -607,6 +615,7 @@ export default function PlannerForm({
     const result = runSnapshot.result;
     const mealPlan = result?.mealPlan ?? [];
     const nutritionDays = result?.nutritionSummary.daily ?? [];
+    const ingredients = result?.ingredients ?? [];
     const selectedProducts = result?.selectedProducts ?? [];
     const warnings = result?.warnings ?? [];
 
@@ -721,6 +730,35 @@ export default function PlannerForm({
                     </li>
                   ))}
                 </ul>
+              </div>
+            ) : null}
+
+            {ingredients.length > 0 ? (
+              <div className="mt-5 border-t border-[#EAECF0] pt-4">
+                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                  Інгредієнти
+                </h3>
+
+                <div className="mt-3 divide-y divide-[#EAECF0] text-sm">
+                  {ingredients.map((ingredient) => (
+                    <div
+                      key={ingredient.id}
+                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2"
+                    >
+                      <span className="min-w-0 font-medium text-[#344054]">
+                        {ingredient.name}
+                      </span>
+
+                      <span className="text-[#667085]">
+                        {formatQuantity(ingredient.quantity, ingredient.unit)}
+                      </span>
+
+                      <span className="w-full text-[12px] text-[#98A2B3]">
+                        {ingredient.mealIds.length} прийомів їжі
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
 
