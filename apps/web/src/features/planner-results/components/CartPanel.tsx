@@ -43,7 +43,7 @@ export function CartPanel({
   mode: "live" | "demo" | "mixed";
 }) {
   return (
-    <aside className="flex max-h-[calc(100vh-120px)] min-h-[620px] flex-col rounded-[24px] border border-[#ff9b72] border-l-[8px] bg-white p-6 shadow-[0_18px_45px_rgba(255,112,67,0.08)]">
+    <aside className="flex max-h-[calc(100vh-120px)] min-h-[420px] flex-col rounded-[24px] border border-[#ff9b72] border-l-[8px] bg-white p-6 shadow-[0_18px_45px_rgba(255,112,67,0.08)] xl:h-full xl:min-h-0 xl:max-h-none">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-xl font-semibold text-[#9a5b17]">Смарт кошик Сільпо</h3>
@@ -78,14 +78,14 @@ export function CartPanel({
               <p className="mt-0.5 text-xs text-[#8a94a6]">{item.cartQuantity} package</p>
               <p className="mt-1 text-sm">
                 <span className="mr-1 text-[#2f3340] line-through opacity-70">
-                  {formatUah(Math.round(item.lineTotalMinor * item.cartQuantity * 1.35))}
+                  {formatUah(Math.round(item.unitPriceMinor * item.cartQuantity * 1.35))}
                 </span>
                 <span className="rounded bg-brand px-1 py-0.5 text-[10px] font-semibold text-white">
                   -25%
                 </span>
               </p>
               <p className="mt-0.5 text-base font-semibold">
-                {formatUah(item.lineTotalMinor * item.cartQuantity)}
+                {formatUah(item.unitPriceMinor * item.cartQuantity)}
               </p>
             </div>
             <div className="flex flex-col items-end justify-between gap-3">

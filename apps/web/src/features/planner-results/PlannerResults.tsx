@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   apiConfirmCart,
   apiPreviewCart,
@@ -13,9 +13,10 @@ import type {
   Meal,
   PlanningResult,
   ProductSelection,
+  RecurringSuggestion,
   RunSnapshot,
 } from "@/lib/api/types";
-import { formatUah } from "@/lib/format";
+import { formatQuantity, formatUah } from "@/lib/format";
 import {
   fixtureCartPartial,
   fixtureCartPreview,
@@ -25,14 +26,19 @@ import {
   CartPreviewModal,
   CartReceiptView,
 } from "./components/CartFlow";
-import { AgentFailure, SyncFailureModal, WarningsList } from "./components/states";
+import { AgentFailure, EmptyHistoryBanner, SyncFailureModal, WarningsList } from "./components/states";
 import { RunProgress } from "./components/RunProgress";
 import { Button, Spinner } from "./components/ui";
 
 export type SourceMode = "fixtures" | "live";
 
-// PlannerResults is keyed at the call site by {runId}:{version} so cart state
-// resets when a new run occupies the screen.
+export interface SavedMeal {
+  id: string;
+  title: string;
+}
+
+// Cart contents are owned by the parent (page.tsx) so every chat shares the
+// same single cart. PlannerResults only receives cart state via props.
 export function PlannerResults({
   snapshot,
   result,
@@ -40,6 +46,15 @@ export function PlannerResults({
   cartScenario,
   recalcBusy,
   onRetryPlan,
+  sentMessages,
+  savedMeals,
+  onSavedMealsChange,
+  addedToCart,
+  cartProductIds,
+  cartQuantities,
+  onAddedToCartChange,
+  onCartProductIdsChange,
+  onCartQuantitiesChange,
 }: {
   snapshot?: RunSnapshot | null;
   result: PlanningResult | null;
@@ -47,6 +62,15 @@ export function PlannerResults({
   cartScenario?: DemoScenario;
   recalcBusy: boolean;
   onRetryPlan?: () => void;
+  sentMessages?: string[];
+  savedMeals?: SavedMeal[];
+  onSavedMealsChange?: (meals: SavedMeal[]) => void;
+  addedToCart: boolean;
+  cartProductIds: string[] | null;
+  cartQuantities: Record<string, number>;
+  onAddedToCartChange: (added: boolean) => void;
+  onCartProductIdsChange: (ids: string[] | null) => void;
+  onCartQuantitiesChange: (quantities: Record<string, number>) => void;
 }) {
   const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
   const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
@@ -54,14 +78,20 @@ export function PlannerResults({
   const [cartKey, setCartKey] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [screen, setScreen] = useState<"setup" | "thinking" | "ready">("setup");
-  const [addedToCart, setAddedToCart] = useState(false);
-  const [cartProductIds, setCartProductIds] = useState<string[] | null>(null);
-  const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
+  const [recurringOverrides, setRecurringOverrides] = useState<Record<string, boolean>>({});
+  const [recurringDirty, setRecurringDirty] = useState(false);
 
   useEffect(() => {
     if (screen !== "thinking") return;
     const timer = window.setTimeout(() => setScreen("ready"), 1800);
     return () => window.clearTimeout(timer);
+  }, [screen]);
+
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (screen !== "ready") return;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [screen]);
 
   if (!result) {
@@ -83,63 +113,63 @@ export function PlannerResults({
   const addDisabled =
     !result.canConfirmCart ||
     result.budgetStatus !== "within_budget";
+  const confirmGate = addDisabled || recurringDirty;
 
   const cartItems: CartPanelItem[] = selectedProducts.map((product) => ({
     productId: product.productId,
     name: product.name,
     quantity: product.quantity,
-    cartQuantity: cartQuantities[product.productId] ?? 1,
+    cartQuantity: cartQuantities[product.productId] ?? product.quantity,
     sellingUnit: product.sellingUnit,
     unitPriceMinor: product.unitPriceMinor,
     lineTotalMinor: product.lineTotalMinor,
     source: product.source,
     added: true,
   }));
-  const activeCartProductIds =
-    cartProductIds ?? selectedProducts.slice(0, 2).map((product) => product.productId);
+  const activeCartProductIds = cartProductIds ?? [];
   const visibleCartItems = cartItems.filter((item) => activeCartProductIds.includes(item.productId));
   const visibleCartTotalMinor = visibleCartItems.reduce(
-    (sum, item) => sum + item.lineTotalMinor * item.cartQuantity,
+    (sum, item) => sum + item.unitPriceMinor * item.cartQuantity,
     0,
   );
   const visibleCartCount = visibleCartItems.reduce((sum, item) => sum + item.cartQuantity, 0);
 
   function addAllToCart() {
-    setAddedToCart(true);
-    setCartProductIds(selectedProducts.map((product) => product.productId));
-    setCartQuantities((currentQuantities) => {
-      const next = { ...currentQuantities };
-      selectedProducts.forEach((product) => {
-        next[product.productId] = next[product.productId] ?? 1;
-      });
-      return next;
+    onAddedToCartChange(true);
+    onCartProductIdsChange(selectedProducts.map((product) => product.productId));
+    const next = { ...cartQuantities };
+    selectedProducts.forEach((product) => {
+      next[product.productId] = next[product.productId] ?? product.quantity;
     });
+    onCartQuantitiesChange(next);
+  }
+
+  function toggleRecurring(item: RecurringSuggestion) {
+    setRecurringOverrides((prev) => ({ ...prev, [item.id]: !(prev[item.id] ?? item.selected) }));
+    setRecurringDirty(true);
   }
 
   function incrementCartItem(productId: string) {
-    setCartQuantities((currentQuantities) => ({
-      ...currentQuantities,
-      [productId]: (currentQuantities[productId] ?? 1) + 1,
-    }));
+    const base = selectedProducts.find((p) => p.productId === productId)?.quantity ?? 1;
+    onCartQuantitiesChange({
+      ...cartQuantities,
+      [productId]: (cartQuantities[productId] ?? base) + 1,
+    });
   }
 
   function decrementCartItem(productId: string) {
-    setCartQuantities((currentQuantities) => ({
-      ...currentQuantities,
-      [productId]: Math.max(1, (currentQuantities[productId] ?? 1) - 1),
-    }));
+    const base = selectedProducts.find((p) => p.productId === productId)?.quantity ?? 1;
+    onCartQuantitiesChange({
+      ...cartQuantities,
+      [productId]: Math.max(1, (cartQuantities[productId] ?? base) - 1),
+    });
   }
 
   function removeCartItem(productId: string) {
-    setCartProductIds((currentIds) => {
-      const ids = currentIds ?? activeCartProductIds;
-      return ids.filter((id) => id !== productId);
-    });
-    setCartQuantities((currentQuantities) => {
-      const next = { ...currentQuantities };
-      delete next[productId];
-      return next;
-    });
+    const next = { ...cartQuantities };
+    delete next[productId];
+    onCartQuantitiesChange(next);
+    onCartProductIdsChange((cartProductIds ?? []).filter((id) => id !== productId));
   }
 
   async function handleAddAll() {
@@ -237,21 +267,30 @@ export function PlannerResults({
               </div>
             </div>
 
-            {screen === "thinking" ? (
-              <ThinkingMessage />
-            ) : (
-              <ReadyMessage
-                result={result}
-                addedToCart={addedToCart}
-                onAddToCart={addAllToCart}
-                onRecalculate={() => {
-                  setAddedToCart(false);
-                  setCartProductIds(null);
-                  setCartQuantities({});
-                  setScreen("thinking");
-                }}
-              />
-            )}
+            <div ref={resultsRef}>
+              {screen === "thinking" ? (
+                <ThinkingMessage />
+              ) : (
+                <ReadyMessage
+                  result={result}
+                  addedToCart={addedToCart}
+                  confirmGate={confirmGate}
+                  recurringOverrides={recurringOverrides}
+                  recurringDirty={recurringDirty}
+                  onToggleRecurring={toggleRecurring}
+                  onAddToCart={addAllToCart}
+                  savedMeals={savedMeals ?? []}
+                  onSavedMealsChange={onSavedMealsChange}
+                  onRecalculate={() => {
+                    onAddedToCartChange(false);
+                    onCartProductIdsChange(null);
+                    onCartQuantitiesChange({});
+                    setRecurringDirty(false);
+                    setScreen("thinking");
+                  }}
+                />
+              )}
+            </div>
           </>
         )}
 
@@ -267,9 +306,22 @@ export function PlannerResults({
           </div>
         )}
         <WarningsList warnings={result.warnings} />
+
+        {sentMessages && sentMessages.length > 0 && (
+          <div className="mt-4 flex flex-col items-end gap-2">
+            {sentMessages.map((message, index) => (
+              <div
+                key={`${index}-${message}`}
+                className="max-w-[70%] rounded-[20px] rounded-tr-none bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]"
+              >
+                {message}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="mt-8 xl:fixed xl:bottom-24 xl:right-8 xl:top-24 xl:z-30 xl:mt-0 xl:w-[390px]">
+      <div className="mt-8 xl:fixed xl:bottom-28 xl:right-8 xl:top-24 xl:z-30 xl:mt-0 xl:w-[390px] xl:overflow-hidden">
         <CartPanel
           items={visibleCartItems}
           itemCount={visibleCartCount}
@@ -280,7 +332,7 @@ export function PlannerResults({
           onIncrement={incrementCartItem}
           onDecrement={decrementCartItem}
           onRemove={removeCartItem}
-          syncDisabled={addDisabled || !addedToCart || visibleCartItems.length === 0}
+          syncDisabled={confirmGate || !addedToCart || visibleCartItems.length === 0}
           syncBusy={cartBusy}
           mode={result.dataMode}
         />
@@ -426,12 +478,24 @@ function ThinkingMessage() {
 function ReadyMessage({
   result,
   addedToCart,
+  confirmGate,
+  recurringOverrides,
+  recurringDirty,
+  onToggleRecurring,
   onAddToCart,
+  savedMeals,
+  onSavedMealsChange,
   onRecalculate,
 }: {
   result: PlanningResult;
   addedToCart: boolean;
+  confirmGate: boolean;
+  recurringOverrides: Record<string, boolean>;
+  recurringDirty: boolean;
+  onToggleRecurring: (item: RecurringSuggestion) => void;
   onAddToCart: () => void;
+  savedMeals: SavedMeal[];
+  onSavedMealsChange?: (meals: SavedMeal[]) => void;
   onRecalculate: () => void;
 }) {
   return (
@@ -451,7 +515,13 @@ function ReadyMessage({
         <PlannerReadyView
           result={result}
           addedToCart={addedToCart}
+          confirmGate={confirmGate}
+          recurringOverrides={recurringOverrides}
+          recurringDirty={recurringDirty}
+          onToggleRecurring={onToggleRecurring}
           onAddToCart={onAddToCart}
+          savedMeals={savedMeals}
+          onSavedMealsChange={onSavedMealsChange}
           onRecalculate={onRecalculate}
         />
       </div>
@@ -462,49 +532,88 @@ function ReadyMessage({
 function PlannerReadyView({
   result,
   addedToCart,
+  confirmGate,
+  recurringOverrides,
+  recurringDirty,
+  onToggleRecurring,
   onAddToCart,
+  savedMeals,
+  onSavedMealsChange,
   onRecalculate,
 }: {
   result: PlanningResult;
   addedToCart: boolean;
+  confirmGate: boolean;
+  recurringOverrides: Record<string, boolean>;
+  recurringDirty: boolean;
+  onToggleRecurring: (item: RecurringSuggestion) => void;
   onAddToCart: () => void;
+  savedMeals: SavedMeal[];
+  onSavedMealsChange?: (meals: SavedMeal[]) => void;
   onRecalculate: () => void;
 }) {
+  function toggleSavedMeal(meal: Meal) {
+    const existingIndex = savedMeals.findIndex((item) => item.id === meal.id);
+    const next =
+      existingIndex >= 0
+        ? savedMeals.filter((item) => item.id !== meal.id)
+        : [...savedMeals, { id: meal.id, title: meal.title }];
+    onSavedMealsChange?.(next);
+  }
+
   const products = result.selectedProducts.slice(0, 4);
-  const meals = result.mealPlan.slice(0, 6);
+  const meals = result.mealPlan.filter((meal) => meal.day === 1);
+  const over = result.budgetRemainingMinor < 0;
+  const incomplete = result.budgetStatus === "incomplete";
 
   return (
     <section className="max-w-[910px] pt-7">
-      <h3 className="text-lg font-semibold text-[#9a5b17]">Регулярні покупки</h3>
-      <div className="mt-5 grid gap-x-20 gap-y-6 md:grid-cols-2">
-        {products.map((product, index) => (
-          <ProductSuggestion
-            key={`${product.productId}-${index}`}
-            product={product}
-            variant={index % 2 === 0 ? "dairy" : "bottle"}
-          />
-        ))}
+      <EmptyHistoryBanner warnings={result.warnings} />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="text-lg font-semibold text-[#9a5b17]">Регулярні покупки</h3>
+        {recurringDirty && (
+          <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11px] font-medium text-warn-text">
+            потрібне перерахування
+          </span>
+        )}
       </div>
+      <div className="mt-5 grid gap-x-20 gap-y-6 md:grid-cols-2">
+        {products.map((product, index) => {
+          const rec = result.recurringItems.find((item) =>
+            product.recurringSuggestionIds.includes(item.id),
+          );
+          const selected = rec ? recurringOverrides[rec.id] ?? rec.selected : true;
+          return (
+            <ProductSuggestion
+              key={`${product.productId}-${index}`}
+              product={product}
+              variant={index % 2 === 0 ? "dairy" : "bottle"}
+              selected={selected}
+              togglable={Boolean(rec)}
+              onToggle={rec ? () => onToggleRecurring(rec) : undefined}
+            />
+          );
+        })}
+      </div>
+      {recurringDirty && (
+        <p className="mt-3 text-xs text-[#8b94a6]">
+          Вибір змінено — підтвердження кошика розблоковано після перерахунку.
+        </p>
+      )}
 
       <h3 className="mt-8 text-lg font-semibold text-[#9a5b17]">План харчування</h3>
-      <div className="mt-5 rounded-[24px] border border-[#d9deea] bg-white">
-        <div className="grid grid-cols-[64px_minmax(0,1fr)]">
-          <div className="border-r border-[#eef1f5]">
-            <div className="flex justify-center pt-[150px] text-lg font-semibold text-[#9a5b17]">
-              1
-            </div>
-          </div>
-          <div className="px-8 py-5">
-            {meals.map((meal, index) => (
-              <MealPreview
-                key={meal.id}
-                meal={meal}
-                products={[products[index % products.length], products[(index + 1) % products.length]].filter(Boolean)}
-                first={index === 0}
-              />
-            ))}
-          </div>
-        </div>
+      <div className="mt-5 rounded-[24px] border border-[#d9deea] bg-white px-8 py-5">
+        {meals.map((meal, index) => (
+          <MealPreview
+            key={meal.id}
+            meal={meal}
+            number={index + 1}
+            saved={savedMeals.some((item) => item.id === meal.id)}
+            onToggleSave={() => toggleSavedMeal(meal)}
+            first={index === 0}
+          />
+        ))}
       </div>
 
       <div className="mt-9">
@@ -512,10 +621,8 @@ function PlannerReadyView({
         <p className="mt-3 text-sm leading-6 text-[#202124]">
           Розрахункова сума: <span className="font-semibold">{formatUah(result.basketTotalMinor)}</span>{" "}
           (ліміт: {formatUah(result.budgetMinor)}) | Залишок бюджету:{" "}
-          <span className={result.budgetRemainingMinor >= 0 ? "text-success" : "text-danger"}>
-            {result.budgetRemainingMinor >= 0
-              ? formatUah(result.budgetRemainingMinor)
-              : `-${formatUah(Math.abs(result.budgetRemainingMinor))}`}
+          <span className={over ? "text-danger" : "text-success"}>
+            {over ? `-${formatUah(Math.abs(result.budgetRemainingMinor))}` : formatUah(result.budgetRemainingMinor)}
           </span>{" "}
           |
           <br />
@@ -523,6 +630,24 @@ function PlannerReadyView({
           <span className="text-brand">
             {result.savingsMinor === null ? "—" : formatUah(result.savingsMinor)}
           </span>
+        </p>
+
+        {over && (
+          <p className="mt-3 rounded-lg bg-danger-soft p-2 text-xs text-danger">
+            Бюджет перевищено на {formatUah(Math.abs(result.budgetRemainingMinor))}. Змініть
+            параметри або зменшіть період/кількість людей; порції та обмеження ми не зменшуємо
+            мовчки.
+          </p>
+        )}
+        {incomplete && (
+          <p className="mt-3 rounded-lg bg-warn-bg p-2 text-xs text-warn-text">
+            Кошик неповний — не всі інгредієнти підібрані. Підтвердження недоступне.
+          </p>
+        )}
+
+        <p className="mt-2 text-xs text-[#8b94a6]">
+          Сума покриває продукти плану та обрані регулярні/пет-товари. Доставка — окремо й у суму
+          не входить.
         </p>
 
         <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -537,12 +662,20 @@ function PlannerReadyView({
           <Button
             className="h-11 min-w-[260px]"
             onClick={onAddToCart}
-            disabled={addedToCart}
+            disabled={addedToCart || confirmGate}
           >
             {addedToCart ? "Додано в кошик Сільпо" : "Додати все в кошик Сільпо"}
             <span className="text-xl leading-none">↘</span>
           </Button>
         </div>
+        {confirmGate && (
+          <p className="mt-2 text-right text-xs text-[#8b94a6]">
+            Підтвердження недоступне:{" "}
+            {recurringDirty
+              ? "оновіть вибір регулярних покупок через «Перерахувати кошик»."
+              : "результат неповний або бюджет перевищено."}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -551,32 +684,43 @@ function PlannerReadyView({
 function ProductSuggestion({
   product,
   variant,
+  selected,
+  togglable,
+  onToggle,
 }: {
   product: ProductSelection;
   variant: "dairy" | "bottle";
+  selected: boolean;
+  togglable: boolean;
+  onToggle?: () => void;
 }) {
-  const oldPrice = Math.round(product.unitPriceMinor * (variant === "dairy" ? 1.55 : 1.42));
-  const discount = variant === "dairy" ? "-35%" : "-30%";
-
   return (
     <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-4">
       <ProductThumb variant={variant} />
       <div>
-        <p className="line-clamp-2 text-sm leading-5 text-[#252936]">
-          {variant === "bottle" ? "Віскі Jameson" : product.name}
-        </p>
+        <p className="line-clamp-2 text-sm leading-5 text-[#252936]">{product.name}</p>
         <p className="mt-0.5 text-xs text-[#8b94a6]">
-          {variant === "bottle" ? "0,7 л" : `${product.quantity * 100} г`}
+          {formatQuantity(product.quantity, product.sellingUnit)}
         </p>
-        <p className="mt-2 text-sm">
-          <span className="mr-1 text-[#252936] line-through">{formatUah(oldPrice)}</span>
-          <span className="rounded bg-brand px-1 py-0.5 text-[10px] font-semibold text-white">
-            {discount}
-          </span>
-        </p>
-        <p className="mt-0.5 text-base font-semibold">
-          {variant === "bottle" ? formatUah(62900) : formatUah(product.unitPriceMinor)}
-        </p>
+        <p className="mt-2 text-base font-semibold">{formatUah(product.unitPriceMinor)}</p>
+        {togglable ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            onClick={onToggle}
+            className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              selected
+                ? "border-brand bg-brand text-white"
+                : "border-line bg-white text-muted hover:border-brand hover:text-brand"
+            }`}
+          >
+            <span aria-hidden="true">{selected ? "✓" : ""}</span>
+            {selected ? "Включено" : "Виключено"}
+          </button>
+        ) : (
+          <p className="mt-1 text-xs text-[#8b94a6]">звичайна позиція плану</p>
+        )}
       </div>
     </div>
   );
@@ -584,70 +728,76 @@ function ProductSuggestion({
 
 function MealPreview({
   meal,
-  products,
+  number,
+  saved,
+  onToggleSave,
   first,
 }: {
   meal: Meal;
-  products: ProductSelection[];
+  number: number;
+  saved: boolean;
+  onToggleSave: () => void;
   first: boolean;
 }) {
-  const title =
-    meal.slot === "breakfast"
-      ? "Вівсянка з бананом"
-      : meal.slot === "lunch"
-        ? "Паста Карбонара"
-        : "Овочевий боул з сочевицею";
-  const kcal = meal.slot === "breakfast" ? 67 : meal.kcalPerServing ?? "—";
+  const kcalText = meal.kcalPerServing === null ? "невідомо" : `${meal.kcalPerServing} ккал`;
 
   return (
     <div className={first ? "" : "mt-7"}>
-      <span className="rounded-full bg-[#fff4e8] px-3 py-1 text-xs font-medium text-brand">
-        {meal.slot === "breakfast" ? "Сніданок" : meal.slot === "lunch" ? "Обід" : "Вечеря"}
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+          {number}
+        </span>
+        <span className="rounded-full bg-[#fff4e8] px-3 py-1 text-xs font-medium text-brand">
+          {meal.slot === "breakfast" ? "Сніданок" : meal.slot === "lunch" ? "Обід" : "Вечеря"}
+        </span>
+      </div>
       <div className="mt-3 rounded-[18px] border border-[#dfe3ee] p-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <span className="size-5 rounded-full bg-[#ffe1bd]" />
             <div>
-              <p className="font-medium text-[#252936]">{title}</p>
+              <p className="font-medium text-[#252936]">{meal.title}</p>
               <p className="mt-1 text-xs text-[#5f687a]">
-                Порцій: {meal.servings} | Калорії: {kcal} | КБЖУ: хз, хз, хз
+                Порцій: {meal.servings} · Калорії: {kcalText}
               </p>
             </div>
           </div>
           <button
             type="button"
-            className="group relative flex size-9 items-center justify-center text-[#6f737b]"
-            aria-label="Зберегти у FatSecret"
+            onClick={onToggleSave}
+            aria-pressed={saved}
+            aria-label={saved ? "Прибрати зі збережених у FatSecret" : "Зберегти у FatSecret"}
+            className={`group relative flex size-9 items-center justify-center transition-colors ${
+              saved ? "text-brand" : "text-[#6f737b] hover:text-brand"
+            }`}
           >
             <span
               className="absolute -right-3 -top-9 whitespace-nowrap rounded bg-white px-2.5 py-1.5 text-[10px] font-semibold text-[#344057] opacity-0 shadow-[0_6px_14px_rgba(16,24,40,0.12)] transition-opacity after:absolute after:bottom-[-4px] after:right-7 after:size-2 after:rotate-45 after:bg-white group-hover:opacity-100"
             >
-              Зберегти у FatSecret
+              {saved ? "Збережено у FatSecret" : "Зберегти у FatSecret"}
             </span>
-            <span className="text-3xl leading-none">♡</span>
+            <span className={`text-3xl leading-none transition-transform ${saved ? "scale-110" : ""}`}>
+              {saved ? "♥" : "♡"}
+            </span>
           </button>
         </div>
       </div>
 
-      <div className="ml-9 mt-2 space-y-2 border-l border-[#e6e9ef] pl-7">
-        {products.map((product) => (
-          <div key={`${meal.id}-${product.productId}`} className="grid grid-cols-[40px_minmax(0,1fr)_90px] gap-3">
-            <ProductThumb variant="dairy" small />
-            <div>
-              <p className="line-clamp-1 text-sm text-[#252936]">{product.name}</p>
-              <p className="text-xs text-[#8b94a6]">180 г | 9876 кк</p>
+      {meal.ingredientAmounts.length > 0 && (
+        <div className="ml-9 mt-2 space-y-2 border-l border-[#e6e9ef] pl-7">
+          {meal.ingredientAmounts.map((amount) => (
+            <div key={amount.ingredientId} className="grid grid-cols-[40px_minmax(0,1fr)_90px] gap-3">
+              <ProductThumb variant={meal.slot === "breakfast" ? "dairy" : "bottle"} small />
+              <div>
+                <p className="line-clamp-1 text-sm text-[#252936]">{amount.name}</p>
+              </div>
+              <div className="text-right text-sm font-semibold">
+                {formatQuantity(amount.quantity, amount.unit)}
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm">
-                <span className="mr-1 line-through">{formatUah(Math.round(product.unitPriceMinor * 1.55))}</span>
-                <span className="rounded bg-brand px-1 py-0.5 text-[10px] font-semibold text-white">-35%</span>
-              </p>
-              <p className="font-semibold">{formatUah(product.unitPriceMinor)}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
