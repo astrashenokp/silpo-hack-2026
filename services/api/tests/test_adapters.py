@@ -38,10 +38,14 @@ async def test_get_purchase_history_auth_error():
 async def test_get_user_context_reads_profile_history_and_cart_without_exposing_profile():
     payloads = {
         "silpo_get_my_profile": {"name": "Test User", "phone": "+380000000000"},
-        "silpo_get_my_family": {"pets": [{"species": "cat", "count": 1}]},
+        "silpo_get_my_family": {
+            "pets": [
+                {"species": "cat", "count": 1},
+                {"id": "pet-type-dog", "name": "", "slug": "dogs"},
+            ],
+        },
         "silpo_get_my_food_restrictions": {
-            "preferences": ["vegetarian"],
-            "restrictions": ["peanut-free"],
+            "restrictions": [{"slug": "peanut-free", "name": None}],
         },
         "silpo_get_my_online_orders": {"orders": [{"orderId": "online-1"}]},
         "silpo_get_my_offline_orders": {"orders": []},
@@ -82,9 +86,12 @@ async def test_get_user_context_reads_profile_history_and_cart_without_exposing_
     context = await get_user_context(FakeSession(), owner)
 
     assert context.model_dump(by_alias=True) == {
-        "preferences": ["vegetarian"],
+        "preferences": [],
         "restrictions": ["peanut-free"],
-        "pets": [{"species": "cat", "count": 1}],
+        "pets": [
+            {"species": "cat", "count": 1},
+            {"species": "dog", "count": 1},
+        ],
         "historyAvailable": True,
         "cartContextReady": True,
         "warnings": [],

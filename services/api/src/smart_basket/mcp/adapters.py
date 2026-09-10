@@ -73,22 +73,51 @@ def _find_value(payload: Any, *keys: str) -> Any:
 
 
 def _string_values(payload: Any, *keys: str) -> list[str]:
-    values = _list_payload(payload, *keys)
-    return list(dict.fromkeys(value for value in values if isinstance(value, str) and value))
+    values = _find_value(payload, *keys) if keys else payload
+    if not isinstance(values, list):
+        return []
+    normalized: list[str] = []
+    for value in values:
+        if isinstance(value, str):
+            label = value
+        elif isinstance(value, dict):
+            label = value.get("slug") or value.get("name")
+        else:
+            continue
+        if isinstance(label, str) and label:
+            normalized.append(label)
+    return list(dict.fromkeys(normalized))
 
 
 def _normalize_pets(payload: Any) -> list[Pet]:
     raw_pets = _list_payload(payload, "pets", "animals")
     counts: dict[str, int] = {}
-    aliases = {"cat": "cat", "кіт": "cat", "кішка": "cat", "dog": "dog", "пес": "dog", "собака": "dog"}
+    aliases = {
+        "cat": "cat", "cats": "cat", "кіт": "cat", "кішка": "cat",
+        "dog": "dog", "dogs": "dog", "пес": "dog", "собака": "dog",
+    }
     for item in raw_pets:
-        if not isinstance(item, dict):
+        if isinstance(item, str):
+            species_values = [item]
+            raw_count = 1
+        elif isinstance(item, dict):
+            species_values = [
+                item.get("species"),
+                item.get("type"),
+                item.get("animalType"),
+                item.get("slug"),
+                item.get("name"),
+            ]
+            raw_count = item.get("count", 1)
+        else:
             continue
-        raw_species = item.get("species") or item.get("type") or item.get("animalType")
-        species = aliases.get(str(raw_species).strip().lower())
+        species = next(
+            (aliases[str(value).strip().lower()] for value in species_values
+             if str(value).strip().lower() in aliases),
+            None,
+        )
         if species is None:
             continue
-        raw_count = item.get("count", 1)
         if isinstance(raw_count, bool) or not isinstance(raw_count, int) or raw_count < 1:
             continue
         counts[species] = counts.get(species, 0) + raw_count
