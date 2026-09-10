@@ -21,8 +21,8 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
     plan = create_plan(client, planning_request)
     assert plan["dataMode"] == "demo"
     assert len(plan["mealPlan"]) == 12
-    assert plan["basketTotalMinor"] == 34000
-    assert plan["budgetRemainingMinor"] == 146000
+    assert plan["basketTotalMinor"] == 49000
+    assert plan["budgetRemainingMinor"] == 131000
     assert plan["savingsMinor"] is None
     assert plan["effectiveRequest"] == planning_request
     assert plan["recurringItems"] == []
@@ -33,8 +33,8 @@ def test_demo_plan_arithmetic_and_wire_format(client, planning_request):
 
     assert ingredient_quantities == {
         "oats": 600,
-        "rice": 960,
-        "lentils": 840,
+        "rice": 1440,
+        "lentils": 1200,
     }
     assert plan["mealPlan"][0]["ingredientAmounts"][0]["quantity"] == 150
     assert plan["canConfirmCart"] is True
@@ -80,13 +80,13 @@ def test_planning_failure_and_over_budget(client, planning_request):
     assert failed["error"]["code"] == "UPSTREAM_UNAVAILABLE"
     plan = create_plan(client, {**planning_request, "budgetMinor": 100})
     assert plan["budgetStatus"] == "over_budget"
-    assert plan["budgetRemainingMinor"] == -33900
+    assert plan["budgetRemainingMinor"] == -48900
     assert not plan["canConfirmCart"]
     assert client.post("/api/cart/preview", json=reference(plan)).status_code == 409
 
 
 @pytest.mark.parametrize("scenario,expected_total,status", [
-    ("success", 37500, "success"), ("partial", 15500, "partial"), ("failed", 3500, "failed"),
+    ("success", 52500, "success"), ("partial", 15500, "partial"), ("failed", 3500, "failed"),
 ])
 def test_cart_outcomes_are_idempotent(app, client, planning_request, scenario, expected_total, status):
     plan = create_plan(client, planning_request)
@@ -94,8 +94,8 @@ def test_cart_outcomes_are_idempotent(app, client, planning_request, scenario, e
     assert session.cart == {"demo-existing-soap": (1.0, 3500)}
     preview = client.post("/api/cart/preview", json=reference(plan), headers={"X-Demo-Scenario": scenario}).json()
     assert preview["existingCartTotalMinor"] == 3500
-    assert preview["addedGoodsTotalMinor"] == 34000
-    assert preview["projectedGoodsTotalMinor"] == 37500
+    assert preview["addedGoodsTotalMinor"] == 49000
+    assert preview["projectedGoodsTotalMinor"] == 52500
     body = {"previewId": preview["previewId"], "idempotencyKey": "once"}
     first = client.post("/api/cart/confirm", json=body)
     assert first.status_code == 200

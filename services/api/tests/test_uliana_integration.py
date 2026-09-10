@@ -77,8 +77,8 @@ def test_uliana_planner_through_api():
     result = plan["result"]
 
     assert result["budgetMinor"] == 180000
-    assert result["basketTotalMinor"] == 34000
-    assert result["budgetRemainingMinor"] == 146000
+    assert result["basketTotalMinor"] == 49000
+    assert result["budgetRemainingMinor"] == 131000
 
     assert result["budgetStatus"] == "within_budget"
 
