@@ -106,9 +106,9 @@
       "id": "synthetic-day-2-breakfast-1",
       "day": 2,
       "slot": "breakfast",
-      "title": "Oatmeal breakfast bowl",
+      "title": "Warm oat porridge with fruit",
       "servings": 3,
-      "kcalPerServing": 420.0,
+      "kcalPerServing": 430.0,
       "ingredientIds": [
         "oats"
       ],
@@ -128,9 +128,9 @@
       "id": "synthetic-day-2-lunch-2",
       "day": 2,
       "slot": "lunch",
-      "title": "Rice and lentil lunch bowl",
+      "title": "Rice pilaf with lentils",
       "servings": 3,
-      "kcalPerServing": 680.0,
+      "kcalPerServing": 670.0,
       "ingredientIds": [
         "rice",
         "lentils"
@@ -139,13 +139,13 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 240.0,
+          "quantity": 210.0,
           "unit": "g"
         },
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 90.0,
+          "quantity": 120.0,
           "unit": "g"
         }
       ],
@@ -157,9 +157,9 @@
       "id": "synthetic-day-2-dinner-3",
       "day": 2,
       "slot": "dinner",
-      "title": "Lentil dinner stew",
+      "title": "Lentil and rice soup",
       "servings": 3,
-      "kcalPerServing": 760.0,
+      "kcalPerServing": 730.0,
       "ingredientIds": [
         "lentils",
         "rice"
@@ -168,13 +168,13 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 210.0,
+          "quantity": 180.0,
           "unit": "g"
         },
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 120.0,
+          "quantity": 150.0,
           "unit": "g"
         }
       ],
@@ -186,9 +186,9 @@
       "id": "synthetic-day-3-breakfast-1",
       "day": 3,
       "slot": "breakfast",
-      "title": "Oatmeal breakfast bowl",
+      "title": "Oat breakfast cup",
       "servings": 3,
-      "kcalPerServing": 420.0,
+      "kcalPerServing": 410.0,
       "ingredientIds": [
         "oats"
       ],
@@ -208,9 +208,9 @@
       "id": "synthetic-day-3-lunch-2",
       "day": 3,
       "slot": "lunch",
-      "title": "Rice and lentil lunch bowl",
+      "title": "Rice bowl with lentil topping",
       "servings": 3,
-      "kcalPerServing": 680.0,
+      "kcalPerServing": 690.0,
       "ingredientIds": [
         "rice",
         "lentils"
@@ -219,13 +219,13 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 240.0,
+          "quantity": 270.0,
           "unit": "g"
         },
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 90.0,
+          "quantity": 60.0,
           "unit": "g"
         }
       ],
@@ -237,9 +237,9 @@
       "id": "synthetic-day-3-dinner-3",
       "day": 3,
       "slot": "dinner",
-      "title": "Lentil dinner stew",
+      "title": "Hearty lentil skillet",
       "servings": 3,
-      "kcalPerServing": 760.0,
+      "kcalPerServing": 780.0,
       "ingredientIds": [
         "lentils",
         "rice"
@@ -248,13 +248,13 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 210.0,
+          "quantity": 240.0,
           "unit": "g"
         },
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 120.0,
+          "quantity": 90.0,
           "unit": "g"
         }
       ],
@@ -266,7 +266,7 @@
       "id": "synthetic-day-4-breakfast-1",
       "day": 4,
       "slot": "breakfast",
-      "title": "Oatmeal breakfast bowl",
+      "title": "Simple overnight oats",
       "servings": 3,
       "kcalPerServing": 420.0,
       "ingredientIds": [
@@ -288,9 +288,9 @@
       "id": "synthetic-day-4-lunch-2",
       "day": 4,
       "slot": "lunch",
-      "title": "Rice and lentil lunch bowl",
+      "title": "Balanced rice and lentils",
       "servings": 3,
-      "kcalPerServing": 680.0,
+      "kcalPerServing": 700.0,
       "ingredientIds": [
         "rice",
         "lentils"
@@ -299,13 +299,13 @@
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 240.0,
+          "quantity": 180.0,
           "unit": "g"
         },
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 90.0,
+          "quantity": 150.0,
           "unit": "g"
         }
       ],
@@ -317,9 +317,9 @@
       "id": "synthetic-day-4-dinner-3",
       "day": 4,
       "slot": "dinner",
-      "title": "Lentil dinner stew",
+      "title": "Lentil rice supper bowl",
       "servings": 3,
-      "kcalPerServing": 760.0,
+      "kcalPerServing": 740.0,
       "ingredientIds": [
         "lentils",
         "rice"
@@ -328,13 +328,13 @@
         {
           "ingredientId": "lentils",
           "name": "Dry lentils",
-          "quantity": 210.0,
+          "quantity": 150.0,
           "unit": "g"
         },
         {
           "ingredientId": "rice",
           "name": "Dry rice",
-          "quantity": 120.0,
+          "quantity": 180.0,
           "unit": "g"
         }
       ],
