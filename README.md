@@ -43,8 +43,10 @@ A web page where users set a budget, planning period, household size, food prefe
 
 ## Repository status
 
-Rina's **Python demo API is implemented** with mock planning, product matching,
-cart preview/confirmation and FatSecret export outcomes. Start with the
+Rina's **Python demo API is implemented** with product matching, cart
+preview/confirmation and FatSecret export outcomes. Sofiia's meal-planning module
+now supplies synthetic meals/ingredients through Uliana's pipeline while live
+Edamam verification remains credential-gated. Start with the
 [backend launch guide](services/api/README.md), [synthetic examples](fixtures/README.md)
 and [Rina's handoff](docs/handoffs/rina.md). The frontend and live provider/AI modules
 are still pending their owners. No external credentials are required for the demo.
