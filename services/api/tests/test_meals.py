@@ -1,6 +1,6 @@
 import pytest
 
-from smart_basket.meals import build_meal_plan
+from smart_basket.meals import build_meal_plan, supported_labels
 from smart_basket.meals.edamam import (
     EdamamSettings,
     EdamamUnavailable,
@@ -421,3 +421,12 @@ def test_vegan_plus_restrictions_deduplication_in_edamam_payload():
     )
     assert filters.preferences == ("vegan",)
     assert set(filters.edamam_health_labels) == {"vegan", "dairy-free", "egg-free"}
+
+
+def test_supported_labels_returns_complete_preference_and_restriction_lists():
+    labels = supported_labels()
+    assert set(labels["preferences"]) == {"vegetarian", "vegan", "paleo", "high-protein", "high-fiber"}
+    assert set(labels["restrictions"]) == {
+        "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
+        "shellfish-free", "soy-free", "egg-free", "pork-free",
+    }
