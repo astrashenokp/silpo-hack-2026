@@ -1,0 +1,80 @@
+{
+  "operation": "GET /api/filters",
+  "method": "TRACE",
+  "path_template": "/api/filters",
+  "fingerprint": "03de3b07",
+  "case_id": "BfBl3K",
+  "code_sample": "curl -X TRACE -H 'Cookie: [Filtered]' http://127.0.0.1:8000/api/filters",
+  "sequence": [
+    {
+      "method": "TRACE",
+      "url": "http://127.0.0.1:8000/api/filters",
+      "url_template": "http://127.0.0.1:8000/api/filters",
+      "headers": {
+        "User-Agent": "schemathesis/4.26.1",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "Cookie": "[Filtered]",
+        "X-Schemathesis-TestCaseId": "BfBl3K",
+        "Content-Length": "0"
+      },
+      "response": {
+        "status_code": 405,
+        "headers": {
+          "date": "Fri, 11 Sep 2026 09:23:42 GMT",
+          "server": "uvicorn",
+          "content-length": "80",
+          "content-type": "application/json",
+          "x-data-mode": "demo",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":{\"code\":\"HTTP_ERROR\",\"message\":\"Method Not Allowed\",\"retryable\":false}}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "unsupported_method",
+          "status": "failure",
+          "message": "Unsupported methods\n\nTRACE returned 405 without required `Allow` header\n\nAdd `Allow` header listing supported methods (required by RFC 9110)"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 2.200000380980782e-06,
+          "mode": "negative"
+        },
+        "components": {},
+        "phase": {
+          "name": "coverage",
+          "data": {
+            "type": "CoveragePhaseData",
+            "description": "Unspecified HTTP method: TRACE",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "scenario": "unspecified_http_method"
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/filters",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {
+        "Cookie": "[Filtered]"
+      },
+      "cookies": {},
+      "case_body": {
+        "encoding": "none"
+      },
+      "media_type": null,
+      "parent_index": null
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "operation": "POST /api/plans",
+  "method": "POST",
+  "path_template": "/api/plans",
+  "fingerprint": "3a85d73e",
+  "case_id": "coGgfd",
+  "code_sample": "curl -X POST -H 'Cookie: [Filtered]' -H 'X-Demo-Scenario;' -H 'Content-Type: application/json' -d '{\"budgetMinor\": 1, \"caloriesPerPersonPerDay\": 1, \"currency\": \"UAH\", \"days\": 1, \"includeRecurring\": false, \"notes\": \"\", \"people\": 1, \"pets\": [], \"preferences\": [], \"restrictions\": []}' http://127.0.0.1:8000/api/plans",
+  "sequence": [
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:8000/api/plans",
+      "url_template": "http://127.0.0.1:8000/api/plans",
+      "headers": {
+        "User-Agent": "schemathesis/4.26.1",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "Cookie": "[Filtered]",
+        "X-Demo-Scenario": "",
+        "X-Schemathesis-TestCaseId": "coGgfd",
+        "Content-Type": "application/json",
+        "Content-Length": "182"
+      },
+      "response": {
+        "status_code": 400,
+        "headers": {
+          "date": "Fri, 11 Sep 2026 09:23:43 GMT",
+          "server": "uvicorn",
+          "content-length": "110",
+          "content-type": "application/json",
+          "x-data-mode": "demo",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"Supported demo scenarios: failed, success.\",\"retryable\":false}}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "positive_data_acceptance",
+          "status": "failure",
+          "message": "API rejected schema-compliant request\n\nValid data should have been accepted\nExpected: 2xx, 401, 403, 404, 409, 5xx"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 0.004885700000158977,
+          "mode": "positive"
+        },
+        "components": {
+          "HEADER": "positive",
+          "BODY": "positive"
+        },
+        "phase": {
+          "name": "fuzzing",
+          "data": {
+            "type": "FuzzingPhaseData",
+            "description": "Positive test case",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "mutations": []
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {}
+      },
+      "path": "/api/plans",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {
+        "Cookie": "[Filtered]",
+        "X-Demo-Scenario": ""
+      },
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "budgetMinor": 1,
+          "caloriesPerPersonPerDay": 1,
+          "currency": "UAH",
+          "days": 1,
+          "includeRecurring": false,
+          "notes": "",
+          "people": 1,
+          "pets": [],
+          "preferences": [],
+          "restrictions": []
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}

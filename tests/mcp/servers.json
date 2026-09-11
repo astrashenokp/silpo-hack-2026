@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "node",
+      "args": ["node_modules/@playwright/mcp/cli.js", "--headless", "--isolated"]
+    },
+    "chrome-devtools": {
+      "command": "node",
+      "args": ["node_modules/chrome-devtools-mcp/build/src/bin/chrome-devtools-mcp.js", "--headless", "--isolated"]
+    },
+    "silpo": {
+      "type": "http",
+      "url": "https://mcp.silpo.ua/mcp"
+    }
+  }
+}

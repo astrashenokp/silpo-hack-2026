@@ -1,0 +1,104 @@
+{
+  "operation": "POST /api/plans",
+  "method": "TRACE",
+  "path_template": "/api/plans",
+  "fingerprint": "703e8ea4",
+  "case_id": "lYYVIb",
+  "code_sample": "curl -X TRACE -H 'X-Demo-Scenario: success' -H 'Cookie: [Filtered]' -H 'Content-Type: application/json' -d '{\"budgetMinor\": 1, \"caloriesPerPersonPerDay\": 1, \"cookingTimeLimit\": 5, \"currency\": \"UAH\", \"days\": 1, \"healthConditions\": [], \"includeRecurring\": false, \"notes\": \"\", \"people\": 1, \"pets\": [], \"preferences\": [], \"restrictions\": []}' http://127.0.0.1:8000/api/plans",
+  "sequence": [
+    {
+      "method": "TRACE",
+      "url": "http://127.0.0.1:8000/api/plans",
+      "url_template": "http://127.0.0.1:8000/api/plans",
+      "headers": {
+        "User-Agent": "schemathesis/4.26.1",
+        "Accept-Encoding": "gzip, deflate",
+        "Accept": "*/*",
+        "Connection": "keep-alive",
+        "X-Demo-Scenario": "success",
+        "Cookie": "[Filtered]",
+        "X-Schemathesis-TestCaseId": "lYYVIb",
+        "Content-Type": "application/json",
+        "Content-Length": "229"
+      },
+      "response": {
+        "status_code": 405,
+        "headers": {
+          "date": "Fri, 11 Sep 2026 09:23:42 GMT",
+          "server": "uvicorn",
+          "content-length": "80",
+          "content-type": "application/json",
+          "x-data-mode": "demo",
+          "cache-control": "no-store"
+        },
+        "body": "{\"error\":{\"code\":\"HTTP_ERROR\",\"message\":\"Method Not Allowed\",\"retryable\":false}}"
+      },
+      "link": null,
+      "checks": [
+        {
+          "name": "unsupported_method",
+          "status": "failure",
+          "message": "Unsupported methods\n\nTRACE returned 405 without required `Allow` header\n\nAdd `Allow` header listing supported methods (required by RFC 9110)"
+        }
+      ],
+      "meta": {
+        "generation": {
+          "time": 1.5199999324977398e-05,
+          "mode": "negative"
+        },
+        "components": {
+          "HEADER": "positive",
+          "BODY": "positive"
+        },
+        "phase": {
+          "name": "coverage",
+          "data": {
+            "type": "CoveragePhaseData",
+            "description": "Unspecified HTTP method: TRACE",
+            "location": null,
+            "parameter": null,
+            "parameter_location": null,
+            "scenario": "unspecified_http_method"
+          }
+        },
+        "pool_draws": [],
+        "pool_misses": [],
+        "semantic_draws": [],
+        "dictionary_draws": [],
+        "constants_draws": [],
+        "raw_containers": {
+          "HEADER": {
+            "X-Demo-Scenario": "success"
+          }
+        }
+      },
+      "path": "/api/plans",
+      "path_parameters": {},
+      "query": {},
+      "case_headers": {
+        "X-Demo-Scenario": "success",
+        "Cookie": "[Filtered]"
+      },
+      "cookies": {},
+      "case_body": {
+        "encoding": "json",
+        "value": {
+          "budgetMinor": 1,
+          "caloriesPerPersonPerDay": 1,
+          "cookingTimeLimit": 5,
+          "currency": "UAH",
+          "days": 1,
+          "healthConditions": [],
+          "includeRecurring": false,
+          "notes": "",
+          "people": 1,
+          "pets": [],
+          "preferences": [],
+          "restrictions": []
+        }
+      },
+      "media_type": "application/json",
+      "parent_index": null
+    }
+  ]
+}
