@@ -9,12 +9,88 @@ from typing import Any, TypeVar
 import anyio
 
 from smart_basket.demo import DemoCatalog
-from smart_basket.mcp.adapters import get_purchase_history, get_user_context, search_products
+from smart_basket.mcp.adapters import (
+    get_product_details as get_silpo_product_details,
+    get_purchase_history,
+    get_user_context,
+    product_write_metadata,
+    search_products,
+)
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.schemas import ProductCandidate
 
 
 T = TypeVar("T")
+
+
+def _flatten_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for child in value.values() for text in _flatten_strings(child)]
+    if isinstance(value, list):
+        return [text for child in value for text in _flatten_strings(child)]
+    return []
+
+
+def _named_values(payload: Any, names: set[str]) -> list[Any]:
+    values: list[Any] = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            normalized = key.replace("_", "").replace("-", "").casefold()
+            if normalized in names:
+                values.append(value)
+            values.extend(_named_values(value, names))
+    elif isinstance(payload, list):
+        for value in payload:
+            values.extend(_named_values(value, names))
+    return values
+
+
+def restriction_check_from_details(payload: Any, restrictions: list[str]) -> str:
+    """Verify restrictions from explicit provider labels or a non-empty composition."""
+    if not restrictions:
+        return "pass"
+    label_values = _named_values(
+        payload,
+        {"healthlabels", "dietarylabels", "dietlabels"},
+    )
+    labels = {
+        label.strip().casefold().replace("_", "-").replace(" ", "-")
+        for value in label_values
+        for label in _flatten_strings(value)
+        if label.strip()
+    }
+    composition_values = _named_values(
+        payload,
+        {"ingredients", "ingredientlist", "composition", "components", "склад"},
+    )
+    composition = " ".join(
+        _flatten_strings(composition_values)
+    ).casefold()
+    forbidden = {
+        "fish-free": (
+            "fish", "tuna", "salmon", "anchov", "herring",
+            "риб", "тун", "лосос", "анчоус", "оселед",
+        ),
+        "red-meat-free": (
+            "beef", "veal", "pork", "lamb", "mutton", "duck", "goose",
+            "ялович", "теляч", "свин", "баранин", "качк", "гуск",
+        ),
+    }
+    checks: list[str] = []
+    for restriction in restrictions:
+        if restriction in labels:
+            checks.append("pass")
+        elif restriction in forbidden and composition:
+            checks.append(
+                "fail" if any(token in composition for token in forbidden[restriction]) else "pass"
+            )
+        else:
+            checks.append("unknown")
+    if "fail" in checks:
+        return "fail"
+    return "pass" if checks and all(check == "pass" for check in checks) else "unknown"
 
 
 def _run_async(factory: Callable[[], Awaitable[T]]) -> T:
@@ -33,6 +109,7 @@ class SessionCatalog:
     def __init__(self, demo: DemoCatalog | None = None):
         self.demo = demo or DemoCatalog()
         self._candidates: dict[tuple[str, str], ProductCandidate] = {}
+        self._details: dict[tuple[str, str], Any] = {}
 
     QUERY_ALIASES = {
         "oats": ("вівсяні пластівці", "вівсянка", "oats"),
@@ -89,10 +166,25 @@ class SessionCatalog:
                     tool_schemas=owner.silpo_tool_schemas,
                     owner=owner,
                 )
-                for candidate in result.products:
+                for candidate in result.products[:2]:
                     found.setdefault(candidate.id, candidate)
+            reviewed = list(found.values())[:6]
+            for candidate in reviewed:
+                details = await get_silpo_product_details(
+                    mcp_session, candidate.id, owner.silpo_branch_id
+                )
+                self._details[(owner.id, candidate.id)] = details
+                metadata = product_write_metadata(details)
+                if metadata:
+                    with owner.lock:
+                        for product_id, coordinates in metadata.items():
+                            existing = owner.silpo_product_write_metadata.get(product_id, {})
+                            owner.silpo_product_write_metadata[product_id] = {
+                                **existing,
+                                **coordinates,
+                            }
         candidates = []
-        for candidate in found.values():
+        for candidate in reviewed:
             normalized = candidate.model_copy(update={"restriction_check": "pass"})
             self._candidates[(owner.id, normalized.id)] = normalized.model_copy(deep=True)
             candidates.append(normalized)
@@ -116,5 +208,11 @@ class SessionCatalog:
             return "pass"
         if product.source == "synthetic":
             return self.demo.check_restrictions(product, restrictions)
-        # The normalized Silpo payload currently has no composition evidence.
-        return "unknown"
+        details = next(
+            (
+                payload for (owner_id, product_id), payload in self._details.items()
+                if product_id == product.id
+            ),
+            None,
+        )
+        return restriction_check_from_details(details, restrictions)
