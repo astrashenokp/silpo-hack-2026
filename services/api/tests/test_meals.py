@@ -421,7 +421,10 @@ def test_paleo_preference_maps_to_edamam_health_label():
 
 
 def test_new_restrictions_map_to_edamam_health_labels():
-    for label in ("gluten-free", "dairy-free", "tree-nut-free", "shellfish-free", "soy-free", "egg-free", "pork-free"):
+    for label in (
+        "gluten-free", "dairy-free", "tree-nut-free", "shellfish-free",
+        "soy-free", "egg-free", "pork-free", "fish-free", "red-meat-free",
+    ):
         filters = resolve_meal_filters(
             request(preferences=[], restrictions=[label]),
             context(),
@@ -516,4 +519,5 @@ def test_supported_labels_returns_complete_preference_and_restriction_lists():
     assert set(labels["restrictions"]) == {
         "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
         "shellfish-free", "soy-free", "egg-free", "pork-free",
+        "fish-free", "red-meat-free",
     }

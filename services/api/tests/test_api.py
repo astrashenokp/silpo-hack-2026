@@ -406,4 +406,5 @@ def test_filters_endpoint_returns_all_supported_labels(client):
     assert set(body["restrictions"]) == {
         "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
         "shellfish-free", "soy-free", "egg-free", "pork-free",
+        "fish-free", "red-meat-free",
     }

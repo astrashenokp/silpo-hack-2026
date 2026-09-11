@@ -3,7 +3,11 @@ from contextlib import asynccontextmanager
 import pytest
 
 from conftest import create_plan
-from smart_basket.catalog.live import SessionCatalog, _run_async
+from smart_basket.catalog.live import (
+    SessionCatalog,
+    _run_async,
+    restriction_check_from_details,
+)
 from smart_basket.cart.service import normalize_cart_snapshot, snapshot_total
 from smart_basket.core import Session
 from smart_basket.schemas import ProductCandidate, ProductSearchResponse
@@ -33,6 +37,19 @@ def test_cart_snapshot_tracks_unpriced_lines_for_stale_detection():
     assert snapshot_total(snapshot) == 200
 
 
+@pytest.mark.parametrize(("payload", "expected"), [
+    ({"healthLabels": ["FISH_FREE", "RED_MEAT_FREE"]}, "pass"),
+    ({"composition": "рисова крупа, вода, сіль"}, "pass"),
+    ({"ingredients": "рис, тунець, сіль"}, "fail"),
+    ({"description": "звичайний рис"}, "unknown"),
+    ({}, "unknown"),
+])
+def test_live_restriction_check_requires_provider_evidence(payload, expected):
+    assert restriction_check_from_details(
+        payload, ["fish-free", "red-meat-free"]
+    ) == expected
+
+
 @pytest.mark.asyncio
 async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch):
     owner = Session("owner")
@@ -55,15 +72,33 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
             restriction_check="unknown", regular_price_minor=None,
             source="silpo", checked_at="2026-09-11T00:00:00+00:00",
         )
+        owner.silpo_product_write_metadata[product.id] = {
+            "productId": product.id,
+            "companyId": "company-from-search",
+            "branchId": branch_id,
+        }
         return ProductSearchResponse(query=query, products=[product], warnings=[])
+
+    async def fake_details(_session, product_id, branch_id):
+        assert branch_id == "branch-1"
+        return {
+            "productId": product_id,
+            "branchId": branch_id,
+            "composition": "рисова крупа",
+        }
 
     monkeypatch.setattr("smart_basket.catalog.live.get_mcp_session", fake_session)
     monkeypatch.setattr("smart_basket.catalog.live.search_products", fake_search)
+    monkeypatch.setattr("smart_basket.catalog.live.get_silpo_product_details", fake_details)
     products = await SessionCatalog()._search(owner, "rice")
 
     assert queries == ["крупа рисова", "рис", "rice"]
     assert len(products) == 3
     assert all(product.restriction_check == "pass" for product in products)
+    assert all(
+        metadata["companyId"] == "company-from-search"
+        for metadata in owner.silpo_product_write_metadata.values()
+    )
 
 
 def _make_plan_live(app, client, planning_request):

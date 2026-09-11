@@ -8,7 +8,7 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Ksiusha | Not reported | — | Input flow on mocks 7th | — |
 | Alina | Not reported | — | Result flow on mocks 7th | — |
 | Arina | Silpo OAuth/read path verified; September 11 | [Handoff](handoffs/arina.md), local implementation | Support the final authorized real-cart acceptance check | OAuth, tools/list, context, product search and the provider write boundary are connected. |
-| Rina | Live Silpo catalog/cart flow implemented; September 11 | [Handoff](handoffs/rina.md), local implementation | Run one user-authorized live cart acceptance check | Preview, revalidation, schema-driven write, idempotency and read-back are automated; real-cart QA remains. |
+| Rina | Live Silpo catalog/cart flow implemented; September 11 | [Handoff](handoffs/rina.md), local implementation | Retry the authorized live cart check when provider inventory search recovers | Preview, revalidation, schema-driven write, idempotency and read-back are automated; live search currently returns empty arrays, so no safe confirmation is available. |
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
 | Sofiia | Ready to connect on synthetic meals; September 10 | [Handoff](handoffs/sofiia.md), local implementation | Live Edamam account/field verification next | Needs Edamam credentials/account limits and export permissions; independent synthetic module is complete and tested. |
 | Vika | Not reported | — | Algorithm fixtures 7th | — |
