@@ -1,6 +1,6 @@
 import pytest
 
-from smart_basket.meals import build_meal_plan, supported_labels
+from smart_basket.meals import build_meal_plan, replan_meal_plan, supported_labels
 from smart_basket.meals.edamam import (
     EdamamSettings,
     EdamamUnavailable,
@@ -324,6 +324,35 @@ def test_requested_edamam_source_can_fail_without_fallback(monkeypatch):
         build_meal_plan(request(), context())
 
 
+def test_replan_requested_edamam_source_uses_synthetic_fallback(monkeypatch):
+    initial = build_meal_plan(request(days=1, people=1), context())
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+
+    result = replan_meal_plan(
+        request(days=1, people=1),
+        context(),
+        previous_meals=initial["meals"],
+        reason="upgrade_plan",
+    )
+
+    assert result["source"] == "synthetic"
+    assert "synthetic meal-level replan fallback" in result["warnings"][0]
+
+
+def test_replan_requested_edamam_source_can_fail_without_fallback(monkeypatch):
+    initial = build_meal_plan(request(days=1, people=1), context())
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+    monkeypatch.setenv("EDAMAM_SYNTHETIC_FALLBACK", "false")
+
+    with pytest.raises(EdamamUnavailable):
+        replan_meal_plan(
+            request(days=1, people=1),
+            context(),
+            previous_meals=initial["meals"],
+            reason="upgrade_plan",
+        )
+
+
 def test_unknown_meal_source_fails_explicitly(monkeypatch):
     monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "typo")
 
@@ -517,3 +546,100 @@ def test_supported_labels_returns_complete_preference_and_restriction_lists():
         "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
         "shellfish-free", "soy-free", "egg-free", "pork-free",
     }
+
+
+def test_reduce_cost_replan_preserves_requested_meal_slots():
+    initial = build_meal_plan(request(days=2, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=2, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="reduce_cost",
+        preserve_meal_slots=["breakfast"],
+    )
+
+    original_breakfasts = [
+        meal for meal in initial["meals"]
+        if meal.slot == "breakfast"
+    ]
+    replanned_breakfasts = [
+        meal for meal in replanned["meals"]
+        if meal.slot == "breakfast"
+    ]
+    assert replanned_breakfasts == original_breakfasts
+
+    initial_lentils = next(
+        ingredient.quantity for ingredient in initial["ingredients"]
+        if ingredient.id == "lentils"
+    )
+    replanned_lentils = next(
+        ingredient.quantity for ingredient in replanned["ingredients"]
+        if ingredient.id == "lentils"
+    )
+    assert replanned_lentils < initial_lentils
+    assert replanned["nutrition_summary"].daily
+    assert replanned["source"] == "synthetic"
+
+
+def test_replace_ingredient_replan_removes_requested_ingredient():
+    initial = build_meal_plan(request(days=1, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=1, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="replace_ingredient",
+        replace_ingredient="Dry rice",
+    )
+
+    assert "rice" not in {ingredient.id for ingredient in replanned["ingredients"]}
+    assert {ingredient.id for ingredient in replanned["ingredients"]} == {"oats", "lentils"}
+    for meal in replanned["meals"]:
+        assert "rice" not in meal.ingredient_ids
+        assert all(amount.name != "Dry rice" for amount in meal.ingredient_amounts)
+
+
+def test_replace_ingredient_takes_precedence_over_preserving_conflicting_slot():
+    initial = build_meal_plan(request(days=1, people=1), context())
+    original_lunch = next(meal for meal in initial["meals"] if meal.slot == "lunch")
+
+    replanned = replan_meal_plan(
+        request(days=1, people=1),
+        context(),
+        previous_meals=initial["meals"],
+        reason="replace_ingredient",
+        preserve_meal_slots=["lunch"],
+        replace_ingredient="Dry rice",
+    )
+
+    replanned_lunch = next(meal for meal in replanned["meals"] if meal.slot == "lunch")
+    assert replanned_lunch != original_lunch
+    assert "rice" not in replanned_lunch.ingredient_ids
+    assert "rice" not in {ingredient.id for ingredient in replanned["ingredients"]}
+
+
+def test_upgrade_plan_replan_changes_unpreserved_meals_and_keeps_constraints():
+    initial = build_meal_plan(request(days=2, people=3, calories=2000), context())
+
+    replanned = replan_meal_plan(
+        request(days=2, people=3, calories=2000),
+        context(),
+        previous_meals=initial["meals"],
+        reason="upgrade_plan",
+        preserve_meal_slots=["breakfast"],
+    )
+
+    assert [
+        meal for meal in replanned["meals"] if meal.slot == "breakfast"
+    ] == [
+        meal for meal in initial["meals"] if meal.slot == "breakfast"
+    ]
+    assert {
+        meal.title for meal in replanned["meals"] if meal.slot != "breakfast"
+    } != {
+        meal.title for meal in initial["meals"] if meal.slot != "breakfast"
+    }
+    assert all(meal.servings == 3 for meal in replanned["meals"])
+    assert replanned["nutrition_summary"].calorie_target_kcal_per_person_per_day == 2000
+    assert {ingredient.id for ingredient in replanned["ingredients"]} <= {"oats", "rice", "lentils"}
