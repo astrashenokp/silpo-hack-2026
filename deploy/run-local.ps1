@@ -112,13 +112,25 @@ print("\n".join(project["dependencies"] + project["optional-dependencies"]["test
   Save-Started $started
 }
 
+# Rebuild when there is no build or a source, fixture or config file is newer than it
+# (pages and API_BASE_URL are fixed at build time).
+function Test-BuildStale {
+  $buildId = Join-Path $web ".next\BUILD_ID"
+  if (-not (Test-Path $buildId)) { return $true }
+  $builtAt = (Get-Item $buildId).LastWriteTime
+  $inputs = @(Get-ChildItem (Join-Path $web "src"), (Join-Path $root "fixtures") -Recurse -File) +
+    @(Get-Item (Join-Path $web "next.config.ts"), (Join-Path $web "package-lock.json"))
+  return [bool]($inputs | Where-Object { $_.LastWriteTime -gt $builtAt } | Select-Object -First 1)
+}
+
 if (Test-Url $webHealth) {
   Write-Host "Web app already running: http://localhost:3000"
+  if (Test-BuildStale) { Write-Warning "The running web app is older than the sources; run -Stop, then start again to rebuild." }
 } else {
   Push-Location $web
   try {
     if (-not (Test-Path "node_modules")) { Write-Host "Installing frontend dependencies ..."; & npm.cmd ci --no-audit --no-fund }
-    if (-not (Test-Path ".next\BUILD_ID")) { Write-Host "Building the frontend ..."; & npm.cmd run build }
+    if (Test-BuildStale) { Write-Host "Building the frontend ..."; & npm.cmd run build }
   } finally { Pop-Location }
   $webProcess = Start-Background $web "npm.cmd run start" (Join-Path $env:TEMP "smart-basket-web.log")
   $started += $webProcess.Id
