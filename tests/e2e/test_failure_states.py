@@ -114,8 +114,6 @@ def test_recalculation_invalidates_previous_cart_preview(client, planning_reques
     assert_error(response, 409, "STALE_PLAN")
 
 
-@pytest.mark.xfail(raises=AssertionError,
-                   reason="BUG-003: recalculation fails with PLANNER_FAILED (docs/qa/bugs.md)")
 def test_recalculation_returns_next_version(client, planning_request):
     result = completed_result(client, planning_request)
     response = recalculate(client, result)

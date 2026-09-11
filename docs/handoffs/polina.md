@@ -5,24 +5,34 @@ submission status on September 14.
 
 - **Delivery date:** in progress. Early intake September 11; release target September 13;
   recording and submission September 14.
-- **PR / commit:** branch `feature/polina-integration-qa`, intake of `main` @ `0ef7fbb`.
+- **PR / commit:** intake of `main` @ `0ef7fbb` (PR #18), QA toolkit (PR #19), round 2 on
+  branch `feature/polina-qa-round2`.
 - **Receiving teammates:** the whole team.
-- **Completed so far:** intake run 1 (setup, backend and frontend checks, HTTP scenarios);
-  automated end-to-end suite; CI workflow; deployment draft; bug list with owners.
-- **Main files:** `tests/e2e/`, `docs/qa/test-results.md`, `docs/qa/bugs.md`, `deploy/`,
-  `.github/workflows/ci.yml`.
+- **Completed so far:** runs 1–3 (setup, backend and frontend checks, HTTP scenarios, UI
+  walk-through, load and security review); end-to-end suite; QA toolkit; CI workflow;
+  deployment draft and local launcher; demo script; submission checklist; bug list with owners.
+- **Main files:** `tests/`, `docs/qa/` (test results, bugs, tools, demo script, submission
+  checklist), `deploy/` (runbook, Docker, `run-local.ps1`), `.github/workflows/ci.yml`.
 - **Checks and results:** [test results](../qa/test-results.md).
-- **Known issues:** [bug list](../qa/bugs.md). Open blockers: BUG-001 (clean setup) and
-  BUG-002 (UI not connected to the API).
+- **Known issues:** [bug list](../qa/bugs.md). BUG-001 and BUG-003 are fixed and retested.
+  Open blocker: BUG-002 (UI not connected to the API); for the video also BUG-011, BUG-012
+  and BUG-015.
 
 ## Launch the local demo today (PowerShell, repository root)
 
-The documented install fails until BUG-001 is fixed. Workaround:
+One command installs what is missing, works around BUG-001 without changing any file, starts
+both services and, with `-Test`, runs the e2e and UI suites:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Test
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Stop
+```
+
+Manual alternative (the documented install works again since #20):
 
 ```powershell
 python -m venv services/api/.venv
-& services/api/.venv/Scripts/python.exe -m pip install "fastapi>=0.115,<1" "uvicorn>=0.34,<1" "pydantic>=2.11,<3" "mcp>=2.2,<3" "httpx2>=2.12,<3" google-genai "pytest>=8,<10" "httpx>=0.28,<1" "pytest-asyncio>=0.23.0"
-$env:PYTHONPATH = 'services/api/src'
+& services/api/.venv/Scripts/python.exe -m pip install -e 'services/api[test]'
 & services/api/.venv/Scripts/python.exe -m uvicorn smart_basket.app:app --host 127.0.0.1 --port 8000
 ```
 
@@ -37,7 +47,7 @@ npm.cmd run start
 
 Open `http://localhost:3000` (not `127.0.0.1`: every POST would get 403). Check the stack
 from a third terminal with `& services/api/.venv/Scripts/python.exe -m pytest tests/e2e`:
-expected 34 passed, 1 xfailed. After BUG-001 is fixed, follow `services/api/README.md`.
+expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 
 ## Recovery
 
@@ -52,13 +62,13 @@ expected 34 passed, 1 xfailed. After BUG-001 is fixed, follow `services/api/READ
 
 | Path | Status | Evidence |
 |---|---|---|
-| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, run 1 |
-| Recalculation | failing | BUG-003 |
+| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, runs 1 and 4 (35 of 35 in run 4) |
+| Recalculation | working in demo | Fixed in #22; retested in run 4 |
 | Web UI → Python API | not connected | BUG-002 |
-| Silpo OAuth and MCP | not verified by Polina | Needs the authorized demo account |
+| Silpo OAuth, tools, context and product search | live, reported by Arina and Rina on September 11; not re-verified by Polina | `docs/handoffs/arina.md`, `docs/handoffs/rina.md` |
+| Silpo cart writes | live service with preview, revalidation, idempotency and read-back; one authorized real-cart check still open | Rina's handoff |
 | Edamam | not verified | Credential-gated (Sofiia) |
 | FatSecret export | demo verified; live reported by Rina on September 11, not re-verified | Needs consumer keys and the test account |
-| Silpo cart writes | demo only | Needs a live Silpo session and cart context |
 
 ## Release checklist ([QA and Demo](../QA_DEMO.md#september-1213-polinas-release-checklist))
 
@@ -77,9 +87,9 @@ expected 34 passed, 1 xfailed. After BUG-001 is fixed, follow `services/api/READ
 
 ## Demo plan (draft)
 
-Golden input: 3 people, 4 days, UAH 1,800, 2,000 kcal per person per day, shared vegetarian
-meals, 1 cat, recurring analysis on. Story as in
-[QA and Demo](../QA_DEMO.md#september-14-recording-and-submission). Backup: the same flow in
+Timed script, what to say and not to say, the pre-recording checklist and recovery:
+[demo script](../qa/demo-script.md). Golden input: 3 people, 4 days, UAH 1,800, 2,000 kcal per
+person per day, shared vegetarian meals, 1 cat, recurring analysis on. Backup: the same flow in
 demo mode with the DEMO label visible, never presented as a live run.
 
 ## To decide or fill in
@@ -91,7 +101,7 @@ demo mode with the DEMO label visible, never presented as a live run.
 | Frozen revision | Polina | September 13 |
 | Presenter | Team | — |
 | Submission-account owner | Team | — |
-| Portal requirements (format, duration, fields) | Polina | Check on September 12 at https://ai-factory.silpo.ua/ |
+| Portal requirements | Polina | Read on September 11: [submission checklist](../qa/submission.md); re-check on the 12th and 14th |
 | Recording and backup links | Polina | September 14 |
 
 ## Receiving teammate's verification

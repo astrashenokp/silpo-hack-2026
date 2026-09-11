@@ -29,6 +29,7 @@ Start the backend and the frontend first (see `services/api/README.md`), then in
 |---|---|
 | `specs/smoke.spec.ts` | Guest path to the planner form without console errors; the account gate works with Tab and Enter |
 | `specs/api-wiring.spec.ts` | Creating a plan sends `POST /api/plans`. Marked `test.fail` until BUG-002 is fixed |
+| `specs/flows.spec.ts` | Empty-budget validation; demo label and no horizontal overflow on the result; FatSecret save with one-portion preview and outcome; cart sync control on wide screens. Marked `test.fail`: cart preview and confirmation (BUG-012), cart sync on mobile (BUG-015), over-budget adding (BUG-016), invented name (BUG-006), invented regular purchases (BUG-011) |
 | `specs/a11y.spec.ts` | axe WCAG 2.1 AA scan of the account gate and the planner form. Fails on new serious or critical rules; known ones (`KNOWN_ISSUES`, BUG-009 color contrast) are annotated |
 
 Known issues are tracked in `docs/qa/bugs.md`. When one is fixed, remove its `test.fail`

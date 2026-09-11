@@ -13,16 +13,22 @@ been sent to the owners; Polina shares it with the team.
 
 | ID | Severity | Summary | Owner | Status |
 |---|---|---|---|---|
-| BUG-001 | Blocker | Backend cannot be installed or tested from a clean checkout (`pyproject.toml` syntax error) | Rina (file owner); introduced by merge `f7b10e0` from Uliana's branch | Open |
+| BUG-001 | Blocker | Backend cannot be installed or tested from a clean checkout (`pyproject.toml` syntax error) | Rina (file owner); introduced by merge `f7b10e0` from Uliana's branch | Fixed in #20; retested ✅ (run 4) |
 | BUG-002 | Blocker | Web UI never calls the Python API: plan, cart and FatSecret are simulated in the browser | Ksiusha + Alina | Open |
-| BUG-003 | High | "Recalculate basket" always fails with `PLANNER_FAILED` and leaves no confirmable plan | Uliana | Open |
-| BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 5 of 10 fail | Uliana | Open |
+| BUG-003 | High | "Recalculate basket" always fails with `PLANNER_FAILED` and leaves no confirmable plan | Uliana | Fixed in #22; retested ✅ (run 4) |
+| BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 3 of 10 still fail | Uliana | Open; retested in run 4 |
 | BUG-005 | High | Unsupported dietary restrictions typed in the form are silently moved into `notes` | Ksiusha | Open |
 | BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Open |
 | BUG-007 | Low | Days counter stops at 7; the contract allows 1–14 | Ksiusha (confirm with Katia) | Open |
 | BUG-008 | Low | `API_BASE_URL` is documented as runtime configuration but only applies at `next build` | Ksiusha | Open |
 | BUG-009 | Medium | Text contrast below WCAG AA on primary buttons, hints and the cart panel | Katia + Ksiusha + Alina | Open |
 | BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow` | Rina | Open |
+| BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Open |
+| BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Open |
+| BUG-013 | Medium | Public-deployment hardening: unbounded sessions and runs, no rate limit, cookie without `Secure` | Rina | Open |
+| BUG-014 | Medium | The generated OpenAPI contract is stale after the live cart changes (`export_contracts.py --check` fails) | Rina | Open |
+| BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Open |
+| BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Open |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -94,6 +100,9 @@ been sent to the owners; Polina shares it with the team.
   same root cause as BUG-003), `assert 49000 == 34000` (2 tests; expected totals predate the
   current meal module), and the explanation test expects `1460.00 UAH` while the plan reports
   `1310.00 UAH`.
+- **Retest (run 4, after #22):** the `MatchingContext` failures are gone. Collection without a key
+  still fails, and with a dummy key 3 tests still fail on the stale expectations (`34000` twice,
+  `1460.00 UAH`).
 - **Expected:** the suite runs and passes without secrets, with Gemini mocked or injected.
 - **Impact:** CI stays red and the handoffs' test counts cannot be reproduced.
 
@@ -116,7 +125,9 @@ been sent to the owners; Polina shares it with the team.
 - **Where:** `apps/web/src/app/page.tsx:532-585` (`SetupCartPreview`: two
   "Масло солодковершкове Галичина" items at 124.00/79.99 ₴, a discount total and the store
   "просп. Бандери, 23 (Самовивіз)"); `page.tsx:405` and `:662` greet "Катерина"/"Катерино"
-  after the simulated connection.
+  after the simulated connection. `apps/web/src/features/planner-results/PlannerResults.tsx:380`
+  greets every user, guests included, with "Привіт, Катерино!", and `:258` and `:361` show a
+  fixed "10:39" time. Confirmed at runtime in run 3 (`tests/ui/specs/flows.spec.ts`).
 - **Expected:** synthetic data is visibly labeled (product decision 9); no invented store,
   cart contents or person.
 - **Impact:** viewers of the video can take the panel for the user's real Silpo cart.
@@ -169,3 +180,102 @@ been sent to the owners; Polina shares it with the team.
   keep `Allow`.
 - **Impact:** none on the demo flow; the contract is less precise for the frontend types and
   for automated checks.
+
+## BUG-011 — Invented regular purchases, prices and brand images shown as plan data
+
+- **Found in:** run 3 UI walk-through (desktop and Pixel 7); confirmed by
+  `tests/ui/specs/flows.spec.ts` (`test.fail`).
+- **Where:** `apps/web/src/features/planner-results/PlannerResults.tsx:684`, `:702` and `:714`
+  define fixed "Регулярні покупки" items ("Масло солодковершкове Галичина" and "Віскі Jameson",
+  each shown twice); `:954`, `:1002` and `:1019-1020` attach butter or whiskey names, prices and
+  images to meal ingredients. `apps/web/src/components/ui/ProductImage.tsx:9-16` hotlinks the
+  Jameson image from `ik.imagekit.io/.../jamesonwhiskey/...` and the oats, rice and lentil photos
+  from Wikimedia Commons; `apps/web/public/butter-galychyna.png` is a brand product photo.
+- **Actual:** a guest without purchase history sees "Регулярні покупки" with two butter packs
+  (79.99 ₴) and two bottles of whiskey (629.00 ₴). Ingredient rows carry the same prices, for
+  example "Dry oats 150 g — 124.00 → 79.99 ₴" with the butter photo and
+  "Dry lentils 90 g — 899.00 → 629.00 ₴" with the whiskey photo, while the budget summary below
+  says 490 грн.
+- **Expected:** recurring suggestions only from `result.recurringItems` (empty for a guest; the
+  contract forbids invented recurrence); ingredient rows with quantities from `ingredientAmounts`
+  and prices only from `selectedProducts`; no alcohol unless it comes from the user's own history;
+  images with known rights, or none.
+- **Impact:** looks like fabricated results in the video (grounds for disqualification under the
+  rules), recommends alcohol in a Silpo-branded family planner, and uses third-party brand images
+  without recorded rights ([submission checklist](submission.md)).
+
+## BUG-012 — The cart addition cannot be previewed and confirmed
+
+- **Found in:** run 3 UI walk-through; confirmed by two `test.fail` checks in
+  `tests/ui/specs/flows.spec.ts`.
+- **Actual:** "Додати все в кошик Сільпо" immediately fills the side cart panel (7 units,
+  490 грн) and disables itself; no preview appears. "↥ Синхронізувати з Сільпо" then opens
+  "Попередній перегляд додавання в кошик" (adding 490 грн to 35 грн, total 525 грн), but the
+  dialog already says "Пропозиція застаріла. Створіть новий перегляд перед підтвердженням." and
+  "Підтвердити додавання" stays disabled. "↻ Перерахувати кошик" resets the panel to the two
+  invented butter packs.
+- **Cause of the disabled button:** in fixture mode the preview is `fixtures/cart-preview.json`,
+  whose `expiresAt` is `2026-09-07T12:00:00+00:00`;
+  `apps/web/src/features/planner-results/components/CartFlow.tsx:23` marks it expired and `:74`
+  disables confirmation.
+- **Expected** ([product](../PRODUCT.md), "Real cart"): "Add to Silpo cart" → preview of the exact
+  changes → "Confirm addition" → verified per-item outcome; nothing changes before confirmation.
+- **Impact:** the confirmed cart addition, a central step of the demo story, cannot be shown.
+
+## BUG-013 — Public-deployment hardening
+
+- **Found in:** run 3 load check and read-only security review.
+- **Actual:**
+  - Each `GET /api/context` without the session cookie creates a new server-side session
+    (`services/api/src/smart_basket/routes/api.py:100-108`): 300 such requests created 300
+    sessions in 0.6 s. Sessions, runs, previews and receipts are never evicted, and plan
+    creation has no rate limit, so anyone can grow memory on a public URL.
+  - The session cookie is `HttpOnly` and `SameSite=Lax` but not `Secure` (`routes/api.py:108`).
+  - FastAPI's `/docs` and `/openapi.json` are public.
+- **Expected for a public demo:** session and run expiry or caps, a basic rate limit and
+  `Secure` cookies behind HTTPS.
+- **Impact:** none locally; a public deployment can be exhausted, and a restart signs every viewer
+  out (recovery steps in `deploy/README.md`).
+- **Confirmed as sound:** runs, previews and exports are isolated per session (404 across
+  sessions; 30 parallel sessions without a leak), the POST origin allowlist, the FatSecret callback
+  token check with `hmac.compare_digest`, no provider tokens in status responses, and generic
+  500 messages.
+
+## BUG-014 — Stale generated API contract
+
+- **Found in:** run 4, the retest after #20–#22.
+- **Steps:** `& services/api/.venv/Scripts/python.exe services/api/scripts/export_contracts.py --check`.
+- **Actual:** `Generated artifacts are stale: packages/contracts/openapi.json`. The live catalog and
+  cart work in #21 and #22 changed the server without regenerating the contract.
+- **Expected:** `--check` passes; regenerate with `export_contracts.py` and review the diff
+  (`services/api/README.md`).
+- **Impact:** frontend types and fixtures can drift from the API, and the CI backend job fails at
+  this step even after BUG-004 is fixed.
+
+## BUG-015 — No cart panel below 1280 px
+
+- **Found in:** run 4, the retest of Alina's shared cart (`1a121e0`); confirmed by
+  `tests/ui/specs/flows.spec.ts` (`test.fail` on the mobile project).
+- **Actual:** after "Додати все в кошик Сільпо" the button turns into the disabled
+  "Додано в кошик Сільпо". At 1280 and 1440 px the side panel "Смарт кошик Сільпо" with
+  "↥ Синхронізувати з Сільпо" appears; at 1279, 1024 and 768 px and on a Pixel 7 there is no cart
+  panel and no other way to preview or confirm the cart. The limit matches Tailwind's `xl`
+  breakpoint.
+- **Expected:** the cart and its preview and confirmation are reachable at every supported width
+  (the design includes mobile layouts), for example as a drawer or a section of the page.
+- **Impact:** phones, tablets and laptop windows under 1280 px cannot finish the cart flow; the
+  recording has to use a wide window.
+
+## BUG-016 — Over-budget plans can go to the cart
+
+- **Found in:** run 4; confirmed by `tests/ui/specs/flows.spec.ts` (`test.fail`).
+- **Actual:** with a budget of 100 UAH the result says "Бюджет перевищено на 390,00 грн.", yet
+  "Додати все в кошик Сільпо" stays enabled and "↥ Синхронізувати з Сільпо" opens the preview.
+  Commit `1a121e0` describes this as intended: "budget overrun no longer blocks adding (warning
+  shown instead)".
+- **Contract:** `docs/CONTRACTS.md` enables cart confirmation only for a complete plan within the
+  budget and otherwise asks to disable it with an explanation. The API already refuses such
+  previews with 409 (e2e `test_over_budget_plan_cannot_reach_the_cart`).
+- **Decision needed:** keep the contract and disable adding with an explanation, or change the
+  contract and the API together.
+- **Impact:** once the UI calls the API (BUG-002), this path ends in a 409 the user does not expect.
