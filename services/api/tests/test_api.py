@@ -313,12 +313,14 @@ def test_product_search_uses_stored_branch(app, client, monkeypatch):
 
     async def fake_search(
         mcp_session, query, branch_id, *, cart_id, delivery_type, timeslot, tool_schemas,
+        owner,
     ):
         assert branch_id == "stored-branch"
         assert cart_id == "stored-cart"
         assert delivery_type == "SelfPickup"
         assert timeslot == {"start": "start", "end": "end"}
         assert "silpo_find_products_batch" in tool_schemas
+        assert owner is session
         return ProductSearchResponse(query=query, products=[ProductCandidate(
             id="p1", name="Rice", requirement_ids=[], price_minor=8000,
             selling_unit="package", quantity_step=1.0, content_quantity=1000.0,

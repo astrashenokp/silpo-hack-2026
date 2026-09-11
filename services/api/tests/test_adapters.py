@@ -3,13 +3,120 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from smart_basket.core import Session
 from smart_basket.mcp.adapters import (
+    add_or_update_cart_products,
+    cart_write_call,
     get_purchase_history,
     get_user_context,
     get_user_profile,
     normalize_product_search,
     product_search_call,
+    product_write_metadata,
     search_products,
 )
+
+
+def test_product_write_metadata_retains_only_server_write_coordinates():
+    payload = {"results": [{
+        "productId": "milk-1",
+        "companyId": "company-1",
+        "branchId": "branch-1",
+        "title": "Milk",
+        "currentPrice": 42,
+    }]}
+    assert product_write_metadata(payload) == {
+        "milk-1": {
+            "productId": "milk-1",
+            "companyId": "company-1",
+            "branchId": "branch-1",
+        }
+    }
+
+
+def test_cart_write_call_follows_live_tool_schema():
+    schema = {
+        "type": "object",
+        "properties": {
+            "products": {"type": "array", "items": {
+                "type": "object",
+                "properties": {
+                    "productId": {"type": "string"},
+                    "companyId": {"type": "string"},
+                    "branchId": {"type": "string"},
+                    "quantity": {"type": "number"},
+                },
+                "required": ["productId", "companyId", "branchId", "quantity"],
+            }},
+            "shoppingCartId": {"type": "string"},
+            "deliveryType": {"type": "string"},
+            "timeslotStart": {"type": "string"},
+            "timeslotEnd": {"type": "string"},
+        },
+        "required": ["products", "shoppingCartId"],
+    }
+    assert cart_write_call(
+        [{
+            "productId": "milk-1",
+            "companyId": "company-1",
+            "branchId": "branch-1",
+            "quantity": 2,
+        }],
+        "cart-1",
+        "SelfPickup",
+        {"start": "start", "end": "end"},
+        schema,
+    ) == ("silpo_add_or_update_cart_products", {
+        "products": [{
+            "productId": "milk-1",
+            "companyId": "company-1",
+            "branchId": "branch-1",
+            "quantity": 2,
+        }],
+        "shoppingCartId": "cart-1",
+        "deliveryType": "SelfPickup",
+        "timeslotStart": "start",
+        "timeslotEnd": "end",
+    })
+
+
+@pytest.mark.asyncio
+async def test_cart_write_adapter_calls_provider_once():
+    session = AsyncMock()
+    session.call_tool.return_value = SimpleNamespace(
+        is_error=False,
+        structured_content={"success": True},
+        content=[],
+    )
+    schema = {
+        "type": "object",
+        "properties": {
+            "items": {"type": "array", "items": {
+                "type": "object",
+                "properties": {
+                    "productId": {"type": "string"},
+                    "quantity": {"type": "number"},
+                },
+                "required": ["productId", "quantity"],
+            }},
+            "cartId": {"type": "string"},
+        },
+        "required": ["items", "cartId"],
+    }
+    result = await add_or_update_cart_products(
+        session,
+        [{"productId": "milk-1", "quantity": 1}],
+        cart_id="cart-1",
+        delivery_type=None,
+        timeslot=None,
+        tool_schemas={"silpo_add_or_update_cart_products": schema},
+    )
+    assert result == {"success": True}
+    session.call_tool.assert_awaited_once_with(
+        "silpo_add_or_update_cart_products",
+        arguments={
+            "items": [{"productId": "milk-1", "quantity": 1}],
+            "cartId": "cart-1",
+        },
+    )
 
 @pytest.mark.asyncio
 async def test_get_purchase_history_empty():
