@@ -203,6 +203,12 @@ export interface FatSecretStatus {
   reason: string | null;
 }
 
+export interface SilpoStatus {
+  connected: boolean;
+  toolsAvailable: string[];
+  reason: string | null;
+}
+
 export interface FatSecretItem {
   ingredientId: string;
   foodId: string;

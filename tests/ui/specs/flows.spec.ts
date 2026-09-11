@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// User flows of the planner page. Known defects use test.fail with their ID from
-// docs/qa/bugs.md; remove the marker when the fix lands so the check guards it.
+// User flows of the planner page against the running API. Known defects use test.fail with
+// their ID from docs/qa/bugs.md; remove the marker when the fix lands so the check guards it.
 // Steps inside those checks use short timeouts so a defect fails fast instead of timing out.
 const QUICK = { timeout: 5_000 };
 
@@ -35,6 +35,13 @@ test("the result is labeled as demo data and fits the screen", async ({ page }) 
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
+test("recalculation adds the server's next version of the plan", async ({ page }) => {
+  await createPlan(page);
+  await page.getByRole("button", { name: /Перерахувати кошик/ }).first().click();
+  await expect(page.getByRole("heading", { name: "План харчування" })).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.getByText(/Не вдалося перерахувати кошик/)).toHaveCount(0);
+});
+
 test("saving a meal to FatSecret previews one personal portion and reports the outcome", async ({ page }) => {
   await createPlan(page);
   await page.getByRole("button", { name: "Зберегти у FatSecret" }).first().click();
@@ -45,7 +52,8 @@ test("saving a meal to FatSecret previews one personal portion and reports the o
   await expect(dialog.getByText(/1 особиста порція на страву/)).toBeVisible();
   await expect(dialog.getByText(/не щоденниковий запис/)).toBeVisible();
   await dialog.getByRole("button", { name: "Підтвердити збереження" }).click();
-  await expect(page.getByText("Додано й прочитано назад (demo).")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Результат збереження у FatSecret" })).toBeVisible();
+  await expect(page.getByText("Збережено").first()).toBeVisible();
 });
 
 test("adding to the Silpo cart shows a preview before anything changes", async ({ page }) => {
@@ -64,15 +72,15 @@ test("the Silpo cart can be synced on this screen size", async ({ page }, testIn
   await expect(page.getByRole("button", { name: /Синхронізувати з Сільпо/ })).toBeVisible(QUICK);
 });
 
-test("the cart preview can be confirmed", async ({ page }, testInfo) => {
+test("the cart preview from the API can be confirmed", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "BUG-015: the sync control is missing on narrow screens");
-  test.fail(true, "BUG-012: the preview is already stale, so confirmation stays disabled");
   await createPlan(page);
-  await page.getByRole("button", { name: /Додати все в кошик Сільпо/ }).click(QUICK);
-  await page.getByRole("button", { name: /Синхронізувати з Сільпо/ }).click(QUICK);
+  await page.getByRole("button", { name: /Додати все в кошик Сільпо/ }).click();
+  await page.getByRole("button", { name: /Синхронізувати з Сільпо/ }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Попередній перегляд додавання в кошик" })).toBeVisible(QUICK);
-  await expect(dialog.getByRole("button", { name: "Підтвердити додавання" })).toBeEnabled(QUICK);
+  await expect(dialog.getByRole("heading", { name: "Попередній перегляд додавання в кошик" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Підтвердити додавання" }).click();
+  await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
 });
 
 test("an over-budget plan cannot be added to the Silpo cart", async ({ page }) => {
