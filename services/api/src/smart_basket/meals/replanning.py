@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from smart_basket.schemas import IngredientAmount, Meal, MealMacros
 
@@ -27,6 +27,16 @@ SUPPORTED_MEAL_SLOTS: set[str] = {
     "breakfast",
     "lunch",
     "dinner",
+}
+REDUCE_COST_AMOUNT_FACTORS: dict[str, float] = {
+    "oats": 0.9,
+    "rice": 0.92,
+    "lentils": 0.72,
+}
+REDUCE_COST_SLOT_FACTORS: dict[MealSlot, float] = {
+    "breakfast": 0.9,
+    "lunch": 0.92,
+    "dinner": 0.86,
 }
 
 
@@ -132,24 +142,21 @@ def _should_preserve(
 
 
 def _reduce_cost_meal(meal: Meal) -> Meal:
-    amounts = []
-    changed = False
-    for amount in meal.ingredient_amounts:
-        if amount.ingredient_id == "lentils":
-            amounts.append(_scale_amount(amount, 0.72))
-            changed = True
-        else:
-            amounts.append(amount)
-
-    if changed:
-        meal = _with_amounts(
-            meal,
-            amounts,
-            title=f"Budget {meal.title.removeprefix('Budget ')}",
-            kcal_factor=0.94,
-            macros_factor=0.94,
+    slot_factor = REDUCE_COST_SLOT_FACTORS.get(meal.slot, 0.9)
+    amounts = [
+        _scale_amount(
+            amount,
+            REDUCE_COST_AMOUNT_FACTORS.get(amount.ingredient_id, slot_factor),
         )
-    return meal
+        for amount in meal.ingredient_amounts
+    ]
+    return _with_amounts(
+        meal,
+        amounts,
+        title=f"Budget {meal.title.removeprefix('Budget ')}",
+        kcal_factor=slot_factor,
+        macros_factor=slot_factor,
+    )
 
 
 def _replace_ingredient_in_meal(meal: Meal, requested: str) -> tuple[Meal, bool]:
@@ -318,7 +325,7 @@ def _validated_preserve_slots(preserve_meal_slots: list[str] | None) -> set[Meal
             "Unsupported preserve_meal_slots values: "
             + ", ".join(sorted(unknown_slots))
         )
-    return preserve_slots
+    return cast(set[MealSlot], preserve_slots)
 
 
 def _normalized_text(value: str | None) -> str:

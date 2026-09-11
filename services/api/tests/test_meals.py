@@ -624,6 +624,32 @@ def test_reduce_cost_replan_preserves_requested_meal_slots():
     assert replanned["source"] == "synthetic"
 
 
+def test_reduce_cost_replan_changes_all_slots_without_preservation():
+    initial = build_meal_plan(request(days=1, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=1, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="reduce_cost",
+    )
+
+    initial_by_slot = {meal.slot: meal for meal in initial["meals"]}
+    replanned_by_slot = {meal.slot: meal for meal in replanned["meals"]}
+
+    for slot, initial_meal in initial_by_slot.items():
+        replanned_meal = replanned_by_slot[slot]
+        assert replanned_meal.title.startswith("Budget ")
+        assert replanned_meal != initial_meal
+        assert replanned_meal.kcal_per_serving < initial_meal.kcal_per_serving
+        for before, after in zip(
+            initial_meal.ingredient_amounts,
+            replanned_meal.ingredient_amounts,
+            strict=True,
+        ):
+            assert after.quantity < before.quantity
+
+
 def test_replan_rejects_unknown_preserve_slots():
     initial = build_meal_plan(request(days=1, people=1), context())
 
@@ -768,3 +794,23 @@ def test_upgrade_plan_replan_changes_unpreserved_meals_and_keeps_constraints():
     assert all(meal.servings == 3 for meal in replanned["meals"])
     assert replanned["nutrition_summary"].calorie_target_kcal_per_person_per_day == 2000
     assert {ingredient.id for ingredient in replanned["ingredients"]} <= {"oats", "rice", "lentils"}
+
+
+def test_upgrade_plan_replan_changes_all_slots_without_preservation():
+    initial = build_meal_plan(request(days=1, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=1, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="upgrade_plan",
+    )
+
+    initial_by_slot = {meal.slot: meal for meal in initial["meals"]}
+    replanned_by_slot = {meal.slot: meal for meal in replanned["meals"]}
+
+    for slot, initial_meal in initial_by_slot.items():
+        replanned_meal = replanned_by_slot[slot]
+        assert replanned_meal.title.startswith("Upgraded ")
+        assert replanned_meal != initial_meal
+        assert replanned_meal.kcal_per_serving > initial_meal.kcal_per_serving
