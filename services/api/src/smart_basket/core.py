@@ -39,6 +39,11 @@ class Session:
     cart_receipts: dict = field(default_factory=dict)
     cart_keys: dict = field(default_factory=dict)
     cart_applied_runs: set[str] = field(default_factory=set)
+    live_cart_previews: dict = field(default_factory=dict)
+    live_cart_receipts: dict = field(default_factory=dict)
+    live_cart_keys: dict = field(default_factory=dict)
+    live_cart_inflight: set[str] = field(default_factory=set)
+    live_cart_applied_runs: set[str] = field(default_factory=set)
     export_previews: dict = field(default_factory=dict)
     exports: dict = field(default_factory=dict)
     export_keys: dict = field(default_factory=dict)
@@ -50,6 +55,7 @@ class Session:
     silpo_connected: bool = False
     silpo_tools: tuple[str, ...] = ()
     silpo_tool_schemas: dict[str, dict] = field(default_factory=dict)
+    silpo_product_write_metadata: dict[str, dict] = field(default_factory=dict)
     silpo_cart_id: str | None = None
     silpo_branch_id: str | None = None
     silpo_delivery_type: str | None = None

@@ -3,15 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  apiConfirmCart,
-  apiPreviewCart,
-  newIdempotencyKey,
-  type DemoScenario,
-} from "@/lib/api/client";
 import type {
-  CartPreview,
-  CartReceipt,
   Meal,
   PlanningResult,
   ProductSelection,
@@ -19,16 +11,7 @@ import type {
   RunSnapshot,
 } from "@/lib/api/types";
 import { formatUah } from "@/lib/format";
-import {
-  fixtureCartPartial,
-  fixtureCartPreview,
-} from "@/lib/api/fixtures";
-import { CartPanel, type CartPanelItem } from "./components/CartPanel";
-import {
-  CartPreviewModal,
-  CartReceiptView,
-} from "./components/CartFlow";
-import { AgentFailure, SyncFailureModal, WarningsList } from "./components/states";
+import { AgentFailure, WarningsList } from "./components/states";
 import { RunProgress } from "./components/RunProgress";
 import { Button, Spinner } from "./components/ui";
 
@@ -39,60 +22,79 @@ export interface SavedMeal {
   title: string;
 }
 
+type ChatItem =
+  | { kind: "user"; text: string }
+  | { kind: "plan"; request: string; result: PlanningResult | null; status: "thinking" | "ready"; added: boolean };
+
 // Cart contents are owned by the parent (page.tsx) so every chat shares the
-// same single cart. PlannerResults only receives cart state via props.
+// same single cart. The right-hand CartPanel is rendered once at the app level
+// by the parent; PlannerResults only mutates the shared cart via callbacks.
 export function PlannerResults({
   snapshot,
   result,
-  sourceMode,
-  cartScenario,
   recalcBusy,
   paramsForm,
   onRetryPlan,
   sentMessages,
   savedMeals,
   onSavedMealsChange,
-  addedToCart,
-  cartProductIds,
-  cartQuantities,
-  onAddedToCartChange,
-  onCartProductIdsChange,
-  onCartQuantitiesChange,
+  onAddToCart,
 }: {
   snapshot?: RunSnapshot | null;
   result: PlanningResult | null;
-  sourceMode: SourceMode;
-  cartScenario?: DemoScenario;
   recalcBusy: boolean;
   paramsForm?: ReactNode;
   onRetryPlan?: () => void;
   sentMessages?: string[];
   savedMeals?: SavedMeal[];
   onSavedMealsChange?: (meals: SavedMeal[]) => void;
-  addedToCart: boolean;
-  cartProductIds: string[] | null;
-  cartQuantities: Record<string, number>;
-  onAddedToCartChange: (added: boolean) => void;
-  onCartProductIdsChange: (ids: string[] | null) => void;
-  onCartQuantitiesChange: (quantities: Record<string, number>) => void;
+  onAddToCart: (products: ProductSelection[]) => void;
 }) {
-  const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
-  const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
-  const [cartBusy, setCartBusy] = useState(false);
-  const [cartKey, setCartKey] = useState<string | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
   const [screen, setScreen] = useState<"setup" | "thinking" | "ready">(
     result && !paramsForm ? "ready" : "setup",
   );
   const effectiveScreen = paramsForm ? "setup" : screen;
   const [recurringOverrides, setRecurringOverrides] = useState<Record<string, boolean>>({});
-  const [recurringDirty, setRecurringDirty] = useState(false);
+  const [dirtyPlans, setDirtyPlans] = useState<number[]>([]);
+  const [chat, setChat] = useState<ChatItem[]>(() => {
+    if (result && !paramsForm) {
+      return [{ kind: "plan", request: "Скласти меню та кошик", result, status: "ready", added: false }];
+    }
+    return [];
+  });
+  const lastSyncedMessages = useRef((sentMessages ?? []).slice(1).length);
 
   useEffect(() => {
     if (screen !== "thinking") return;
-    const timer = window.setTimeout(() => setScreen("ready"), 1800);
+    const timer = window.setTimeout(
+      () => {
+        setChat((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            const item = next[i];
+            if (item.kind === "plan" && item.status === "thinking") {
+              next[i] = { ...item, status: "ready", result: item.result ?? result };
+              break;
+            }
+          }
+          return next;
+        });
+        setScreen("ready");
+      },
+      1800,
+    );
     return () => window.clearTimeout(timer);
-  }, [screen]);
+  }, [screen, result]);
+
+  useEffect(() => {
+    const msgs = (sentMessages ?? []).slice(1);
+    if (msgs.length <= lastSyncedMessages.current) return;
+    setChat((prev) => [
+      ...prev,
+      ...msgs.slice(lastSyncedMessages.current).map((text) => ({ kind: "user" as const, text })),
+    ]);
+    lastSyncedMessages.current = msgs.length;
+  }, [sentMessages]);
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -104,9 +106,12 @@ export function PlannerResults({
   if (!result) {
     if (paramsForm) {
       return (
-        <PlannerIntroWindow>
-          <PlannerIntroduction>{paramsForm}</PlannerIntroduction>
-        </PlannerIntroWindow>
+        <div>
+          <PlannerIntroWindow messages={sentMessages}>
+            <PlannerIntroduction>{paramsForm}</PlannerIntroduction>
+          </PlannerIntroWindow>
+          <ChatUserMessages messages={sentMessages} />
+        </div>
       );
     }
     if (snapshot && (snapshot.status === "running" || snapshot.status === "queued")) {
@@ -122,121 +127,23 @@ export function PlannerResults({
     );
   }
 
-  const current = result;
-  const selectedProducts = result.selectedProducts;
-  const addDisabled =
-    !result.canConfirmCart ||
-    result.budgetStatus !== "within_budget";
-  const confirmGate = addDisabled || recurringDirty;
-
-  const cartItems: CartPanelItem[] = selectedProducts.map((product) => ({
-    productId: product.productId,
-    name: product.name,
-    quantity: product.quantity,
-    cartQuantity: cartQuantities[product.productId] ?? product.quantity,
-    sellingUnit: product.sellingUnit,
-    unitPriceMinor: product.unitPriceMinor,
-    lineTotalMinor: product.lineTotalMinor,
-    source: product.source,
-    added: true,
-  }));
-  const activeCartProductIds = cartProductIds ?? [];
-  const visibleCartItems = cartItems.filter((item) => activeCartProductIds.includes(item.productId));
-  const visibleCartTotalMinor = visibleCartItems.reduce(
-    (sum, item) => sum + item.unitPriceMinor * item.cartQuantity,
-    0,
-  );
-  const visibleCartCount = visibleCartItems.reduce((sum, item) => sum + item.cartQuantity, 0);
-
-  function addAllToCart() {
-    onAddedToCartChange(true);
-    onCartProductIdsChange(selectedProducts.map((product) => product.productId));
-    const next = { ...cartQuantities };
-    selectedProducts.forEach((product) => {
-      next[product.productId] = next[product.productId] ?? product.quantity;
-    });
-    onCartQuantitiesChange(next);
-  }
-
-  function toggleRecurring(item: RecurringSuggestion) {
+  function toggleRecurring(item: RecurringSuggestion, planKey: number) {
     setRecurringOverrides((prev) => ({ ...prev, [item.id]: !(prev[item.id] ?? item.selected) }));
-    setRecurringDirty(true);
+    setDirtyPlans((prev) => (prev.includes(planKey) ? prev : [...prev, planKey]));
   }
 
-  function incrementCartItem(productId: string) {
-    const base = selectedProducts.find((p) => p.productId === productId)?.quantity ?? 1;
-    onCartQuantitiesChange({
-      ...cartQuantities,
-      [productId]: (cartQuantities[productId] ?? base) + 1,
-    });
-  }
-
-  function decrementCartItem(productId: string) {
-    const base = selectedProducts.find((p) => p.productId === productId)?.quantity ?? 1;
-    onCartQuantitiesChange({
-      ...cartQuantities,
-      [productId]: Math.max(1, (cartQuantities[productId] ?? base) - 1),
-    });
-  }
-
-  function removeCartItem(productId: string) {
-    const next = { ...cartQuantities };
-    delete next[productId];
-    onCartQuantitiesChange(next);
-    onCartProductIdsChange((cartProductIds ?? []).filter((id) => id !== productId));
-  }
-
-  async function handleAddAll() {
-    setCartBusy(true);
-    try {
-      const preview =
-        sourceMode === "fixtures"
-          ? fixtureCartPreview
-          : await apiPreviewCart(current.runId, current.version, cartScenario);
-      setCartKey(newIdempotencyKey());
-      setCartReceipt(null);
-      setCartPreview(preview);
-    } catch {
-      setSyncError("Не вдалося сформувати попередній перегляд кошика.");
-    } finally {
-      setCartBusy(false);
-    }
-  }
-
-  async function handleConfirmCart() {
-    if (!cartPreview || !cartKey) return;
-    const key = cartKey;
-    setCartBusy(true);
-    try {
-      const receipt =
-        sourceMode === "fixtures"
-          ? fixtureCartPartial
-          : await apiConfirmCart(cartPreview.previewId, key);
-      if (receipt.status === "failed") {
-        // Keep cartPreview + key: retry is a re-send of the same preview with
-        // the same idempotency key, so it cannot double-add.
-        setSyncError("Сталася помилка під час передачі списку товарів у ваш акаунт.");
-        return;
-      }
-      setCartPreview(null);
-      setCartReceipt(receipt);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Сталася помилка під час синхронізації кошика.";
-      setSyncError(message);
-    } finally {
-      setCartBusy(false);
-    }
-  }
-
-  async function handleRetrySync() {
-    setSyncError(null);
-    await handleConfirmCart();
+  function handleRecalculate(planKey: number) {
+    setDirtyPlans((prev) => prev.filter((key) => key !== planKey));
+    setChat((prev) => [
+      ...prev,
+      { kind: "plan", request: "Перерахуйте кошик", result: null, status: "thinking", added: false },
+    ]);
+    setScreen("thinking");
   }
 
   return (
-    <div className="xl:pr-[430px]">
-      <PlannerIntroWindow>
+    <div>
+      <PlannerIntroWindow messages={sentMessages}>
         <PlannerIntroduction>
           {paramsForm ? (
             paramsForm
@@ -245,7 +152,13 @@ export function PlannerResults({
               result={result}
               disabled={recalcBusy}
               loading={recalcBusy}
-              onSubmit={() => setScreen("thinking")}
+              onSubmit={() => {
+                setChat((prev) => [
+                  ...prev,
+                  { kind: "plan", request: "Скласти меню та кошик", result: null, status: "thinking", added: false },
+                ]);
+                setScreen("thinking");
+              }}
             />
           ) : null}
         </PlannerIntroduction>
@@ -253,42 +166,47 @@ export function PlannerResults({
 
       <div className="min-w-0">
         {effectiveScreen !== "setup" && (
-          <>
-            <div className="mb-9 mt-10 flex items-end justify-end gap-3 pr-2 lg:pr-5">
-              <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>
-              <div className="inline-flex items-center gap-3 rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
-                Скласти меню та кошик
-                <span className="flex size-6 items-center justify-center rounded-full border-2 border-brand text-brand">
-                  ✓
-                </span>
-              </div>
-            </div>
-
-            <div ref={resultsRef}>
-              {effectiveScreen === "thinking" ? (
-                <ThinkingMessage />
-              ) : (
-                <ReadyMessage
-                  result={result}
-                  addedToCart={addedToCart}
-                  confirmGate={confirmGate}
-                  recurringOverrides={recurringOverrides}
-                  recurringDirty={recurringDirty}
-                  onToggleRecurring={toggleRecurring}
-                  onAddToCart={addAllToCart}
-                  savedMeals={savedMeals ?? []}
-                  onSavedMealsChange={onSavedMealsChange}
-                  onRecalculate={() => {
-                    onAddedToCartChange(false);
-                    onCartProductIdsChange(null);
-                    onCartQuantitiesChange({});
-                    setRecurringDirty(false);
-                    setScreen("thinking");
-                  }}
-                />
-              )}
-            </div>
-          </>
+          <div className="mt-10 space-y-10">
+            {chat.map((item, index) => {
+              const isLast = index === chat.length - 1;
+              if (item.kind === "user") {
+                return (
+                  <UserChatBubble key={`user-${index}-${item.text}`} text={item.text} />
+                );
+              }
+              const planResult = item.result ?? result;
+              const planAdded = item.added;
+              const planConfirmGate = dirtyPlans.includes(index);
+              return (
+                <div
+                  key={`plan-${index}-${item.request}`}
+                  ref={isLast ? resultsRef : undefined}
+                  className="min-w-0"
+                >
+                  <UserChatBubble text={item.request} />
+                  {item.status === "thinking" ? (
+                    <ThinkingMessage />
+                  ) : (
+                    <ReadyMessage
+                      result={planResult}
+                      addedToCart={planAdded}
+                      confirmGate={planConfirmGate}
+                      recurringOverrides={recurringOverrides}
+                      recurringDirty={dirtyPlans.includes(index)}
+                      onToggleRecurring={(recurringItem) => toggleRecurring(recurringItem, index)}
+                      onAddToCart={() => {
+                        setChat((prev) => prev.map((entry, i) => (i === index ? { ...entry, added: true } : entry)));
+                        onAddToCart(planResult.selectedProducts);
+                      }}
+                      savedMeals={savedMeals ?? []}
+                      onSavedMealsChange={onSavedMealsChange}
+                      onRecalculate={() => handleRecalculate(index)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {recalcBusy && (
@@ -297,71 +215,32 @@ export function PlannerResults({
           </div>
         )}
 
-        {cartReceipt && (
-          <div className="ml-0 mt-5 md:ml-[68px]">
-            <CartReceiptView receipt={cartReceipt} />
-          </div>
-        )}
         <WarningsList warnings={result.warnings} />
-
-        {sentMessages && sentMessages.length > 0 && (
-          <div className="mt-4 flex flex-col items-end gap-2">
-            {sentMessages.map((message, index) => (
-              <div
-                key={`${index}-${message}`}
-                className="max-w-[70%] rounded-[20px] rounded-tr-none bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]"
-              >
-                {message}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
-
-      <div className="mt-8 xl:fixed xl:bottom-28 xl:right-8 xl:top-24 xl:z-30 xl:mt-0 xl:w-[300px] xl:overflow-hidden">
-        <CartPanel
-          items={visibleCartItems}
-          itemCount={visibleCartCount}
-          totalMinor={visibleCartTotalMinor}
-          discountMinor={result.savingsMinor}
-          storeLabel="просп. Бандери, 23 (Самовивіз)"
-          onSync={handleAddAll}
-          onIncrement={incrementCartItem}
-          onDecrement={decrementCartItem}
-          onRemove={removeCartItem}
-          syncDisabled={confirmGate || !addedToCart || visibleCartItems.length === 0}
-          syncBusy={cartBusy}
-          mode={result.dataMode}
-        />
-      </div>
-
-      {cartPreview && (
-        <CartPreviewModal
-          preview={cartPreview}
-          onConfirm={handleConfirmCart}
-          onCancel={() => setCartPreview(null)}
-          busy={cartBusy}
-        />
-      )}
-
-      <SyncFailureModal
-        open={syncError !== null}
-        message={syncError ?? ""}
-        onLater={() => setSyncError(null)}
-        onRetry={handleRetrySync}
-      />
     </div>
   );
 }
 
-function PlannerIntroWindow({ children }: { children: ReactNode }) {
+function PlannerIntroWindow({
+  children,
+  messages = [],
+}: {
+  children: ReactNode;
+  messages?: string[];
+}) {
+  const visibleMessages = messages.length > 0 ? messages.slice(0, 1) : ["Почати планування"];
+
   return (
     <div className="min-w-0 pt-1 lg:pt-5">
-      <div className="mb-5 flex items-end justify-end gap-3 pr-2 lg:pr-5">
-        <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>
-        <div className="rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
-          Привіт!
-        </div>
+      <div className="mb-5 flex flex-col items-end gap-2 pr-2 lg:pr-5">
+        {visibleMessages.map((message, index) => (
+          <div key={`${index}-${message}`} className="flex items-end justify-end gap-3">
+            {index === 0 && <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>}
+            <div className="max-w-[70%] rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
+              {message}
+            </div>
+          </div>
+        ))}
       </div>
       {children}
     </div>
@@ -385,6 +264,37 @@ function PlannerIntroduction({ children }: { children: ReactNode }) {
         </div>
         <div className="mt-5 h-px max-w-[820px] bg-[#edf0f3]" />
         {children}
+      </div>
+    </div>
+  );
+}
+
+function ChatUserMessages({ messages }: { messages?: string[] }) {
+  if (!messages || messages.length <= 1) return null;
+
+  return (
+    <div className="mt-4 flex flex-col items-end gap-2 pb-4">
+      {messages.slice(1).map((message, index) => (
+        <div
+          key={`${index}-${message}`}
+          className="max-w-[70%] rounded-[20px] rounded-tr-none bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]"
+        >
+          {message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UserChatBubble({ text }: { text: string }) {
+  return (
+    <div className="mb-9 flex items-end justify-end gap-3 pr-2 lg:pr-5">
+      <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>
+      <div className="inline-flex items-center gap-3 rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
+        {text}
+        <span className="flex size-6 items-center justify-center rounded-full border-2 border-brand text-brand">
+          ✓
+        </span>
       </div>
     </div>
   );
