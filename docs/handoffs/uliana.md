@@ -659,3 +659,191 @@ Gemini використовується тільки для визначення
 ```
 
 Наступний етап — підключення FastAPI/frontend та live-модулів команди до вже готових orchestration methods.
+
+Оновлення роботи — AI Orchestration
+
+На поточному етапі моя частина AI orchestration для Smart Basket Planner завершена та готова до інтеграції з meal replanning модулем Софії.
+
+Основний planning pipeline уже працює наскрізно:
+
+PlanningRequest
+→ User Context
+→ Purchase History
+→ Recurring Analysis
+→ Meal Planning
+→ Product Matching
+→ Basket Optimization
+→ PlanningResult
+
+UlianaPlanner використовується backend-ом як основний orchestration layer та координує виклики модулів інших учасниць без дублювання їхньої бізнес-логіки.
+
+Реалізовано
+
+Підключено:
+
+user context;
+purchase history;
+recurring analysis через модуль Віки;
+initial meal planning через build_meal_plan() Софії;
+product matching через модуль Ріни;
+basket optimization через модуль Віки;
+формування фінального PlanningResult;
+progress events для основних етапів planning flow.
+
+Також реалізовано natural-language orchestration через Gemini. Gemini використовується тільки як interpreter: він визначає intent користувача та повертає структурований ChatCommand. Gemini не обирає товари, не вигадує product IDs або ціни і не виконує бюджетні розрахунки.
+
+Підтримуються intents:
+
+create_plan
+recalculate_plan
+change_budget
+reduce_cost
+upgrade_plan
+replace_ingredient
+explain_plan
+unknown
+Change Budget
+
+Додано окрему branching-логіку для зміни бюджету.
+
+Якщо новий бюджет нижчий за попередній:
+
+change_budget
+→ reduce_cost
+→ meal replan
+→ new ingredients
+→ product matching
+→ optimization
+
+Якщо бюджет збільшується:
+
+change_budget
+→ upgrade_plan
+→ meal replan
+→ new ingredients
+→ product matching
+→ optimization
+
+Таким чином зміна бюджету не запускає повний initial planner повторно та не робить зайвих provider calls.
+
+Reduce Cost
+
+Поточний кошик уже product-optimized після initial run_planner(), тому reduce_cost не повторює matching та optimization для тих самих інгредієнтів.
+
+Flow:
+
+current optimized plan
+→ one meal-level replan
+→ new ingredients
+→ matching
+→ optimization
+
+Після optimization перевіряється, що новий basket справді дешевший. Якщо вартість не зменшилась, orchestration повертає no_cost_improvement.
+
+Upgrade Plan
+
+Додано новий upgrade_plan.
+
+Його задача — спробувати зробити meal plan кращим або різноманітнішим у межах доступного бюджету.
+
+Flow:
+
+current plan
+→ meal replan(reason="upgrade_plan")
+→ new ingredients
+→ product matching
+→ optimization
+→ budget validation
+
+Upgrade не означає обов'язково витратити весь бюджет. Фінальний plan лише повинен залишатися валідним і вкладатися у доступний budget.
+
+Replace Ingredient
+
+replace_ingredient знаходить ingredient у поточному plan та передає його meal replanner-у.
+
+Після replanning додано validation: orchestration перевіряє, що ingredient, який користувач попросив замінити, справді зник із нового normalized ingredient list. Якщо provider повернув фактично незмінений plan, повертається invalid_replan.
+
+Recalculate
+
+Реалізовано recalculate_plan() для повторного розрахунку існуючого proposal після зміни selected recurring items.
+
+Meals та ingredients повторно не генеруються; оновлюються matching та optimization.
+
+Validation та failure handling
+
+Додано захист для chat-команд, які потребують already existing plan. Якщо користувач намагається змінити budget, зробити plan дешевшим, upgrade, replace ingredient або отримати explanation до створення plan, повертається контрольований clarification, а не runtime error.
+
+Meal replan boundary перевіряє:
+
+що provider повернув dict;
+що присутні required fields:
+meals;
+ingredients;
+nutrition_summary;
+provider errors UnsupportedMealFilter та EdamamUnavailable конвертуються у відповідні ApiError, як і в initial meal planning.
+
+Додані edge-case tests для:
+
+modification command без existing plan;
+None від meal replanner;
+неправильного типу meal replanner output;
+missing required fields;
+reduce-cost replan, який не став дешевшим;
+upgrade, який не вкладається в budget;
+successful ingredient replacement;
+replanner, який не замінив requested ingredient;
+decrease budget → reduce-cost routing;
+increase budget → upgrade routing;
+direct upgrade_plan.
+Environment
+
+До .env.example додані Gemini variables:
+
+GEMINI_API_KEY=your_key
+GEMINI_MODEL=gemini-3.7-flash
+Поточні зовнішні залежності
+
+Моя orchestration-частина готова до інтеграції, але повний real replan flow залежить від meal module Софії.
+
+Потрібна реалізація:
+
+replan_meal_plan(
+    request,
+    effective_context,
+    previous_meals,
+    reason,
+    preserve_meal_slots=None,
+    replace_ingredient=None,
+)
+
+з підтримкою:
+
+reduce_cost
+replace_ingredient
+upgrade_plan
+
+До її підключення orchestration boundary уже готовий та тестується через injected fake replanner.
+
+Також залишаються зовнішні integration blockers:
+
+selected recurring product matching очікує нормалізованого mapping від Rina/Vika;
+automatic optimizer-triggered initial meal replan залежить від відповідного сигналу optimization layer;
+HTTP/frontend wiring для free-form chat потребує backend/frontend integration, якщо команда вирішить включити chat у demo scope.
+Поточний статус
+Core orchestration                ✅ Ready
+PlanningRequest → PlanningResult  ✅ Ready
+FastAPI planner integration       ✅ Ready
+Gemini structured routing         ✅ Ready
+Create / Recalculate              ✅ Ready
+Change Budget                     ✅ Ready
+Reduce Cost orchestration         ✅ Ready
+Upgrade Plan orchestration        ✅ Ready
+Replace Ingredient orchestration  ✅ Ready
+Validation / failure handling     ✅ Ready
+Environment configuration         ✅ Ready
+
+Real meal replan                  ⏳ Waiting for Sofiia
+Selected recurring matching E2E   ⏳ Waiting for Rina/Vika
+Chat HTTP/frontend E2E            ⏳ Team integration if required
+
+Отже моя частина зараз знаходиться у статусі Ready for integration. Наступна зміна в orchestration потрібна після того, як Софія додасть real replan_meal_plan().
