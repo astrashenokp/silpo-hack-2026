@@ -648,56 +648,6 @@ def test_chat_recalculate_plan():
         .basket_total_minor
     )
 
-def test_chat_recalculate_plan():
-
-    catalog = DemoCatalog()
-
-    first_planner = UlianaPlanner(
-        catalog=catalog,
-        chat_interpreter=(
-            FailIfCalledInterpreter()
-        ),
-    )
-
-    previous_result = (
-        make_result(first_planner)
-    )
-
-    planner = UlianaPlanner(
-        catalog=catalog,
-
-        chat_interpreter=(
-            FakeChatInterpreter(
-                ChatCommand(
-                    intent="recalculate_plan"
-                )
-            )
-        ),
-    )
-
-    result = planner.handle_chat_message(
-        message="Перерахуй кошик",
-
-        previous_result=(
-            previous_result
-        ),
-
-        selected_recurring_ids=[],
-
-        session=object(),
-
-        emit_progress=lambda *_: None,
-    )
-
-    assert result.version == 2
-
-    assert (
-        result.basket_total_minor
-        ==
-        previous_result
-        .basket_total_minor
-    )
-
 
 def test_chat_reduce_cost_runs_meal_replan():
 
@@ -783,6 +733,307 @@ def test_chat_reduce_cost_runs_meal_replan():
             "reason"
         ]
         == "reduce_cost"
+    )
+
+    assert (
+        meal_replanner.calls[0][
+            "preserve_meal_slots"
+        ]
+        == ["breakfast"]
+    )
+def test_change_budget_decrease_runs_reduce_cost():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    meal_replanner = (
+        FakeMealReplanner(
+            previous_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="change_budget",
+                    budget_uah=400,
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    result = planner.handle_chat_message(
+        message="Зміни бюджет на 400 грн",
+
+        previous_result=(
+            previous_result
+        ),
+
+        session=object(),
+
+        emit_progress=lambda *_: None,
+    )
+
+    # Budget really changed:
+    # 1800 UAH -> 400 UAH.
+    assert (
+        result.budget_minor
+        == 40000
+    )
+
+    assert (
+        result.effective_request
+        .budget_minor
+        == 40000
+    )
+
+    # Our fake reduce-cost replan
+    # produces the cheaper 340 UAH basket.
+    assert (
+        result.basket_total_minor
+        == 34000
+    )
+
+    assert (
+        result.basket_total_minor
+        <= result.budget_minor
+    )
+
+    assert (
+        result.budget_remaining_minor
+        == 6000
+    )
+
+    assert (
+        result.budget_status
+        == "within_budget"
+    )
+
+    assert (
+        result.version
+        ==
+        previous_result.version + 1
+    )
+
+    # Most important assertion:
+    # change_budget selected reduce_cost.
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "reduce_cost"
+    )
+def test_change_budget_increase_runs_upgrade_plan():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    meal_replanner = (
+        FakeMealReplanner(
+            previous_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="change_budget",
+                    budget_uah=2500,
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    result = planner.handle_chat_message(
+        message="Бюджет тепер 2500 грн",
+
+        previous_result=(
+            previous_result
+        ),
+
+        session=object(),
+
+        emit_progress=lambda *_: None,
+    )
+
+    # New budget must be preserved
+    # through the upgrade flow.
+    assert (
+        result.budget_minor
+        == 250000
+    )
+
+    assert (
+        result.effective_request
+        .budget_minor
+        == 250000
+    )
+
+    assert (
+        result.budget_status
+        == "within_budget"
+    )
+
+    assert (
+        result.basket_total_minor
+        <= result.budget_minor
+    )
+
+    assert (
+        result.budget_remaining_minor
+        ==
+        result.budget_minor
+        - result.basket_total_minor
+    )
+
+    assert (
+        result.version
+        ==
+        previous_result.version + 1
+    )
+
+    # Most important assertion:
+    # change_budget selected upgrade_plan.
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "upgrade_plan"
+    )
+def test_chat_upgrade_plan():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    meal_replanner = (
+        FakeMealReplanner(
+            previous_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="upgrade_plan",
+
+                    preserve_meal_slots=[
+                        "breakfast"
+                    ],
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    result = planner.handle_chat_message(
+        message=(
+            "Зроби меню різноманітнішим, "
+            "але не змінюй сніданки"
+        ),
+
+        previous_result=(
+            previous_result
+        ),
+
+        session=object(),
+
+        emit_progress=lambda *_: None,
+    )
+
+    # Direct upgrade does NOT
+    # change the user's budget.
+    assert (
+        result.budget_minor
+        ==
+        previous_result.budget_minor
+    )
+
+    assert (
+        result.effective_request
+        .budget_minor
+        ==
+        previous_result.effective_request
+        .budget_minor
+    )
+
+    assert (
+        result.budget_status
+        == "within_budget"
+    )
+
+    assert (
+        result.version
+        ==
+        previous_result.version + 1
+    )
+
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "upgrade_plan"
     )
 
     assert (
