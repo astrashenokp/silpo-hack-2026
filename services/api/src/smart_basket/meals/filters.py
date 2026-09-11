@@ -72,6 +72,14 @@ RESTRICTION_LABELS = {
         "display": "Pork-free",
         "edamam_health": ("pork-free",),
     },
+    "fish-free": {
+        "display": "Fish-free",
+        "edamam_health": ("fish-free",),
+    },
+    "red-meat-free": {
+        "display": "Red-meat-free",
+        "edamam_health": ("red-meat-free",),
+    },
 }
 
 

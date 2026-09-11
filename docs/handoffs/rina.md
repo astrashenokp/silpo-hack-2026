@@ -14,6 +14,12 @@ search result. The schema-driven cart adapter is now connected to a reviewed liv
 preview/confirmation service with price and availability revalidation, stale-cart
 protection, idempotency, and post-write read-back. Automated provider-boundary tests
 pass; one explicitly authorized real-cart mutation is still required for final live QA.
+The September 11 acceptance attempt reached the live planner after normalizing the
+connected profile's `fish` and `red-meat` labels, but the provider returned empty
+product arrays for both meal staples and the previously successful `молоко` query.
+The planner correctly produced an incomplete, non-confirmable result and made no
+cart mutation. Final write QA is blocked until Silpo search returns inventory for
+the active cart/store context.
 
 - Date: September 7, 2026.
 - Revision: local working-tree implementation; no PR or shared commit yet.

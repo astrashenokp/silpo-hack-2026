@@ -152,7 +152,11 @@ async def test_get_user_context_reads_profile_history_and_cart_without_exposing_
             ],
         },
         "silpo_get_my_food_restrictions": {
-            "restrictions": [{"slug": "peanut-free", "name": None}],
+            "restrictions": [
+                {"slug": "peanut-free", "name": None},
+                {"slug": "fish", "name": None},
+                {"slug": "red-meat", "name": None},
+            ],
         },
         "silpo_get_my_online_orders": {"orders": [{"orderId": "online-1"}]},
         "silpo_get_my_offline_orders": {"orders": []},
@@ -194,7 +198,7 @@ async def test_get_user_context_reads_profile_history_and_cart_without_exposing_
 
     assert context.model_dump(by_alias=True) == {
         "preferences": [],
-        "restrictions": ["peanut-free"],
+        "restrictions": ["peanut-free", "fish-free", "red-meat-free"],
         "pets": [
             {"species": "cat", "count": 1},
             {"species": "dog", "count": 1},

@@ -93,6 +93,17 @@ def _string_values(payload: Any, *keys: str) -> list[str]:
     return list(dict.fromkeys(normalized))
 
 
+def _canonical_restrictions(labels: list[str]) -> list[str]:
+    """Translate Silpo profile labels to the shared hard-restriction contract."""
+    aliases = {
+        "fish": "fish-free",
+        "fish-free": "fish-free",
+        "red-meat": "red-meat-free",
+        "red-meat-free": "red-meat-free",
+    }
+    return list(dict.fromkeys(aliases.get(label.casefold(), label) for label in labels))
+
+
 def _normalize_pets(payload: Any) -> list[Pet]:
     raw_pets = _list_payload(payload, "pets", "animals")
     counts: dict[str, int] = {}
@@ -850,6 +861,7 @@ async def get_user_context(session, owner=None) -> UserContext:
     restrictions = _string_values(food, "restrictions", "foodRestrictions")
     if isinstance(food, list):
         restrictions = _string_values(food)
+    restrictions = _canonical_restrictions(restrictions)
     pets = _normalize_pets(family)
 
     cart_id = _find_value(cart, "shoppingCartId", "cartId")
