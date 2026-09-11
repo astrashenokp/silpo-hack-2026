@@ -12,7 +12,7 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
 | Sofiia | Ready to connect on synthetic meals; September 10 | [Handoff](handoffs/sofiia.md), local implementation | Live Edamam account/field verification next | Needs Edamam credentials/account limits and export permissions; independent synthetic module is complete and tested. |
 | Vika | Not reported | — | Algorithm fixtures 7th | — |
-| Polina | In progress: QA runs 1–3; September 11 | [QA results](qa/test-results.md), [bugs](qa/bugs.md), [demo script](qa/demo-script.md), [submission checklist](qa/submission.md), [handoff draft](handoffs/polina.md) | Final integration 12th; deploy, QA and demo freeze 13th | Clean setup blocked by BUG-001 (Rina/Uliana); UI not using the API, BUG-002 (Ksiusha/Alina); cart confirmation BUG-012 and invented data BUG-011 (Alina/Ksiusha); recalculation BUG-003 (Uliana). QA toolkit, CI and deployment draft continue meanwhile |
+| Polina | In progress: QA runs 1–4, fixes of BUG-001 and BUG-003 retested; September 11 | [QA results](qa/test-results.md), [bugs](qa/bugs.md), [demo script](qa/demo-script.md), [submission checklist](qa/submission.md), [handoff draft](handoffs/polina.md) | Final integration 12th; deploy, QA and demo freeze 13th | UI not using the API, BUG-002 (Ksiusha/Alina); cart preview and narrow screens BUG-012, BUG-015 and invented data BUG-011 (Alina/Ksiusha); chat tests BUG-004 (Uliana); stale contract BUG-014 (Rina). QA toolkit, CI and deployment draft continue meanwhile |
 
 Use: in progress / ready to connect / verified / blocked / delivered. For blockers, say what independent work continues.
 

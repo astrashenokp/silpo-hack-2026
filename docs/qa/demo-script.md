@@ -17,7 +17,7 @@ record a step as live after it has been verified on the frozen revision.
 | 1:00–1:30 | Input | Golden input in the form: 1,800 UAH, 2,000 kcal, 3 people, 4 days, vegetarian, cat, restocking on | ✅ form works (days are capped at 7, BUG-007) |
 | 1:30–2:00 | Agent progress | Completed stages: context → history → meals → matching → optimization → ready | ⚠️ UI shows scripted steps, not API progress (BUG-002) |
 | 2:00–2:45 | Result | Meals by day with portions and calories, basket with package quantities, budget remaining, warnings with the DEMO label | ⚠️ fixture data; invented products and prices must be gone first (BUG-011) |
-| 2:45–3:30 | Silpo cart | "Add to Silpo cart" → preview of exact changes → "Confirm addition" → verified per-item result | ❌ preview is stale and cannot be confirmed (BUG-012); live cart needs the MCP |
+| 2:45–3:30 | Silpo cart | "Add to Silpo cart" → preview of exact changes → "Confirm addition" → verified per-item result | ❌ the UI preview is stale and cannot be confirmed (BUG-012), and windows under 1280 px have no cart panel (BUG-015); Rina's live cart service awaits one authorized check |
 | 3:30–3:50 | FatSecret | Save one meal → preview of one personal portion → confirm → saved outcome | ✅ demo flow works in the UI; live account checked by Rina through the API |
 | 3:50–4:15 | Implementation and quality | Next.js → Python API → agent modules → MCP gateway; automated checks (e2e, contract fuzzing, UI, accessibility) | ✅ QA toolkit and results exist |
 | 4:15–4:45 | Value and limits | Measured facts only; what is demo and what is live; next steps | Fill in from the final test run |
@@ -38,7 +38,7 @@ record a step as live after it has been verified on the frozen revision.
 - [ ] Frozen revision and deploy URL recorded in `docs/handoffs/polina.md`.
 - [ ] `deploy/run-local.ps1 -Test` (or the deployed URL with the same suites) passes.
 - [ ] Demo account signed in, cart context ready, cart emptied of rehearsal items.
-- [ ] Browser: clean profile, 100% zoom, desktop width (1280 px or more shows the cart panel beside the plan), notifications off.
+- [ ] Browser: clean profile, 100% zoom, window at least 1280 px wide (narrower windows have no cart panel, BUG-015), notifications off.
 - [ ] No personal data, tokens or account IDs visible; FatSecret account label checked.
 - [ ] Backup: a fully labeled demo-mode take recorded first, in case a live provider fails.
 

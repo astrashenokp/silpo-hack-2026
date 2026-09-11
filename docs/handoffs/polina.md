@@ -14,8 +14,9 @@ submission status on September 14.
 - **Main files:** `tests/`, `docs/qa/` (test results, bugs, tools, demo script, submission
   checklist), `deploy/` (runbook, Docker, `run-local.ps1`), `.github/workflows/ci.yml`.
 - **Checks and results:** [test results](../qa/test-results.md).
-- **Known issues:** [bug list](../qa/bugs.md). Open blockers: BUG-001 (clean setup) and
-  BUG-002 (UI not connected to the API); for the video also BUG-011 and BUG-012.
+- **Known issues:** [bug list](../qa/bugs.md). BUG-001 and BUG-003 are fixed and retested.
+  Open blocker: BUG-002 (UI not connected to the API); for the video also BUG-011, BUG-012
+  and BUG-015.
 
 ## Launch the local demo today (PowerShell, repository root)
 
@@ -27,12 +28,11 @@ powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Test
 powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Stop
 ```
 
-Manual alternative. The documented install fails until BUG-001 is fixed. Workaround:
+Manual alternative (the documented install works again since #20):
 
 ```powershell
 python -m venv services/api/.venv
-& services/api/.venv/Scripts/python.exe -m pip install "fastapi>=0.115,<1" "uvicorn>=0.34,<1" "pydantic>=2.11,<3" "mcp>=2.2,<3" "httpx2>=2.12,<3" google-genai "pytest>=8,<10" "httpx>=0.28,<1" "pytest-asyncio>=0.23.0"
-$env:PYTHONPATH = 'services/api/src'
+& services/api/.venv/Scripts/python.exe -m pip install -e 'services/api[test]'
 & services/api/.venv/Scripts/python.exe -m uvicorn smart_basket.app:app --host 127.0.0.1 --port 8000
 ```
 
@@ -47,7 +47,7 @@ npm.cmd run start
 
 Open `http://localhost:3000` (not `127.0.0.1`: every POST would get 403). Check the stack
 from a third terminal with `& services/api/.venv/Scripts/python.exe -m pytest tests/e2e`:
-expected 34 passed, 1 xfailed. After BUG-001 is fixed, follow `services/api/README.md`.
+expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 
 ## Recovery
 
@@ -62,13 +62,13 @@ expected 34 passed, 1 xfailed. After BUG-001 is fixed, follow `services/api/READ
 
 | Path | Status | Evidence |
 |---|---|---|
-| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, run 1 |
-| Recalculation | failing | BUG-003 |
+| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, runs 1 and 4 (35 of 35 in run 4) |
+| Recalculation | working in demo | Fixed in #22; retested in run 4 |
 | Web UI → Python API | not connected | BUG-002 |
-| Silpo OAuth and MCP | not verified by Polina | Needs the authorized demo account |
+| Silpo OAuth, tools, context and product search | live, reported by Arina and Rina on September 11; not re-verified by Polina | `docs/handoffs/arina.md`, `docs/handoffs/rina.md` |
+| Silpo cart writes | live service with preview, revalidation, idempotency and read-back; one authorized real-cart check still open | Rina's handoff |
 | Edamam | not verified | Credential-gated (Sofiia) |
 | FatSecret export | demo verified; live reported by Rina on September 11, not re-verified | Needs consumer keys and the test account |
-| Silpo cart writes | demo only | Needs a live Silpo session and cart context |
 
 ## Release checklist ([QA and Demo](../QA_DEMO.md#september-1213-polinas-release-checklist))
 
