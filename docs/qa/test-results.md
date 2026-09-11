@@ -185,3 +185,28 @@ the recording plan: [demo script](demo-script.md).
 The live Silpo checks that Arina and Rina reported on September 11 (OAuth, 40 tools, ready cart
 context, live product search, a reviewed cart write with read-back awaiting one authorized
 real-cart check) were not repeated by Polina, and the UI does not use these paths yet (BUG-002).
+
+## Run 5 — UI connected to the API, September 11, 2026
+
+- **Revision:** `afe586e`, that is PR #27 (the web UI connected to the Python API) with `main` @
+  `acac9d3` (Uliana's #26) merged in; merged into `main` as `cf7ebbf`. Demo mode, guest session;
+  the frontend was rebuilt.
+
+| Check | Result |
+|---|---|
+| Documented backend tests without `GEMINI_API_KEY` | ✅ 191 passed — BUG-004 fixed |
+| Generated contracts (`export_contracts.py --check`) | ✅ 22 files current — BUG-014 fixed |
+| e2e through Next.js | ✅ 35 of 35 |
+| UI specs against the running API, desktop and Pixel 7 | ✅ 33 passed, 1 skipped (cart confirmation on mobile, BUG-015); the 9 expected failures reproduce BUG-006, BUG-011, BUG-012 (adding without a preview), BUG-015 (mobile) and BUG-016 |
+| Plan from the form | ✅ `POST /api/plans`, then polling; the result shows the API's `dataMode` — BUG-002 fixed |
+| "↻ Перерахувати кошик" | ✅ the server's next version appears as a second plan |
+| Cart preview and confirmation | ✅ the preview comes from `/api/cart/preview`, and "Підтвердити додавання" ends in "Результат синхронізації". "Додати все" still skips the preview — BUG-012 partly fixed |
+| FatSecret save | ✅ preview of one personal portion, confirmation and export outcome through the API |
+| Silpo and FatSecret connect buttons | ✅ with the provider responses mocked: Silpo goes through `/api/auth/silpo/start` and back to the app with the status read; a FatSecret start error is explained on the page. Real sign-in not run: it needs the demo accounts |
+| Over-budget plan (budget 100) | ❌ "Бюджет перевищено на 110,00 грн.", yet "Додати все" stays enabled. "Синхронізувати з Сільпо" gets 409 `STALE_PLAN` from `/api/cart/preview`, and the page shows "Помилка синхронізації кошика Сільпо" with the API's English message and a retry that cannot succeed — BUG-016 |
+| Result screen of that plan | ⚠️ the cart panel lists the API's three demo products (210,00 грн), but ingredient rows keep the invented butter and whiskey prices and images (BUG-011) and the panel the invented store address (BUG-006) |
+| CI on PR #27 (`afe586e`) | ✅ all five jobs: backend, frontend, e2e, images, UI |
+| CI on `main` after the merge (`cf7ebbf`) | ✅ all five jobs |
+
+Not covered: a signed-in Silpo or FatSecret run from the UI, and the chat, which has no API
+endpoint.

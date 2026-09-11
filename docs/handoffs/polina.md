@@ -5,18 +5,19 @@ submission status on September 14.
 
 - **Delivery date:** in progress. Early intake September 11; release target September 13;
   recording and submission September 14.
-- **PR / commit:** intake of `main` @ `0ef7fbb` (PR #18), QA toolkit (PR #19), round 2 on
-  branch `feature/polina-qa-round2`.
+- **PR / commit:** intake of `main` @ `0ef7fbb` (PR #18), QA toolkit (PR #19), round 2 (PR #23),
+  UI connected to the API (PR #27), run 5 records on branch `feature/polina-qa-run5`.
 - **Receiving teammates:** the whole team.
-- **Completed so far:** runs 1–3 (setup, backend and frontend checks, HTTP scenarios, UI
-  walk-through, load and security review); end-to-end suite; QA toolkit; CI workflow;
-  deployment draft and local launcher; demo script; submission checklist; bug list with owners.
+- **Completed so far:** runs 1–5 (setup, backend and frontend checks, HTTP scenarios, UI
+  walk-through, load and security review, retests); end-to-end suite; QA toolkit; CI workflow;
+  deployment draft and local launcher; demo script; submission checklist; bug list with owners;
+  the web UI wired to the Python API (plans, recalculation, cart, FatSecret, sign-in routes).
 - **Main files:** `tests/`, `docs/qa/` (test results, bugs, tools, demo script, submission
   checklist), `deploy/` (runbook, Docker, `run-local.ps1`), `.github/workflows/ci.yml`.
 - **Checks and results:** [test results](../qa/test-results.md).
-- **Known issues:** [bug list](../qa/bugs.md). BUG-001 and BUG-003 are fixed and retested.
-  Open blocker: BUG-002 (UI not connected to the API); for the video also BUG-011, BUG-012
-  and BUG-015.
+- **Known issues:** [bug list](../qa/bugs.md). BUG-001–BUG-004 and BUG-014 are fixed and
+  retested. Open for the video: invented data (BUG-006, BUG-011), adding without a preview
+  (BUG-012), no cart panel below 1280 px (BUG-015) and over-budget adding (BUG-016).
 
 ## Launch the local demo today (PowerShell, repository root)
 
@@ -62,9 +63,9 @@ expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 
 | Path | Status | Evidence |
 |---|---|---|
-| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, runs 1 and 4 (35 of 35 in run 4) |
-| Recalculation | working in demo | Fixed in #22; retested in run 4 |
-| Web UI → Python API | not connected | BUG-002 |
+| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, runs 1, 4 and 5 (35 of 35) |
+| Recalculation | working in demo, from the UI too | Fixed in #22; the UI calls it since #27; run 5 |
+| Web UI → Python API | connected (PR #27): plans, recalculation, cart, FatSecret, sign-in routes | Run 5, UI specs against the running API; the chat has no API endpoint |
 | Silpo OAuth, tools, context and product search | live, reported by Arina and Rina on September 11; not re-verified by Polina | `docs/handoffs/arina.md`, `docs/handoffs/rina.md` |
 | Silpo cart writes | live service with preview, revalidation, idempotency and read-back; one authorized real-cart check still open | Rina's handoff |
 | Edamam | not verified | Credential-gated (Sofiia) |
@@ -72,14 +73,14 @@ expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 
 ## Release checklist ([QA and Demo](../QA_DEMO.md#september-1213-polinas-release-checklist))
 
-- [ ] Reproduce setup from the delivered revision — blocked by BUG-001; workaround works
-- [ ] Connect frontend, HTTP API, agent and provider adapters — UI not connected (BUG-002); providers not live
+- [ ] Reproduce setup from the delivered revision — the documented install works since #20 (run 4); repeat on the frozen revision
+- [ ] Connect frontend, HTTP API, agent and provider adapters — UI connected to the API in #27 (run 5); providers not yet run live from the UI
 - [x] Start Next.js and Python; `/api` forwarding and background plan execution work locally
 - [ ] OAuth redirect/session behavior and CORS on the hosted origin
-- [ ] Acceptance scenarios run, bugs assigned and retested — run 1 recorded; owners to be notified; retest pending
+- [ ] Acceptance scenarios run, bugs assigned and retested — runs 1–5 recorded; owners to be notified
 - [ ] A real MCP interaction and the Edamam path verified
 - [ ] FatSecret export acceptance checks on the live account
-- [ ] No blocking defects in the demo flow — two blockers open
+- [ ] No blocking defects in the demo flow — no blocker open since #27; High defects BUG-005, BUG-011, BUG-012 and BUG-015 remain
 - [ ] Demo account, cart context and a repeatable starting state
 - [ ] Revision frozen on September 13 with deploy URL, launch and recovery steps
 - [ ] Clearly labeled synthetic backup

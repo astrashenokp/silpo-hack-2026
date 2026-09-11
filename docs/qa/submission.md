@@ -24,7 +24,7 @@ re-check both pages on September 12 and again before submitting.
 
 | Risk | Why it matters | Tracking |
 |---|---|---|
-| The UI never calls the API, so the live Silpo MCP path (OAuth, 40 tools, context, search and a reviewed cart write, reported by Arina and Rina on September 11) is not visible in the product | The MCP must be functionally significant, and "MCP quality" is a judging criterion | BUG-002; one authorized real-cart check (Rina) |
+| Since #27 the UI calls the API, but the live Silpo MCP path (OAuth, 40 tools, context, search and a reviewed cart write, reported by Arina and Rina on September 11) has not been run end to end from the UI | The MCP must be functionally significant, and "MCP quality" is a judging criterion | A signed-in UI run on the demo account (Polina); one authorized real-cart check (Rina) |
 | Invented products, prices, cart panel and user name look like real results | Fabricated results or false information can disqualify the entry | BUG-006, BUG-011 |
 | Brand images from the Jameson website and the "Галичина" butter photo, Wikimedia photos without recorded licenses | The team must hold rights to every submitted material | BUG-011; list below |
 | The repository is private | If the form asks for code, the organizer needs access | Decide: add the organizer as a collaborator or submit an archive |
