@@ -100,6 +100,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -107,6 +110,10 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             tests/ui/package-lock.json
+      - name: Install and start the API
+        run: |
+          python -m pip install -e 'services/api[test]'
+          nohup python -m uvicorn smart_basket.app:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
       - name: Build and start the web app
         working-directory: apps/web
         run: |
@@ -118,13 +125,13 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: Wait for the web app
+      - name: Wait for the web app and the API behind it
         run: |
           for attempt in $(seq 1 60); do
-            curl -fsS -o /dev/null http://localhost:3000/ && exit 0
+            curl -fsS -o /dev/null http://localhost:3000/api/health && exit 0
             sleep 1
           done
-          cat web.log
+          cat api.log web.log
           exit 1
       - name: Playwright specs on desktop and mobile
         working-directory: tests/ui
