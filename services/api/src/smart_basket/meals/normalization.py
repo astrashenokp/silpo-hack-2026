@@ -124,9 +124,18 @@ def aggregate_ingredients_from_meals(
     quantities: dict[str, float] = defaultdict(float)
     meal_ids: dict[str, list[str]] = defaultdict(list)
     first_amount: dict[str, IngredientAmount] = {}
+    units: dict[str, NormalizedUnit] = {}
 
     for meal in meals:
         for amount in meal.ingredient_amounts:
+            unit = normalize_unit(amount.unit)
+            existing_unit = units.setdefault(amount.ingredient_id, unit)
+            if existing_unit != unit:
+                raise UnitNormalizationError(
+                    "Ingredient "
+                    f"'{amount.ingredient_id}' appears with incompatible units: "
+                    f"'{existing_unit}' and '{unit}'."
+                )
             quantities[amount.ingredient_id] += amount.quantity
             meal_ids[amount.ingredient_id].append(meal.id)
             first_amount.setdefault(amount.ingredient_id, amount)
@@ -136,12 +145,18 @@ def aggregate_ingredients_from_meals(
         spec = specs.get(ingredient_id) if specs is not None else None
         amount = first_amount[ingredient_id]
         name = spec.name if spec is not None else amount.name
+        unit = normalize_unit(spec.unit) if spec is not None else units[ingredient_id]
+        if unit != units[ingredient_id]:
+            raise UnitNormalizationError(
+                "Ingredient "
+                f"'{ingredient_id}' appears with unit '{units[ingredient_id]}', "
+                f"but its spec requires '{unit}'."
+            )
         search_terms = (
             list(spec.search_terms)
             if spec is not None
             else _search_terms_for_unknown_ingredient(ingredient_id, name)
         )
-        unit = normalize_unit(spec.unit) if spec is not None else amount.unit
         ingredients.append(
             IngredientRequirement(
                 id=ingredient_id,

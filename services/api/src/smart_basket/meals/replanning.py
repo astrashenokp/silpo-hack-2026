@@ -16,11 +16,17 @@ from .nutrition import (
 from .synthetic import build_synthetic_meal_plan
 
 ReplanReason = Literal["reduce_cost", "replace_ingredient", "upgrade_plan"]
+MealSlot = Literal["breakfast", "lunch", "dinner"]
 
 SUPPORTED_REPLAN_REASONS: set[str] = {
     "reduce_cost",
     "replace_ingredient",
     "upgrade_plan",
+}
+SUPPORTED_MEAL_SLOTS: set[str] = {
+    "breakfast",
+    "lunch",
+    "dinner",
 }
 
 
@@ -40,7 +46,10 @@ def build_synthetic_replanned_meal_plan(
             + ", ".join(sorted(SUPPORTED_REPLAN_REASONS))
         )
 
-    preserve_slots = set(preserve_meal_slots or [])
+    preserve_slots = _validated_preserve_slots(preserve_meal_slots)
+    if reason == "replace_ingredient" and not _normalized_text(replace_ingredient):
+        raise ValueError("replace_ingredient is required when reason='replace_ingredient'.")
+
     generated = _generated_replan_meals(request, filters, reason, replace_ingredient)
     previous_by_position = {
         (meal.day, meal.slot): meal
@@ -48,12 +57,26 @@ def build_synthetic_replanned_meal_plan(
     }
 
     meals: list[Meal] = []
+    replacement_count = 0
     for meal in generated:
         previous = previous_by_position.get((meal.day, meal.slot))
-        if previous is not None and _should_preserve(previous, preserve_slots, replace_ingredient):
+        if reason == "replace_ingredient":
+            base_meal = previous or meal
+            replanned_meal, changed = _replace_ingredient_in_meal(
+                base_meal,
+                replace_ingredient or "",
+            )
+            meals.append(replanned_meal)
+            replacement_count += int(changed)
+        elif previous is not None and _should_preserve(previous, preserve_slots):
             meals.append(previous)
         else:
             meals.append(meal)
+
+    if reason == "replace_ingredient" and replacement_count == 0:
+        raise ValueError(
+            f"Ingredient '{replace_ingredient}' was not found in the meal plan."
+        )
 
     ingredients = aggregate_ingredients_from_meals(
         meals,
@@ -97,22 +120,15 @@ def _generated_replan_meals(request, filters, reason: str, replace_ingredient: s
     if reason == "reduce_cost":
         return [_reduce_cost_meal(meal) for meal in meals]
     if reason == "replace_ingredient":
-        if not replace_ingredient:
-            return meals
-        return [_replace_ingredient_in_meal(meal, replace_ingredient) for meal in meals]
+        return meals
     return [_upgrade_meal(meal) for meal in meals]
 
 
 def _should_preserve(
     meal: Meal,
     preserve_slots: set[str],
-    replace_ingredient: str | None,
 ) -> bool:
-    if meal.slot not in preserve_slots:
-        return False
-    if replace_ingredient and _meal_contains_ingredient(meal, replace_ingredient):
-        return False
-    return True
+    return meal.slot in preserve_slots
 
 
 def _reduce_cost_meal(meal: Meal) -> Meal:
@@ -136,14 +152,14 @@ def _reduce_cost_meal(meal: Meal) -> Meal:
     return meal
 
 
-def _replace_ingredient_in_meal(meal: Meal, requested: str) -> Meal:
+def _replace_ingredient_in_meal(meal: Meal, requested: str) -> tuple[Meal, bool]:
     if not _meal_contains_ingredient(meal, requested):
-        return meal
+        return meal, False
 
-    replacement_id, replacement_name = _replacement_for(requested)
     amounts_by_id: dict[str, IngredientAmount] = {}
     for amount in meal.ingredient_amounts:
         if _matches_ingredient(amount, requested):
+            replacement_id, replacement_name = _replacement_for(meal, requested, amount)
             replacement = IngredientAmount(
                 ingredient_id=replacement_id,
                 name=replacement_name,
@@ -160,12 +176,15 @@ def _replace_ingredient_in_meal(meal: Meal, requested: str) -> Meal:
                 amount,
             )
 
-    return _with_amounts(
-        meal,
-        list(amounts_by_id.values()),
-        title=f"Alternative {meal.title.removeprefix('Alternative ')}",
-        kcal_factor=0.98,
-        macros_factor=0.98,
+    return (
+        _with_amounts(
+            meal,
+            list(amounts_by_id.values()),
+            title=f"Alternative {meal.title.removeprefix('Alternative ')}",
+            kcal_factor=0.98,
+            macros_factor=0.98,
+        ),
+        True,
     )
 
 
@@ -250,17 +269,62 @@ def _meal_contains_ingredient(meal: Meal, requested: str) -> bool:
 
 
 def _matches_ingredient(amount: IngredientAmount, requested: str) -> bool:
-    normalized = requested.strip().casefold()
+    normalized = _normalized_text(requested)
     return normalized in {
         amount.ingredient_id.casefold(),
         amount.name.casefold(),
     }
 
 
-def _replacement_for(requested: str) -> tuple[str, str]:
-    normalized = requested.strip().casefold()
+def _replacement_for(
+    meal: Meal,
+    requested: str,
+    removed_amount: IngredientAmount,
+) -> tuple[str, str]:
+    normalized = _normalized_text(requested)
     if normalized in {"rice", "dry rice"}:
         return "lentils", "Dry lentils"
     if normalized in {"lentils", "dry lentils"}:
         return "rice", "Dry rice"
-    return "rice", "Dry rice"
+    if normalized in {"oats", "dry oats"}:
+        return "rice", "Dry rice"
+
+    same_unit_candidates = [
+        amount
+        for amount in meal.ingredient_amounts
+        if not _matches_ingredient(amount, requested)
+        and amount.unit == removed_amount.unit
+    ]
+    if same_unit_candidates:
+        candidate = same_unit_candidates[0]
+        return candidate.ingredient_id, candidate.name
+
+    if removed_amount.unit == "g":
+        if meal.slot == "breakfast":
+            return "oats", "Dry oats"
+        if meal.slot == "lunch":
+            return "lentils", "Dry lentils"
+        return "rice", "Dry rice"
+
+    fallback_id = f"replacement-{_slugify(removed_amount.name)}"
+    return fallback_id, f"Alternative {removed_amount.name}"
+
+
+def _validated_preserve_slots(preserve_meal_slots: list[str] | None) -> set[MealSlot]:
+    preserve_slots = set(preserve_meal_slots or [])
+    unknown_slots = preserve_slots - SUPPORTED_MEAL_SLOTS
+    if unknown_slots:
+        raise ValueError(
+            "Unsupported preserve_meal_slots values: "
+            + ", ".join(sorted(unknown_slots))
+        )
+    return preserve_slots
+
+
+def _normalized_text(value: str | None) -> str:
+    return (value or "").strip().casefold()
+
+
+def _slugify(value: str) -> str:
+    slug = "-".join(value.strip().casefold().split())
+    return slug or "ingredient"

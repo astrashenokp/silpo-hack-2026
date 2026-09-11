@@ -72,7 +72,10 @@ def replan_meal_plan(
             replace_ingredient=replace_ingredient,
         )
         result["warnings"] = [
-            "Edamam meal source was requested for replanning; synthetic meal-level replan fallback was used.",
+            (
+                "Live Edamam provider-side replanning is not supported yet; "
+                "local meal-level replan fallback was used."
+            ),
             *result["warnings"],
         ]
         return result
