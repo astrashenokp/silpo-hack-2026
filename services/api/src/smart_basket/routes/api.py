@@ -152,6 +152,7 @@ async def silpo_product_search(
                 delivery_type=delivery_type,
                 timeslot=timeslot,
                 tool_schemas=tool_schemas,
+                owner=owner,
             )
     except Exception as exc:
         message = str(exc).lower()

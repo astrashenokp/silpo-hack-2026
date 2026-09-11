@@ -29,7 +29,7 @@
 ### 4. Інтеграція з FatSecret (`services/api/src/smart_basket/fatsecret/`)
 * **Авторство:** OAuth/client implementation below was completed by Rina under the team's agreement to cover Arina's FatSecret assignment.
 * **`client.py` та `auth.py`**: Реалізовано OAuth 1.0 request-token → browser authorization → access-token flow, перевірку callback token, ізольоване серверне зберігання токенів у сесії та HMAC-SHA1 transport для delegated API calls. Роути: `/api/auth/fatsecret/start`, `/api/auth/fatsecret/callback`, статус: `/api/integrations/fatsecret`.
-* Rina's connected-session Saved Meal export now uses provider matching, write and read-back calls. Disconnected sessions retain a labelled demo. Durable encrypted token storage and manual visibility verification in the FatSecret app are still required for deployment.
+* Rina's connected-session Saved Meal export now uses provider matching, write and read-back calls. Disconnected sessions retain a labelled demo. Durable encrypted token storage is still required for deployment; manual visibility in the FatSecret app was verified on September 11.
 * **Live check, September 10, 2026:** browser request-token flow, FatSecret member login/authorization, callback access-token exchange and session-scoped `connected: true` status were verified against a real test account. No account identifier, token or secret was recorded. Saved Meal writes were not exercised by this check.
 * **Live export check, September 11, 2026:** after explicit candidate review, Rina confirmed one Saved Meal; provider read-back succeeded and the user found the meal under **Favorite Meals** in the same connected FatSecret account. No account identity, credential or remote ID was recorded.
 
@@ -43,7 +43,8 @@
 * [x] Архітектура шлюзу та ізоляція сесій продумана[cite: 8].
 * [x] Усі функції пройшли локальну перевірку на синтаксичні та імпортні помилки (тести `pytest` пройдені успішно)[cite: 8].
 * [x] Код зафіксовано в гілці `feature/arina-mcp-gateway` та відправлено на GitHub[cite: 8].
-* [⏳] *Очікування:* фінальний робочий `mcp_token` від команди для перевірки живих запитів на реальному тестовому акаунті[cite: 8].
+* [x] **Live Silpo check, September 11, 2026:** OAuth completed against the official MCP endpoint; `tools/list` returned the expected 40 read/write tools; live context reported a ready cart; and product search returned a normalized available item with its live price. No token, account identity, cart identifier or product identifier was recorded.
+* [x] The backend keeps provider `companyId` and `branchId` write coordinates privately after search and builds `silpo_add_or_update_cart_products` arguments from the runtime input schema. A reviewed live cart mutation and read-back are still pending Rina's cart-service integration.
 
 ### 🔌 Життєвий цикл сесії та пакет MCP
 - **Пакет:** використовується офіційний Python-пакет `mcp>=1.0.0`[cite: 8].

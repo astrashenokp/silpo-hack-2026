@@ -7,8 +7,8 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Katia | Not reported | — | Draft Figma 6th, final 7th | — |
 | Ksiusha | Not reported | — | Input flow on mocks 7th | — |
 | Alina | Not reported | — | Result flow on mocks 7th | — |
-| Arina | Not reported | — | MCP/OAuth access check 6th | — |
-| Rina | Ready to connect on mocks; September 7 | [Handoff](handoffs/rina.md), local implementation | Frontend/module connection check next; live integration September 8–9 | Live adapters/auth from Arina; planner from Uliana; meals from Sofiia; optimization/recurring input from Vika. Mock work complete for first connection. |
+| Arina | Silpo OAuth/read path verified; September 11 | [Handoff](handoffs/arina.md), local implementation | Support Rina's reviewed cart write/read-back check | Live write awaits cart-service integration; OAuth, tools/list, context and product search are verified. |
+| Rina | FatSecret live export and Silpo read path verified; September 11 | [Handoff](handoffs/rina.md), local implementation | Connect reviewed live Silpo cart preview/write/read-back | Needs planner/catalog integration for live cart candidates; low-level MCP write adapter is ready. |
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
 | Sofiia | Ready to connect on synthetic meals; September 10 | [Handoff](handoffs/sofiia.md), local implementation | Live Edamam account/field verification next | Needs Edamam credentials/account limits and export permissions; independent synthetic module is complete and tested. |
 | Vika | Not reported | — | Algorithm fixtures 7th | — |

@@ -8,6 +8,11 @@ one reviewed Saved Meal was created, its provider write was read back successful
 and the user found it in FatSecret under **Favorite Meals** in the same connected
 account. No account identity, token, secret, or remote identifier is recorded here.
 
+The same day's Silpo check completed browser OAuth, discovered the official MCP
+read/write tool set, loaded live cart context and returned a normalized live product
+search result. The low-level schema-driven cart write adapter is implemented; the
+reviewed live cart service and write/read-back check remain separate follow-up work.
+
 - Date: September 7, 2026.
 - Revision: local working-tree implementation; no PR or shared commit yet.
 - Receivers: Ksiusha, Alina, Uliana, Vika; Arina for provider adapter boundaries.

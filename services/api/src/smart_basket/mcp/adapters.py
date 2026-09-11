@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 class McpReadError(RuntimeError):
     """The provider read failed; this is different from a valid empty history."""
 
+
+class McpWriteError(RuntimeError):
+    """A provider mutation could not be built or verified safely."""
+
 @dataclass(frozen=True)
 class PurchaseHistoryResult:
     purchases: list[dict[str, Any]]
@@ -286,6 +290,35 @@ def normalize_product_search(payload: Any, query: str) -> ProductSearchResponse:
             f"available fields: {', '.join(fields)}."
         )
     return ProductSearchResponse(query=query, products=products, warnings=warnings)
+
+
+def product_write_metadata(payload: Any) -> dict[str, dict[str, str]]:
+    """Keep provider write coordinates server-side, keyed by public product ID."""
+    found: dict[str, dict[str, str]] = {}
+
+    def collect(value: Any) -> None:
+        if isinstance(value, dict):
+            product_id = _find_value(value, "productId", "id")
+            company_id = _find_value(value, "companyId")
+            branch_id = _find_value(value, "branchId")
+            if product_id is not None and (company_id is not None or branch_id is not None):
+                found[str(product_id)] = {
+                    key: str(item)
+                    for key, item in {
+                        "productId": product_id,
+                        "companyId": company_id,
+                        "branchId": branch_id,
+                    }.items()
+                    if item is not None
+                }
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(payload)
+    return found
 
 def uah_to_minor(value: Any) -> int:
     """Convert a UAH value to integer kopiykas without binary-float rounding."""
@@ -612,6 +645,7 @@ async def search_products(
     delivery_type: str | None = None,
     timeslot: Any = None,
     tool_schemas: Mapping[str, Mapping[str, Any]] | None = None,
+    owner: Any = None,
 ) -> ProductSearchResponse:
     """Search the user's selected Silpo branch and return contract-safe products."""
     try:
@@ -624,10 +658,111 @@ async def search_products(
             tool_schemas or {},
         )
         result = await session.call_tool(tool_name, arguments=args)
-        return normalize_product_search(_decode_tool_payload(result, []), query)
+        payload = _decode_tool_payload(result, [])
+        if owner is not None:
+            metadata = product_write_metadata(payload)
+            with owner.lock:
+                owner.silpo_product_write_metadata.update(metadata)
+        return normalize_product_search(payload, query)
     except Exception as e:
         _handle_adapter_exception(e, None, f"пошуку товарів (query: {query})")
         raise McpReadError("Silpo product search failed.") from e
+
+
+def cart_write_call(
+    products: list[dict[str, Any]],
+    cart_id: str,
+    delivery_type: str | None,
+    timeslot: Any,
+    input_schema: Mapping[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Build a cart mutation strictly from the live tools/list schema."""
+    tool_name = "silpo_add_or_update_cart_products"
+    properties = _schema_properties(input_schema, tool_name)
+    normalized = _normalized_property_names(properties)
+    items_key = next(
+        (normalized[name] for name in ("products", "items") if name in normalized),
+        None,
+    )
+    if items_key is None:
+        raise McpWriteError(f"{tool_name} has no products/items array.")
+    definition = properties.get(items_key)
+    item_schema = definition.get("items", {}) if isinstance(definition, dict) else {}
+    item_properties = _schema_properties(item_schema, f"{tool_name}.{items_key}")
+    item_names = _normalized_property_names(item_properties)
+
+    mapped_items: list[dict[str, Any]] = []
+    for product in products:
+        values = {
+            "productid": product.get("productId"),
+            "companyid": product.get("companyId"),
+            "branchid": product.get("branchId"),
+            "quantity": product.get("quantity"),
+            "count": product.get("quantity"),
+        }
+        item = {
+            item_names[name]: value
+            for name, value in values.items()
+            if value is not None and name in item_names
+        }
+        missing = [
+            key for key in item_schema.get("required", [])
+            if key not in item
+            and not (
+                isinstance(item_properties.get(key), dict)
+                and "default" in item_properties[key]
+            )
+        ]
+        if missing:
+            raise McpWriteError(
+                f"{tool_name} product requires unavailable values: {', '.join(missing)}."
+            )
+        mapped_items.append(item)
+
+    arguments: dict[str, Any] = {items_key: mapped_items}
+    context_values = {
+        "shoppingcartid": cart_id,
+        "cartid": cart_id,
+        "deliverytype": delivery_type,
+        "timeslotstart": _find_value(timeslot, "start"),
+        "timeslotend": _find_value(timeslot, "end"),
+    }
+    for name, value in context_values.items():
+        if value is not None and name in normalized:
+            arguments[normalized[name]] = value
+    missing = [
+        key for key in input_schema.get("required", [])
+        if key not in arguments
+        and not (
+            isinstance(properties.get(key), dict)
+            and "default" in properties[key]
+        )
+    ]
+    if missing:
+        raise McpWriteError(
+            f"{tool_name} requires unavailable context: {', '.join(missing)}."
+        )
+    return tool_name, arguments
+
+
+async def add_or_update_cart_products(
+    session,
+    products: list[dict[str, Any]],
+    *,
+    cart_id: str,
+    delivery_type: str | None,
+    timeslot: Any,
+    tool_schemas: Mapping[str, Mapping[str, Any]],
+) -> Any:
+    """Apply one reviewed cart mutation; callers must read the cart back afterward."""
+    schema = tool_schemas.get("silpo_add_or_update_cart_products")
+    if not schema:
+        raise McpWriteError("silpo_add_or_update_cart_products is unavailable in tools/list.")
+    tool_name, arguments = cart_write_call(
+        products, cart_id, delivery_type, timeslot, schema
+    )
+    result = await session.call_tool(tool_name, arguments=arguments)
+    return _decode_tool_payload(result, {})
 
 @with_retries(max_attempts=3)
 async def get_food_restrictions(session) -> Any:
