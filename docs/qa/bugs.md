@@ -23,6 +23,9 @@ been sent to the owners; Polina shares it with the team.
 | BUG-008 | Low | `API_BASE_URL` is documented as runtime configuration but only applies at `next build` | Ksiusha | Open |
 | BUG-009 | Medium | Text contrast below WCAG AA on primary buttons, hints and the cart panel | Katia + Ksiusha + Alina | Open |
 | BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow` | Rina | Open |
+| BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Open |
+| BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Open |
+| BUG-013 | Medium | Public-deployment hardening: unbounded sessions and runs, no rate limit, cookie without `Secure` | Rina | Open |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -116,7 +119,9 @@ been sent to the owners; Polina shares it with the team.
 - **Where:** `apps/web/src/app/page.tsx:532-585` (`SetupCartPreview`: two
   "Масло солодковершкове Галичина" items at 124.00/79.99 ₴, a discount total and the store
   "просп. Бандери, 23 (Самовивіз)"); `page.tsx:405` and `:662` greet "Катерина"/"Катерино"
-  after the simulated connection.
+  after the simulated connection. `apps/web/src/features/planner-results/PlannerResults.tsx:380`
+  greets every user, guests included, with "Привіт, Катерино!", and `:258` and `:361` show a
+  fixed "10:39" time. Confirmed at runtime in run 3 (`tests/ui/specs/flows.spec.ts`).
 - **Expected:** synthetic data is visibly labeled (product decision 9); no invented store,
   cart contents or person.
 - **Impact:** viewers of the video can take the panel for the user's real Silpo cart.
@@ -169,3 +174,63 @@ been sent to the owners; Polina shares it with the team.
   keep `Allow`.
 - **Impact:** none on the demo flow; the contract is less precise for the frontend types and
   for automated checks.
+
+## BUG-011 — Invented regular purchases, prices and brand images shown as plan data
+
+- **Found in:** run 3 UI walk-through (desktop and Pixel 7); confirmed by
+  `tests/ui/specs/flows.spec.ts` (`test.fail`).
+- **Where:** `apps/web/src/features/planner-results/PlannerResults.tsx:684`, `:702` and `:714`
+  define fixed "Регулярні покупки" items ("Масло солодковершкове Галичина" and "Віскі Jameson",
+  each shown twice); `:954`, `:1002` and `:1019-1020` attach butter or whiskey names, prices and
+  images to meal ingredients. `apps/web/src/components/ui/ProductImage.tsx:9-16` hotlinks the
+  Jameson image from `ik.imagekit.io/.../jamesonwhiskey/...` and the oats, rice and lentil photos
+  from Wikimedia Commons; `apps/web/public/butter-galychyna.png` is a brand product photo.
+- **Actual:** a guest without purchase history sees "Регулярні покупки" with two butter packs
+  (79.99 ₴) and two bottles of whiskey (629.00 ₴). Ingredient rows carry the same prices, for
+  example "Dry oats 150 g — 124.00 → 79.99 ₴" with the butter photo and
+  "Dry lentils 90 g — 899.00 → 629.00 ₴" with the whiskey photo, while the budget summary below
+  says 490 грн.
+- **Expected:** recurring suggestions only from `result.recurringItems` (empty for a guest; the
+  contract forbids invented recurrence); ingredient rows with quantities from `ingredientAmounts`
+  and prices only from `selectedProducts`; no alcohol unless it comes from the user's own history;
+  images with known rights, or none.
+- **Impact:** looks like fabricated results in the video (grounds for disqualification under the
+  rules), recommends alcohol in a Silpo-branded family planner, and uses third-party brand images
+  without recorded rights ([submission checklist](submission.md)).
+
+## BUG-012 — The cart addition cannot be previewed and confirmed
+
+- **Found in:** run 3 UI walk-through; confirmed by two `test.fail` checks in
+  `tests/ui/specs/flows.spec.ts`.
+- **Actual:** "Додати все в кошик Сільпо" immediately fills the side cart panel (7 units,
+  490 грн) and disables itself; no preview appears. "↥ Синхронізувати з Сільпо" then opens
+  "Попередній перегляд додавання в кошик" (adding 490 грн to 35 грн, total 525 грн), but the
+  dialog already says "Пропозиція застаріла. Створіть новий перегляд перед підтвердженням." and
+  "Підтвердити додавання" stays disabled. "↻ Перерахувати кошик" resets the panel to the two
+  invented butter packs.
+- **Cause of the disabled button:** in fixture mode the preview is `fixtures/cart-preview.json`,
+  whose `expiresAt` is `2026-09-07T12:00:00+00:00`;
+  `apps/web/src/features/planner-results/components/CartFlow.tsx:23` marks it expired and `:74`
+  disables confirmation.
+- **Expected** ([product](../PRODUCT.md), "Real cart"): "Add to Silpo cart" → preview of the exact
+  changes → "Confirm addition" → verified per-item outcome; nothing changes before confirmation.
+- **Impact:** the confirmed cart addition, a central step of the demo story, cannot be shown.
+
+## BUG-013 — Public-deployment hardening
+
+- **Found in:** run 3 load check and read-only security review.
+- **Actual:**
+  - Each `GET /api/context` without the session cookie creates a new server-side session
+    (`services/api/src/smart_basket/routes/api.py:100-108`): 300 such requests created 300
+    sessions in 0.6 s. Sessions, runs, previews and receipts are never evicted, and plan
+    creation has no rate limit, so anyone can grow memory on a public URL.
+  - The session cookie is `HttpOnly` and `SameSite=Lax` but not `Secure` (`routes/api.py:108`).
+  - FastAPI's `/docs` and `/openapi.json` are public.
+- **Expected for a public demo:** session and run expiry or caps, a basic rate limit and
+  `Secure` cookies behind HTTPS.
+- **Impact:** none locally; a public deployment can be exhausted, and a restart signs every viewer
+  out (recovery steps in `deploy/README.md`).
+- **Confirmed as sound:** runs, previews and exports are isolated per session (404 across
+  sessions; 30 parallel sessions without a leak), the POST origin allowlist, the FatSecret callback
+  token check with `hmac.compare_digest`, no provider tokens in status responses, and generic
+  500 messages.

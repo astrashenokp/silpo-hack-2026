@@ -115,3 +115,49 @@ waits for an MCP token; Edamam is credential-gated (Sofiia).
 | Schemathesis 4.26.1, 25 examples per operation | 13 of 18 operations (sign-in routes and Silpo search excluded), 328 cases, no server errors. Findings: 13 × 405 without `Allow` and 3 × schema-valid `X-Demo-Scenario` values rejected — BUG-010 |
 | MCP Inspector 2.6.0 | Lists 24 tools of Playwright MCP and 29 of Chrome DevTools MCP |
 | `probe_mcp.py` with python-sdk 2.2.0 | Lists 24 tools of a local Playwright MCP over Streamable HTTP. The Silpo MCP server was not contacted |
+
+## Run 3 — UI flows, load, security review and submission rules, September 11, 2026
+
+- **Revision:** `main` @ `d98b5f4` (after PRs #18 and #19), plus the new specs on branch
+  `feature/polina-qa-round2`. Same environment and demo mode; the API runs with the local
+  workaround for BUG-001.
+
+### UI walk-through (Playwright, Desktop Chrome 1280×720 and Pixel 7)
+
+| Flow | Observation |
+|---|---|
+| Account gate → guest → planner form | ✅ Works on both; no console errors; no horizontal overflow |
+| Empty budget | ✅ Inline "Вкажіть бюджет."; no result |
+| Golden input → result | ⚠️ Fixture plan (12 meals, 490 грн, 1 310 грн remaining) with the DEMO warnings. No request to `/api/*` during the whole session — BUG-002 |
+| Greeting and time | ❌ A guest is greeted "Привіт, Катерино!"; timestamps are a fixed "10:39" — BUG-006 |
+| Regular purchases and ingredient prices | ❌ Butter and Jameson whiskey, each twice, for a guest without history; ingredient rows show those prices and photos — BUG-011 |
+| "Додати все в кошик Сільпо" | ❌ Fills the cart panel at once, without a preview — BUG-012 |
+| "Синхронізувати з Сільпо" | ❌ Preview opens but is already stale; "Підтвердити додавання" stays disabled — BUG-012 |
+| "↻ Перерахувати кошик" | ⚠️ Replays scripted steps and resets the cart panel to the invented butter packs |
+| FatSecret save | ✅ Demo: preview with "1 особиста порція на страву" and "не щоденниковий запис", confirmation, per-meal outcome |
+| Cart controls on narrow screens | ✅ Reachable on Pixel 7, 1024, 1279 and 1280 px |
+
+`tests/ui/specs/flows.spec.ts` on both projects: 14 passed — 6 real checks and 8 expected
+failures that reproduce BUG-006, BUG-011 and BUG-012.
+
+### Load and isolation (API directly, 30 parallel demo sessions)
+
+30 of 30 plans completed; from `POST /api/plans` to the terminal state p50 0.23 s and max 0.24 s.
+No session could read another session's run (30 of 30 answered 404). 300 cookie-less
+`GET /api/context` requests created 300 server-side sessions in 0.6 s; none expire — BUG-013.
+
+### Security review (read-only)
+
+Sound: per-session isolation, the POST origin allowlist, an `HttpOnly` + `SameSite=Lax` session
+cookie, the FatSecret callback token check with `hmac.compare_digest`, no tokens in status
+responses, generic 500 messages. Findings for a public deployment: unbounded sessions and runs, no
+rate limit, no `Secure` cookie flag, public `/docs` — BUG-013. The Silpo OAuth state and PKCE
+checks are delegated to the MCP SDK and were not re-verified.
+
+### Submission rules
+
+Read from the official site and rules on September 11: video pitch 3–5 minutes, submission
+through the registration form by September 14, 23:59 Kyiv time, the Silpo MCP as a functionally
+significant component, a list of third-party objects, a generative-AI disclosure and 90 days of
+access for the organizer. Details and the risks they create: [submission checklist](submission.md);
+the recording plan: [demo script](demo-script.md).
