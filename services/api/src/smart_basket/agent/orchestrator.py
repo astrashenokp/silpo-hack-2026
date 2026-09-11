@@ -54,14 +54,18 @@ class UlianaPlanner:
     HTTP, runId, run status and storage
     are handled by Rina's FastAPI layer.
     """
+    MAX_OPTIMIZATION_PASSES = 2
+    MAX_MEAL_REPLANS = 1
 
     def __init__(
         self,
         catalog,
         chat_interpreter=None,
+        meal_replanner=None,
     ):
         self.catalog = catalog
         self.chat_interpreter = chat_interpreter
+        self.meal_replanner = meal_replanner
 
 
     def _get_chat_interpreter(self):
@@ -71,6 +75,84 @@ class UlianaPlanner:
             )
 
         return self.chat_interpreter
+
+    def _request_meal_replan(
+        self,
+        request,
+        context,
+        previous_meals,
+        reason,
+        preserve_meal_slots=None,
+        replace_ingredient=None,
+        emit_progress=None,
+    ):
+        """
+        Request exactly one revised meal plan.
+
+        Uliana controls WHEN replanning happens.
+        Sofiia controls HOW meals are changed.
+        """
+
+        # Sofiia replan boundary is not connected yet.
+        if self.meal_replanner is None:
+            return None
+
+        preserve_meal_slots = (
+            preserve_meal_slots or []
+        )
+
+        if emit_progress is not None:
+            emit_progress(
+                "meals",
+                (
+                    "Meal replan requested. "
+                    f"Reason: {reason}."
+                ),
+            )
+
+        meal_result = self.meal_replanner(
+            request=request,
+            effective_context=context,
+            previous_meals=previous_meals,
+            reason=reason,
+            preserve_meal_slots=(
+                preserve_meal_slots
+            ),
+            replace_ingredient=(
+                replace_ingredient
+            ),
+        )
+
+        required_fields = {
+            "meals",
+            "ingredients",
+            "nutrition_summary",
+        }
+
+        missing_fields = (
+            required_fields
+            - set(meal_result.keys())
+        )
+
+        if missing_fields:
+            raise ValueError(
+                "Meal replanner returned "
+                "an invalid result. Missing fields: "
+                + ", ".join(
+                    sorted(missing_fields)
+                )
+            )
+
+        if emit_progress is not None:
+            emit_progress(
+                "meals",
+                (
+                    "Meal replan completed: "
+                    f"{len(meal_result['meals'])} meals."
+                ),
+            )
+
+        return meal_result
 
     def run_planner(
         self,
@@ -628,101 +710,256 @@ class UlianaPlanner:
             update=updates
         )
 
-    def _handle_reduce_cost(
+    def _build_replanned_result(
         self,
-        command,
         previous_result,
-        session,
-        emit_progress,
+        meal_result,
+        optimization,
+        context,
     ):
-        request = (
-            previous_result
-            .effective_request
+        meal_source = meal_result.get(
+            "source",
+            "synthetic",
         )
 
-        ingredients = (
-            previous_result.ingredients
+        data_mode = (
+            "mixed"
+            if meal_source in {
+                "edamam",
+                "mixed",
+            }
+            else "demo"
         )
 
-        recurring_items = (
-            previous_result.recurring_items
+        warnings = list(
+            previous_result.warnings
         )
 
-        selected_recurring = [
-            item
-            for item in recurring_items
-            if item.selected
-        ]
+        for warning in meal_result.get(
+            "warnings",
+            [],
+        ):
+            if warning not in warnings:
+                warnings.append(warning)
 
-        context = (
-            self.catalog
-            .get_user_context(session)
+        if data_mode == "mixed":
+            mixed_warning = (
+                "Meal data is live or mixed while "
+                "catalog/cart data remains demo; "
+                "cart confirmation is disabled."
+            )
+
+            if mixed_warning not in warnings:
+                warnings.append(
+                    mixed_warning
+                )
+
+        can_confirm_cart = (
+            data_mode == "demo"
+
+            and
+
+            optimization.budget_status
+            == "within_budget"
+
+            and len(
+                optimization
+                .unresolved_requirements
+            )
+            == 0
+
+            and context.cart_context_ready
         )
 
-        matching_context = MatchingContext(
-            session=session,
-            catalog=self.catalog,
-            check_restrictions=(
+        return previous_result.model_copy(
+            update={
+                "version":
+                    previous_result.version + 1,
+
+                "data_mode":
+                    data_mode,
+
+                "meal_plan":
+                    meal_result["meals"],
+
+                "nutrition_summary":
+                    meal_result[
+                        "nutrition_summary"
+                    ],
+
+                "ingredients":
+                    meal_result["ingredients"],
+
+                "selected_products":
+                    optimization.selected_products,
+
+                "substitutions":
+                    optimization.substitutions,
+
+                "basket_total_minor":
+                    optimization.basket_total_minor,
+
+                "budget_remaining_minor":
+                    optimization
+                    .budget_remaining_minor,
+
+                "savings_minor":
+                    optimization.savings_minor,
+
+                "budget_status":
+                    optimization.budget_status,
+
+                "unresolved_requirements":
+                    optimization
+                    .unresolved_requirements,
+
+                "warnings":
+                    warnings,
+
+                "can_confirm_cart":
+                    can_confirm_cart,
+            }
+        )
+    
+    def _handle_reduce_cost(
+            self,
+            command,
+            previous_result,
+            session,
+            emit_progress,
+        ):
+            request = (
+                previous_result
+                .effective_request
+            )
+
+            recurring_items = (
+                previous_result.recurring_items
+            )
+
+            selected_recurring = [
+                item
+                for item in recurring_items
+                if item.selected
+            ]
+
+            context = (
                 self.catalog
-                .check_restrictions
-            ),
-        )
+                .get_user_context(session)
+            )
 
-        try:
-            matching_result = (
-                find_product_candidates(
-                    ingredients,
-                    selected_recurring,
-                    matching_context,
+            # previous_result is already product-optimized
+            # for its current ingredients by run_planner().
+            #
+            # Therefore reduce_cost does NOT repeat
+            # matching + optimization for the old ingredients.
+            #
+            # Instead, we move directly to one bounded
+            # meal-level replan.
+            meal_result = (
+                self._request_meal_replan(
+                    request=request,
+                    context=context,
+                    previous_meals=(
+                        previous_result.meal_plan
+                    ),
+                    reason="reduce_cost",
+                    preserve_meal_slots=(
+                        command.preserve_meal_slots
+                    ),
+                    emit_progress=emit_progress,
                 )
             )
 
-        except ValueError as error:
-            return {
-                "type": "blocked",
-                "message": str(error),
-                "command": command.model_dump(),
-            }
+            # Sofiia's real meal replanner is not connected yet.
+            # Keep backward-compatible behavior until it exists.
+            if meal_result is None:
+                return {
+                    "type":
+                        "meal_replan_required",
 
-        emit_progress(
-            "matching",
-            "Product candidates refreshed.",
-        )
+                    "message": (
+                        "The current basket is already "
+                        "product-optimized. Reducing the "
+                        "cost further requires meal replanning."
+                    ),
 
-        optimization = optimize_basket(
-            request=request,
-            ingredients=ingredients,
-            candidates=matching_result,
-            selected_recurring=selected_recurring,
-        )
+                    "preserveMealSlots":
+                        command.preserve_meal_slots,
 
-        emit_progress(
-            "optimization",
-            "Basket optimization completed.",
-        )
+                    "command":
+                        command.model_dump(),
+                }
 
-        if (
-            optimization.basket_total_minor
-            >=
-            previous_result.basket_total_minor
-        ):
-            return {
-                "type": "meal_replan_required",
-                "message": (
-                    "No cheaper valid basket was found "
-                    "for the current meal plan."
+            # These are NEW ingredients returned
+            # by Sofiia after the meal-level replan.
+            replanned_ingredients = (
+                meal_result["ingredients"]
+            )
+
+            matching_context = MatchingContext(
+                session=session,
+                catalog=self.catalog,
+                check_restrictions=(
+                    self.catalog
+                    .check_restrictions
                 ),
-                "preserveMealSlots":
-                    command.preserve_meal_slots,
-                "command":
-                    command.model_dump(),
-            }
+            )
 
-        return self._build_updated_result(
-            previous_result=previous_result,
-            optimization=optimization,
-            context=context,
-        )
+            # Now matching makes sense again,
+            # because ingredients have changed.
+            try:
+                matching_result = (
+                    find_product_candidates(
+                        replanned_ingredients,
+                        selected_recurring,
+                        matching_context,
+                    )
+                )
+
+            except ValueError as error:
+                return {
+                    "type": "blocked",
+                    "message": str(error),
+                    "command": command.model_dump(),
+                }
+
+            emit_progress(
+                "matching",
+                (
+                    "Product matching completed "
+                    "for replanned meals."
+                ),
+            )
+
+            # Vika now chooses the cheapest valid
+            # products for the NEW ingredients.
+            optimization = optimize_basket(
+                request=request,
+                ingredients=replanned_ingredients,
+                candidates=matching_result,
+                selected_recurring=(
+                    selected_recurring
+                ),
+            )
+
+            emit_progress(
+                "optimization",
+                (
+                    "Basket optimization completed "
+                    "after meal replan."
+                ),
+            )
+
+            # Build one coherent result:
+            # new meals + new ingredients + new products
+            # + new totals.
+            return self._build_replanned_result(
+                previous_result=previous_result,
+                meal_result=meal_result,
+                optimization=optimization,
+                context=context,
+            )
     
     def _handle_replace_ingredient(
         self,
@@ -776,19 +1013,159 @@ class UlianaPlanner:
                 "command": command.model_dump(),
             }
 
-        return {
-            "type": "meal_replan_required",
-            "message": (
-                f"Ingredient '{target.name}' "
-                "was found. Replacing it requires "
-                "meal replanning."
+        request = (
+            previous_result
+            .effective_request
+        )
+
+        context = (
+            self.catalog
+            .get_user_context(session)
+        )
+
+        meal_result = (
+            self._request_meal_replan(
+                request=request,
+                context=context,
+                previous_meals=(
+                    previous_result.meal_plan
+                ),
+                reason="replace_ingredient",
+                preserve_meal_slots=(
+                    command.preserve_meal_slots
+                ),
+                replace_ingredient=(
+                    target.name
+                ),
+                emit_progress=emit_progress,
+            )
+        )
+
+        if meal_result is None:
+            return {
+                "type":
+                    "meal_replan_required",
+
+                "message": (
+                    f"Ingredient '{target.name}' "
+                    "was found. Replacing it requires "
+                    "meal replanning."
+                ),
+
+                "ingredientId":
+                    target.id,
+
+                "ingredient":
+                    target.name,
+
+                "preserveMealSlots":
+                    command.preserve_meal_slots,
+
+                "command":
+                    command.model_dump(),
+            }
+
+        recurring_items = (
+            previous_result.recurring_items
+        )
+
+        selected_recurring = [
+            item
+            for item in recurring_items
+            if item.selected
+        ]
+
+        replanned_ingredients = (
+            meal_result["ingredients"]
+        )
+
+        matching_context = MatchingContext(
+            session=session,
+            catalog=self.catalog,
+            check_restrictions=(
+                self.catalog
+                .check_restrictions
             ),
-            "ingredientId": target.id,
-            "ingredient": target.name,
-            "preserveMealSlots":
-                command.preserve_meal_slots,
-            "command": command.model_dump(),
-        }
+        )
+
+        try:
+            matching_result = (
+                find_product_candidates(
+                    replanned_ingredients,
+                    selected_recurring,
+                    matching_context,
+                )
+            )
+
+        except ValueError as error:
+            return {
+                "type": "blocked",
+                "message": str(error),
+                "command": command.model_dump(),
+            }
+
+        emit_progress(
+            "matching",
+            (
+                "Product matching refreshed "
+                "after ingredient replacement."
+            ),
+        )
+
+        optimization = optimize_basket(
+            request=request,
+            ingredients=replanned_ingredients,
+            candidates=matching_result,
+            selected_recurring=(
+                selected_recurring
+            ),
+        )
+
+        if (
+            optimization.basket_total_minor
+            >= previous_result.basket_total_minor
+        ):
+            return {
+                "type": "no_cost_improvement",
+
+                "message": (
+                    "A cheaper meal plan could not "
+                    "be found while preserving the "
+                    "requested constraints."
+                ),
+
+                "previousBasketTotalMinor": (
+                    previous_result
+                    .basket_total_minor
+                ),
+
+                "candidateBasketTotalMinor": (
+                    optimization
+                    .basket_total_minor
+                ),
+
+                "preserveMealSlots": (
+                    command.preserve_meal_slots
+                ),
+
+                "command":
+                    command.model_dump(),
+            }
+
+        emit_progress(
+            "optimization",
+            (
+                "Basket optimization completed "
+                "after ingredient replacement."
+            ),
+        )
+
+        return self._build_replanned_result(
+            previous_result=previous_result,
+            meal_result=meal_result,
+            optimization=optimization,
+            context=context,
+        )
     
     def _handle_create_plan(
         self,

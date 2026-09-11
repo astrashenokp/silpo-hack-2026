@@ -19,7 +19,83 @@ from smart_basket.schemas import (
 # ==========================================================
 # FAKE GEMINI
 # ==========================================================
+class FakeMealReplanner:
+    def __init__(
+        self,
+        previous_result,
+    ):
+        self.previous_result = (
+            previous_result
+        )
 
+        self.calls = []
+
+    def __call__(
+        self,
+        request,
+        effective_context,
+        previous_meals,
+        reason,
+        preserve_meal_slots=None,
+        replace_ingredient=None,
+    ):
+        self.calls.append({
+            "reason":
+                reason,
+
+            "preserve_meal_slots":
+                list(
+                    preserve_meal_slots
+                    or []
+                ),
+
+            "replace_ingredient":
+                replace_ingredient,
+        })
+
+        ingredients = []
+
+        for ingredient in (
+            self.previous_result
+            .ingredients
+        ):
+            quantity = {
+                "rice": 900.0,
+                "lentils": 900.0,
+            }.get(
+                ingredient.id,
+                ingredient.quantity,
+            )
+
+            ingredients.append(
+                ingredient.model_copy(
+                    update={
+                        "quantity":
+                            quantity
+                    }
+                )
+            )
+
+        return {
+            "meals":
+                previous_meals,
+
+            "ingredients":
+                ingredients,
+
+            "nutrition_summary":
+                self.previous_result
+                .nutrition_summary,
+
+            "warnings":
+                [
+                    "Fake reduce-cost replan."
+                ],
+
+            "source":
+                "synthetic",
+        }
+    
 class FakeChatInterpreter:
     """
     Pretends to be Gemini.
@@ -570,4 +646,148 @@ def test_chat_recalculate_plan():
         ==
         previous_result
         .basket_total_minor
+    )
+
+def test_chat_recalculate_plan():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="recalculate_plan"
+                )
+            )
+        ),
+    )
+
+    result = planner.handle_chat_message(
+        message="Перерахуй кошик",
+
+        previous_result=(
+            previous_result
+        ),
+
+        selected_recurring_ids=[],
+
+        session=object(),
+
+        emit_progress=lambda *_: None,
+    )
+
+    assert result.version == 2
+
+    assert (
+        result.basket_total_minor
+        ==
+        previous_result
+        .basket_total_minor
+    )
+
+
+def test_chat_reduce_cost_runs_meal_replan():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    meal_replanner = (
+        FakeMealReplanner(
+            previous_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="reduce_cost",
+                    preserve_meal_slots=[
+                        "breakfast"
+                    ],
+                )
+            )
+        ),
+
+        meal_replanner=meal_replanner,
+    )
+
+    result = planner.handle_chat_message(
+        message=(
+            "Зроби дешевше, "
+            "але не змінюй сніданки"
+        ),
+
+        previous_result=(
+            previous_result
+        ),
+
+        session=object(),
+
+        emit_progress=lambda *_: None,
+    )
+
+    assert (
+        previous_result.basket_total_minor
+        == 49000
+    )
+
+    assert (
+        result.basket_total_minor
+        == 34000
+    )
+
+    assert (
+        result.basket_total_minor
+        <
+        previous_result.basket_total_minor
+    )
+
+    assert (
+        result.version
+        ==
+        previous_result.version + 1
+    )
+
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "reduce_cost"
+    )
+
+    assert (
+        meal_replanner.calls[0][
+            "preserve_meal_slots"
+        ]
+        == ["breakfast"]
     )
