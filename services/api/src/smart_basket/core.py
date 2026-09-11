@@ -50,6 +50,7 @@ class Session:
     silpo_connected: bool = False
     silpo_tools: tuple[str, ...] = ()
     silpo_tool_schemas: dict[str, dict] = field(default_factory=dict)
+    silpo_product_write_metadata: dict[str, dict] = field(default_factory=dict)
     silpo_cart_id: str | None = None
     silpo_branch_id: str | None = None
     silpo_delivery_type: str | None = None
