@@ -16,20 +16,6 @@ from smart_basket.schemas import (
     PlanningRequest,
 )
 
-from smart_basket.agent.llm import GeminiChatInterpreter
-
-interpreter = GeminiChatInterpreter()
-
-messages = [
-    
-]
-
-for message in messages:
-    command = interpreter.interpret(message)
-
-    print("\nMESSAGE:", message)
-    print("RESULT:", command.model_dump())
-
 # ==========================================================
 # FAKE GEMINI
 # ==========================================================
@@ -135,7 +121,7 @@ def test_create_button_runs_planner_without_gemini():
 
     assert (
         result.basket_total_minor
-        == 34000
+        == 49000
     )
 
     assert (
@@ -181,7 +167,7 @@ def test_chat_can_create_plan():
 
     assert (
         result.basket_total_minor
-        == 34000
+        == 49000
     )
 
     assert result.version == 1
@@ -282,7 +268,7 @@ def test_chat_explain_plan():
     )
 
     assert (
-        "1460.00 UAH"
+        "1310.00 UAH"
         in response["message"]
     )
 

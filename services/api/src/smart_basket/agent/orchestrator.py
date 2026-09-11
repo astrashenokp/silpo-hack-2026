@@ -391,7 +391,7 @@ class UlianaPlanner:
 
         return result
 
-    
+
     def handle_chat_message(
             self,
             message,
@@ -443,7 +443,7 @@ class UlianaPlanner:
                 session=session,
                 emit_progress=emit_progress,
             )
-        
+
         handlers = {
             "change_budget":
                 self._handle_change_budget,
@@ -734,7 +734,7 @@ class UlianaPlanner:
             optimization=optimization,
             context=context,
         )
-    
+
     def _handle_replace_ingredient(
         self,
         command,
@@ -800,7 +800,7 @@ class UlianaPlanner:
                 command.preserve_meal_slots,
             "command": command.model_dump(),
         }
-    
+
     def _handle_create_plan(
         self,
         command,
@@ -946,7 +946,7 @@ class UlianaPlanner:
             "context",
             "User context refreshed.",
         )
-        
+
         matching_context = MatchingContext(
             session=session,
             catalog=self.catalog,
