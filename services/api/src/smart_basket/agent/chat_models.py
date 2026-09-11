@@ -8,6 +8,7 @@ class ChatCommand(BaseModel):
         "create_plan",
         "recalculate_plan",
         "reduce_cost",
+        "upgrade_plan",
         "replace_ingredient",
         "change_budget",
         "explain_plan",
