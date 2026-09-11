@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { fixturePlanningResult } from "@/lib/api/fixtures";
 import ContextSummary from "@/features/planner-input/ContextSummary";
 import {
   createPlan,
@@ -14,6 +15,8 @@ import {
 
 type PlannerFormProps = {
   onPlanReady?: (snapshot: RunSnapshot) => void;
+  demoMode?: boolean;
+  accountConnected?: boolean;
 };
 
 
@@ -85,6 +88,8 @@ function slotLabel(slot: string) {
 
 export default function PlannerForm({
   onPlanReady,
+  demoMode = false,
+  accountConnected = true,
 }: PlannerFormProps) {
   const [budget, setBudget] = useState("");
   const [calories, setCalories] = useState("");
@@ -163,6 +168,23 @@ export default function PlannerForm({
     async function initialLoad() {
       setIsContextLoading(true);
 
+      if (demoMode) {
+        setContext({
+          preferences: [],
+          restrictions: [],
+          pets: [],
+          historyAvailable: accountConnected,
+          cartContextReady: accountConnected,
+          warnings: accountConnected
+            ? ["DEMO: synthetic data; no provider account, cart or Saved Meal is changed."]
+            : ["Гостьовий режим: історія покупок недоступна, але планування працює."],
+        });
+        setSessionExpired(false);
+        setContextError("");
+        setIsContextLoading(false);
+        return;
+      }
+
       try {
         const result = await getContext();
 
@@ -202,7 +224,7 @@ export default function PlannerForm({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [demoMode, accountConnected]);
 
   function validateBudget(value: string) {
     if (!value.trim()) {
@@ -433,6 +455,46 @@ export default function PlannerForm({
     try {
       setIsSubmitting(true);
 
+      if (demoMode) {
+        const runId = `demo-run-${Date.now()}`;
+        const queued: RunSnapshot = {
+          runId,
+          status: "queued",
+          stage: "context",
+          events: [],
+          result: null,
+          error: null,
+        };
+        setRunSnapshot(queued);
+
+        await new Promise((resolve) => window.setTimeout(resolve, 550));
+        setRunSnapshot({ ...queued, status: "running", stage: "optimization" });
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+
+        const basketTotalMinor = fixturePlanningResult.basketTotalMinor;
+        const withinBudget = request.budgetMinor >= basketTotalMinor;
+        const demoResult = {
+          ...fixturePlanningResult,
+          runId,
+          effectiveRequest: request,
+          budgetMinor: request.budgetMinor,
+          budgetRemainingMinor: request.budgetMinor - basketTotalMinor,
+          budgetStatus: withinBudget ? "within_budget" : "over_budget",
+          canConfirmCart: withinBudget,
+        } as unknown as NonNullable<RunSnapshot["result"]>;
+        const completed: RunSnapshot = {
+          runId,
+          status: "completed",
+          stage: "ready",
+          events: [],
+          result: demoResult,
+          error: null,
+        };
+        setRunSnapshot(completed);
+        onPlanReady?.(completed);
+        return;
+      }
+
       const result = await createPlan(request);
 
       console.log("Created plan:", result);
@@ -651,13 +713,13 @@ export default function PlannerForm({
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="max-w-[620px] text-[15px] leading-6 text-[#1F2937]">
+            <p className="max-w-[620px] silpo-chat-text">
               Готово! Ось ваш персональний план, рекомендації щодо регулярних товарів
               та оптимізований кошик:
             </p>
 
             <div className="mt-5 border-t border-[#EAECF0] pt-4">
-              <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+              <h3 className="silpo-section-title">
                 План харчування
               </h3>
 
@@ -706,7 +768,7 @@ export default function PlannerForm({
 
             {nutritionDays.length > 0 ? (
               <div className="mt-5 border-t border-[#EAECF0] pt-4">
-                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                <h3 className="silpo-section-title">
                   Калорійність
                 </h3>
 
@@ -746,7 +808,7 @@ export default function PlannerForm({
 
             {warnings.length > 0 ? (
               <div className="mt-5 border-t border-[#EAECF0] pt-4">
-                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                <h3 className="silpo-section-title">
                   Попередження
                 </h3>
 
@@ -762,7 +824,7 @@ export default function PlannerForm({
 
             {ingredients.length > 0 ? (
               <div className="mt-5 border-t border-[#EAECF0] pt-4">
-                <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+                <h3 className="silpo-section-title">
                   Інгредієнти
                 </h3>
 
@@ -790,7 +852,7 @@ export default function PlannerForm({
             ) : null}
 
             <div className="mt-5 border-t border-[#EAECF0] pt-4">
-              <h3 className="text-[16px] font-semibold text-[#9A6A2D]">
+              <h3 className="silpo-section-title">
                 Товари до кошика
               </h3>
 
@@ -857,9 +919,9 @@ export default function PlannerForm({
         event.preventDefault();
         void handleSubmit();
       }}
-      className="mx-auto mt-4 w-full max-w-[720px]"
+      className="mx-auto mt-2 w-full max-w-[680px] pb-2"
     >
-      <div className="grid grid-cols-1 gap-y-4 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
+      <div className="grid grid-cols-1 gap-y-4 sm:grid-cols-[300px_300px] sm:gap-x-[52px]">
         <PlannerNumberInput
           label="Бюджет"
           value={budget}
@@ -889,10 +951,11 @@ export default function PlannerForm({
           suffix="ккал/особа/день"
           helper="Бажана кількість калорій для 1 людини на день"
           error={caloriesError}
+          digitsOnly
         />
       </div>
 
-      <div className="mt-11 grid grid-cols-1 gap-y-8 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
+      <div className="mt-4 grid grid-cols-1 gap-y-4 sm:grid-cols-[300px_300px] sm:gap-x-[52px]">
         <Counter
           label="Кількість людей"
           value={people}
@@ -929,7 +992,7 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-11 grid grid-cols-1 gap-y-8 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
+      <div className="mt-4 grid grid-cols-1 gap-y-4 sm:grid-cols-[300px_300px] sm:gap-x-[52px]">
         <ChipInput
           label="Алергени/Заборони"
           items={restrictions}
@@ -973,7 +1036,7 @@ export default function PlannerForm({
         />
       </div>
 
-      <div className="mt-11 grid grid-cols-1 sm:grid-cols-[320px_320px] sm:gap-x-[56px]">
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-[300px_300px] sm:gap-x-[52px]">
         <PetChipInput
           label="Домашні тварини"
           items={pets}
@@ -1009,9 +1072,10 @@ export default function PlannerForm({
         isLoading={isContextLoading}
         sessionExpired={sessionExpired}
         hasError={Boolean(contextError)}
+        accountConnected={accountConnected}
       />
 
-      <div className="mt-11 flex flex-col items-stretch gap-6 sm:flex-row sm:items-end sm:justify-between sm:gap-7">
+      <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <label
           className={`flex max-w-[411px] items-start gap-2 ${
             context &&
@@ -1043,7 +1107,7 @@ export default function PlannerForm({
 
             {context &&
               !context.historyAvailable && (
-                <span className="mt-1 block text-xs text-[#98A2B3]">
+                <span className="mt-1 block text-[11px] text-[#98A2B3]">
                   Історія покупок зараз
                   недоступна
                 </span>
@@ -1059,7 +1123,7 @@ export default function PlannerForm({
             isContextLoading ||
             sessionExpired
           }
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-4 text-[12px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[180px]"
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#F89F46] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[180px]"
         >
           <span>
             {isSubmitting
@@ -1192,6 +1256,7 @@ function PlannerNumberInput({
   helper,
   error,
   required = false,
+  digitsOnly = false,
 }: {
   label: string;
   value: string;
@@ -1202,10 +1267,11 @@ function PlannerNumberInput({
   helper: string;
   error: string;
   required?: boolean;
+  digitsOnly?: boolean;
 }) {
   return (
     <div className="w-full">
-      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
+      <h3 className="mb-2 silpo-field-label">
         {label}
 
         {required && (
@@ -1221,20 +1287,26 @@ function PlannerNumberInput({
         }`}
       >
         <input
-          type="number"
-          min="0"
+          type={digitsOnly ? "text" : "number"}
+          min={digitsOnly ? undefined : "0"}
+          inputMode={digitsOnly ? "numeric" : "decimal"}
+          pattern={digitsOnly ? "[0-9]*" : undefined}
           value={value}
           onChange={(event) =>
-            setValue(event.target.value)
+            setValue(
+              digitsOnly
+                ? event.target.value.replace(/[^0-9]/g, "")
+                : event.target.value,
+            )
           }
           onBlur={onBlur}
           placeholder={placeholder}
           aria-label={label}
           aria-invalid={Boolean(error)}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-black/50 focus-visible:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-black/50 focus-visible:outline-none"
         />
 
-        <span className="ml-2 whitespace-nowrap text-sm text-black/50">
+        <span className="ml-2 whitespace-nowrap text-[13px] text-black/50">
           {suffix}
         </span>
       </div>
@@ -1242,12 +1314,12 @@ function PlannerNumberInput({
       {error ? (
         <p
           role="alert"
-          className="pt-2 text-xs text-red-600"
+          className="pt-2 text-[11px] text-red-600"
         >
           {error}
         </p>
       ) : (
-        <p className="pt-2 text-xs text-black/50">
+        <p className="pt-2 text-[11px] text-black/50">
           {helper}
         </p>
       )}
@@ -1274,7 +1346,7 @@ function Counter({
 }) {
   return (
     <div className="w-full">
-      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
+      <h3 className="mb-2 silpo-field-label">
         {label}
       </h3>
 
@@ -1343,16 +1415,16 @@ function ChipInput({
 
   return (
     <div className="w-full">
-      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
+      <h3 className="mb-2 silpo-field-label">
         {label}
       </h3>
 
       {items.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-2 flex flex-wrap gap-1.5">
           {items.map((item) => (
             <span
               key={item}
-              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-3 py-1 text-sm text-[#344054]"
+              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-2.5 py-0.5 text-[12px] text-[#344054]"
             >
               {item}
               <button
@@ -1382,7 +1454,7 @@ function ChipInput({
           }}
           placeholder={placeholder}
           aria-label={label}
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085] focus-visible:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#667085] focus-visible:outline-none"
         />
       </div>
     </div>
@@ -1417,16 +1489,16 @@ function PetChipInput({
 
   return (
     <div className="w-full">
-      <h3 className="mb-3 text-[15px] font-semibold text-[#886432]">
+      <h3 className="mb-2 silpo-field-label">
         {label}
       </h3>
 
       {items.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-2 flex flex-wrap gap-1.5">
           {items.map((item) => (
             <span
               key={item.name}
-              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-3 py-1 text-sm text-[#344054]"
+              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-2.5 py-0.5 text-[12px] text-[#344054]"
             >
               <span>{item.name}</span>
               <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F89F46] px-1 text-[10px] font-semibold text-white">
@@ -1459,7 +1531,7 @@ function PetChipInput({
           }}
           placeholder={placeholder}
           aria-label={label}
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#667085] focus-visible:outline-none"
+          className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#667085] focus-visible:outline-none"
         />
       </div>
     </div>

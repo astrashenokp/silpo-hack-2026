@@ -1,7 +1,7 @@
 """Sofiia's meal planning boundary."""
 
 from .filters import PREFERENCE_LABELS, RESTRICTION_LABELS, display_label_map
-from .planner import build_meal_plan
+from .planner import build_meal_plan, replan_meal_plan
 
 
 def supported_labels() -> dict:
@@ -21,4 +21,4 @@ def label_display_map() -> dict:
     return display_label_map()
 
 
-__all__ = ["build_meal_plan", "label_display_map", "supported_labels"]
+__all__ = ["build_meal_plan", "label_display_map", "replan_meal_plan", "supported_labels"]

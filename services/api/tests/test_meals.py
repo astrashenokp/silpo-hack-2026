@@ -1,6 +1,6 @@
 import pytest
 
-from smart_basket.meals import build_meal_plan, supported_labels
+from smart_basket.meals import build_meal_plan, replan_meal_plan, supported_labels
 from smart_basket.meals.edamam import (
     EdamamSettings,
     EdamamUnavailable,
@@ -9,8 +9,12 @@ from smart_basket.meals.edamam import (
     map_edamam_plan_response,
 )
 from smart_basket.meals.filters import UnsupportedMealFilter, resolve_meal_filters
-from smart_basket.meals.normalization import UnitNormalizationError, normalize_unit
-from smart_basket.schemas import Pet, PlanningRequest, UserContext
+from smart_basket.meals.normalization import (
+    UnitNormalizationError,
+    aggregate_ingredients_from_meals,
+    normalize_unit,
+)
+from smart_basket.schemas import IngredientAmount, Pet, PlanningRequest, UserContext
 
 
 def request(
@@ -324,6 +328,38 @@ def test_requested_edamam_source_can_fail_without_fallback(monkeypatch):
         build_meal_plan(request(), context())
 
 
+def test_replan_requested_edamam_source_declares_synthetic_fallback(monkeypatch):
+    initial = build_meal_plan(request(days=1, people=1), context())
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_ID", "app")
+    monkeypatch.setenv("EDAMAM_MEAL_PLANNER_APP_KEY", "key")
+    monkeypatch.setenv("EDAMAM_ACCOUNT_USER", "user")
+
+    result = replan_meal_plan(
+        request(days=1, people=1),
+        context(),
+        previous_meals=initial["meals"],
+        reason="upgrade_plan",
+    )
+
+    assert result["source"] == "synthetic"
+    assert "Live Edamam provider-side replanning is not supported yet" in result["warnings"][0]
+
+
+def test_replan_requested_edamam_source_can_fail_without_fallback(monkeypatch):
+    initial = build_meal_plan(request(days=1, people=1), context())
+    monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "edamam")
+    monkeypatch.setenv("EDAMAM_SYNTHETIC_FALLBACK", "false")
+
+    with pytest.raises(EdamamUnavailable):
+        replan_meal_plan(
+            request(days=1, people=1),
+            context(),
+            previous_meals=initial["meals"],
+            reason="upgrade_plan",
+        )
+
+
 def test_unknown_meal_source_fails_explicitly(monkeypatch):
     monkeypatch.setenv("SMART_BASKET_MEALS_SOURCE", "typo")
 
@@ -334,6 +370,41 @@ def test_unknown_meal_source_fails_explicitly(monkeypatch):
 def test_unknown_units_are_not_guessed():
     with pytest.raises(UnitNormalizationError):
         normalize_unit("cup")
+
+
+def test_ingredient_aggregation_rejects_mixed_units_for_same_id():
+    initial = build_meal_plan(request(days=1, people=1), context())
+    breakfast = next(meal for meal in initial["meals"] if meal.slot == "breakfast")
+    lunch = next(meal for meal in initial["meals"] if meal.slot == "lunch")
+    shared_breakfast = breakfast.model_copy(
+        update={
+            "ingredient_ids": ["shared"],
+            "ingredient_amounts": [
+                IngredientAmount(
+                    ingredient_id="shared",
+                    name="Shared ingredient",
+                    quantity=100.0,
+                    unit="g",
+                )
+            ],
+        }
+    )
+    shared_lunch = lunch.model_copy(
+        update={
+            "ingredient_ids": ["shared"],
+            "ingredient_amounts": [
+                IngredientAmount(
+                    ingredient_id="shared",
+                    name="Shared ingredient",
+                    quantity=100.0,
+                    unit="ml",
+                )
+            ],
+        }
+    )
+
+    with pytest.raises(UnitNormalizationError, match="incompatible units"):
+        aggregate_ingredients_from_meals([shared_breakfast, shared_lunch], ())
 
 
 def _edamam_selection_response(days):
@@ -421,7 +492,10 @@ def test_paleo_preference_maps_to_edamam_health_label():
 
 
 def test_new_restrictions_map_to_edamam_health_labels():
-    for label in ("gluten-free", "dairy-free", "tree-nut-free", "shellfish-free", "soy-free", "egg-free", "pork-free"):
+    for label in (
+        "gluten-free", "dairy-free", "tree-nut-free", "shellfish-free",
+        "soy-free", "egg-free", "pork-free", "fish-free", "red-meat-free",
+    ):
         filters = resolve_meal_filters(
             request(preferences=[], restrictions=[label]),
             context(),
@@ -516,4 +590,231 @@ def test_supported_labels_returns_complete_preference_and_restriction_lists():
     assert set(labels["restrictions"]) == {
         "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
         "shellfish-free", "soy-free", "egg-free", "pork-free",
+        "fish-free", "red-meat-free",
     }
+
+
+def test_reduce_cost_replan_preserves_requested_meal_slots():
+    initial = build_meal_plan(request(days=2, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=2, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="reduce_cost",
+        preserve_meal_slots=["breakfast"],
+    )
+
+    original_breakfasts = [
+        meal for meal in initial["meals"]
+        if meal.slot == "breakfast"
+    ]
+    replanned_breakfasts = [
+        meal for meal in replanned["meals"]
+        if meal.slot == "breakfast"
+    ]
+    assert replanned_breakfasts == original_breakfasts
+
+    initial_lentils = next(
+        ingredient.quantity for ingredient in initial["ingredients"]
+        if ingredient.id == "lentils"
+    )
+    replanned_lentils = next(
+        ingredient.quantity for ingredient in replanned["ingredients"]
+        if ingredient.id == "lentils"
+    )
+    assert replanned_lentils < initial_lentils
+    assert replanned["nutrition_summary"].daily
+    assert replanned["source"] == "synthetic"
+
+
+def test_reduce_cost_replan_changes_all_slots_without_preservation():
+    initial = build_meal_plan(request(days=1, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=1, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="reduce_cost",
+    )
+
+    initial_by_slot = {meal.slot: meal for meal in initial["meals"]}
+    replanned_by_slot = {meal.slot: meal for meal in replanned["meals"]}
+
+    for slot, initial_meal in initial_by_slot.items():
+        replanned_meal = replanned_by_slot[slot]
+        assert replanned_meal.title.startswith("Budget ")
+        assert replanned_meal != initial_meal
+        assert replanned_meal.kcal_per_serving < initial_meal.kcal_per_serving
+        for before, after in zip(
+            initial_meal.ingredient_amounts,
+            replanned_meal.ingredient_amounts,
+            strict=True,
+        ):
+            assert after.quantity < before.quantity
+
+
+def test_replan_rejects_unknown_preserve_slots():
+    initial = build_meal_plan(request(days=1, people=1), context())
+
+    with pytest.raises(ValueError, match="Unsupported preserve_meal_slots"):
+        replan_meal_plan(
+            request(days=1, people=1),
+            context(),
+            previous_meals=initial["meals"],
+            reason="reduce_cost",
+            preserve_meal_slots=["snidanok"],
+        )
+
+
+def test_replace_ingredient_replan_removes_requested_ingredient():
+    initial = build_meal_plan(request(days=1, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=1, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="replace_ingredient",
+        replace_ingredient="Dry rice",
+    )
+
+    assert "rice" not in {ingredient.id for ingredient in replanned["ingredients"]}
+    assert {ingredient.id for ingredient in replanned["ingredients"]} == {"oats", "lentils"}
+    for meal in replanned["meals"]:
+        assert "rice" not in meal.ingredient_ids
+        assert all(amount.name != "Dry rice" for amount in meal.ingredient_amounts)
+
+
+def test_replace_ingredient_replan_requires_target_ingredient():
+    initial = build_meal_plan(request(days=1, people=1), context())
+
+    with pytest.raises(ValueError, match="replace_ingredient is required"):
+        replan_meal_plan(
+            request(days=1, people=1),
+            context(),
+            previous_meals=initial["meals"],
+            reason="replace_ingredient",
+        )
+
+
+def test_replace_ingredient_replan_rejects_missing_target():
+    initial = build_meal_plan(request(days=1, people=1), context())
+
+    with pytest.raises(ValueError, match="was not found"):
+        replan_meal_plan(
+            request(days=1, people=1),
+            context(),
+            previous_meals=initial["meals"],
+            reason="replace_ingredient",
+            replace_ingredient="Dry buckwheat",
+        )
+
+
+def test_replace_unknown_ingredient_uses_same_meal_alternative():
+    initial = build_meal_plan(request(days=1, people=1), context())
+    breakfast = next(meal for meal in initial["meals"] if meal.slot == "breakfast")
+    custom_breakfast = breakfast.model_copy(
+        update={
+            "title": "Tofu bean breakfast",
+            "ingredient_ids": ["tofu", "beans"],
+            "ingredient_amounts": [
+                IngredientAmount(
+                    ingredient_id="tofu",
+                    name="Firm tofu",
+                    quantity=120.0,
+                    unit="g",
+                ),
+                IngredientAmount(
+                    ingredient_id="beans",
+                    name="White beans",
+                    quantity=80.0,
+                    unit="g",
+                ),
+            ],
+        }
+    )
+    previous_meals = [
+        custom_breakfast if meal.slot == "breakfast" else meal
+        for meal in initial["meals"]
+    ]
+
+    replanned = replan_meal_plan(
+        request(days=1, people=1),
+        context(),
+        previous_meals=previous_meals,
+        reason="replace_ingredient",
+        replace_ingredient="Firm tofu",
+    )
+
+    breakfast_after = next(meal for meal in replanned["meals"] if meal.slot == "breakfast")
+    amounts = {
+        amount.ingredient_id: amount.quantity
+        for amount in breakfast_after.ingredient_amounts
+    }
+    assert "tofu" not in amounts
+    assert amounts["beans"] == 200.0
+
+
+def test_replace_ingredient_takes_precedence_over_preserving_conflicting_slot():
+    initial = build_meal_plan(request(days=1, people=1), context())
+    original_lunch = next(meal for meal in initial["meals"] if meal.slot == "lunch")
+
+    replanned = replan_meal_plan(
+        request(days=1, people=1),
+        context(),
+        previous_meals=initial["meals"],
+        reason="replace_ingredient",
+        preserve_meal_slots=["lunch"],
+        replace_ingredient="Dry rice",
+    )
+
+    replanned_lunch = next(meal for meal in replanned["meals"] if meal.slot == "lunch")
+    assert replanned_lunch != original_lunch
+    assert "rice" not in replanned_lunch.ingredient_ids
+    assert "rice" not in {ingredient.id for ingredient in replanned["ingredients"]}
+
+
+def test_upgrade_plan_replan_changes_unpreserved_meals_and_keeps_constraints():
+    initial = build_meal_plan(request(days=2, people=3, calories=2000), context())
+
+    replanned = replan_meal_plan(
+        request(days=2, people=3, calories=2000),
+        context(),
+        previous_meals=initial["meals"],
+        reason="upgrade_plan",
+        preserve_meal_slots=["breakfast"],
+    )
+
+    assert [
+        meal for meal in replanned["meals"] if meal.slot == "breakfast"
+    ] == [
+        meal for meal in initial["meals"] if meal.slot == "breakfast"
+    ]
+    assert {
+        meal.title for meal in replanned["meals"] if meal.slot != "breakfast"
+    } != {
+        meal.title for meal in initial["meals"] if meal.slot != "breakfast"
+    }
+    assert all(meal.servings == 3 for meal in replanned["meals"])
+    assert replanned["nutrition_summary"].calorie_target_kcal_per_person_per_day == 2000
+    assert {ingredient.id for ingredient in replanned["ingredients"]} <= {"oats", "rice", "lentils"}
+
+
+def test_upgrade_plan_replan_changes_all_slots_without_preservation():
+    initial = build_meal_plan(request(days=1, people=2), context())
+
+    replanned = replan_meal_plan(
+        request(days=1, people=2),
+        context(),
+        previous_meals=initial["meals"],
+        reason="upgrade_plan",
+    )
+
+    initial_by_slot = {meal.slot: meal for meal in initial["meals"]}
+    replanned_by_slot = {meal.slot: meal for meal in replanned["meals"]}
+
+    for slot, initial_meal in initial_by_slot.items():
+        replanned_meal = replanned_by_slot[slot]
+        assert replanned_meal.title.startswith("Upgraded ")
+        assert replanned_meal != initial_meal
+        assert replanned_meal.kcal_per_serving > initial_meal.kcal_per_serving

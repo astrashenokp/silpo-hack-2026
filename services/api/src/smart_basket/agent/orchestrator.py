@@ -384,17 +384,26 @@ class UlianaPlanner:
             ),
         )
 
+        uses_live_catalog = bool(optimization.selected_products) and all(
+            item.source == "silpo" for item in optimization.selected_products
+        )
+        if uses_live_catalog:
+            data_mode = "live" if meal_source not in {"synthetic", "mixed"} else "mixed"
+            warnings = [
+                warning for warning in warnings
+                if "catalog/cart data remains demo" not in warning
+            ]
+            if data_mode == "mixed":
+                warnings.append(
+                    "Silpo catalog and cart data are live while meal data is synthetic or mixed."
+                )
+
 
         # ====================================================
         # STAGE 6 — CAN CART BE CONFIRMED?
         # ====================================================
 
         can_confirm_cart = (
-            data_mode
-            == "demo"
-
-            and
-
             optimization.budget_status
             == "within_budget"
 
@@ -406,6 +415,8 @@ class UlianaPlanner:
 
             and context
             .cart_context_ready
+
+            and (uses_live_catalog or data_mode == "demo")
         )
 
 
@@ -482,7 +493,7 @@ class UlianaPlanner:
 
         return result
 
-    
+
     def handle_chat_message(
             self,
             message,
@@ -555,7 +566,7 @@ class UlianaPlanner:
                 session=session,
                 emit_progress=emit_progress,
             )
-        
+
         handlers = {
             "change_budget":
                 self._handle_change_budget,
@@ -1777,11 +1788,14 @@ class UlianaPlanner:
             "context",
             "User context refreshed.",
         )
-        
+
         matching_context = MatchingContext(
             session=session,
             catalog=self.catalog,
-            check_restrictions=self.catalog.check_restrictions,
+            check_restrictions=(
+                self.catalog
+                .check_restrictions
+            ),
         )
 
         matching_result = (

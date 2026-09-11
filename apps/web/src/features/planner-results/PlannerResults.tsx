@@ -1,33 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  apiConfirmCart,
-  apiPreviewCart,
-  newIdempotencyKey,
-  type DemoScenario,
-} from "@/lib/api/client";
 import type {
-  CartPreview,
-  CartReceipt,
   Meal,
   PlanningResult,
   ProductSelection,
   RecurringSuggestion,
   RunSnapshot,
 } from "@/lib/api/types";
-import { formatQuantity, formatUah } from "@/lib/format";
-import {
-  fixtureCartPartial,
-  fixtureCartPreview,
-} from "@/lib/api/fixtures";
-import { CartPanel, type CartPanelItem } from "./components/CartPanel";
-import {
-  CartPreviewModal,
-  CartReceiptView,
-} from "./components/CartFlow";
-import { AgentFailure, EmptyHistoryBanner, SyncFailureModal, WarningsList } from "./components/states";
+import { formatUah } from "@/lib/format";
+import { AgentFailure, WarningsList } from "./components/states";
 import { RunProgress } from "./components/RunProgress";
 import { Button, Spinner } from "./components/ui";
 
@@ -38,60 +22,79 @@ export interface SavedMeal {
   title: string;
 }
 
+type ChatItem =
+  | { kind: "user"; text: string }
+  | { kind: "plan"; request: string; result: PlanningResult | null; status: "thinking" | "ready"; added: boolean };
+
 // Cart contents are owned by the parent (page.tsx) so every chat shares the
-// same single cart. PlannerResults only receives cart state via props.
+// same single cart. The right-hand CartPanel is rendered once at the app level
+// by the parent; PlannerResults only mutates the shared cart via callbacks.
 export function PlannerResults({
   snapshot,
   result,
-  sourceMode,
-  cartScenario,
   recalcBusy,
   paramsForm,
   onRetryPlan,
   sentMessages,
   savedMeals,
   onSavedMealsChange,
-  addedToCart,
-  cartProductIds,
-  cartQuantities,
-  onAddedToCartChange,
-  onCartProductIdsChange,
-  onCartQuantitiesChange,
+  onAddToCart,
 }: {
   snapshot?: RunSnapshot | null;
   result: PlanningResult | null;
-  sourceMode: SourceMode;
-  cartScenario?: DemoScenario;
   recalcBusy: boolean;
   paramsForm?: ReactNode;
   onRetryPlan?: () => void;
   sentMessages?: string[];
   savedMeals?: SavedMeal[];
   onSavedMealsChange?: (meals: SavedMeal[]) => void;
-  addedToCart: boolean;
-  cartProductIds: string[] | null;
-  cartQuantities: Record<string, number>;
-  onAddedToCartChange: (added: boolean) => void;
-  onCartProductIdsChange: (ids: string[] | null) => void;
-  onCartQuantitiesChange: (quantities: Record<string, number>) => void;
+  onAddToCart: (products: ProductSelection[]) => void;
 }) {
-  const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
-  const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
-  const [cartBusy, setCartBusy] = useState(false);
-  const [cartKey, setCartKey] = useState<string | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
   const [screen, setScreen] = useState<"setup" | "thinking" | "ready">(
     result && !paramsForm ? "ready" : "setup",
   );
   const effectiveScreen = paramsForm ? "setup" : screen;
   const [recurringOverrides, setRecurringOverrides] = useState<Record<string, boolean>>({});
-  const [recurringDirty, setRecurringDirty] = useState(false);
+  const [dirtyPlans, setDirtyPlans] = useState<number[]>([]);
+  const [chat, setChat] = useState<ChatItem[]>(() => {
+    if (result && !paramsForm) {
+      return [{ kind: "plan", request: "Скласти меню та кошик", result, status: "ready", added: false }];
+    }
+    return [];
+  });
+  const lastSyncedMessages = useRef((sentMessages ?? []).slice(1).length);
 
   useEffect(() => {
     if (screen !== "thinking") return;
-    const timer = window.setTimeout(() => setScreen("ready"), 1800);
+    const timer = window.setTimeout(
+      () => {
+        setChat((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            const item = next[i];
+            if (item.kind === "plan" && item.status === "thinking") {
+              next[i] = { ...item, status: "ready", result: item.result ?? result };
+              break;
+            }
+          }
+          return next;
+        });
+        setScreen("ready");
+      },
+      1800,
+    );
     return () => window.clearTimeout(timer);
-  }, [screen]);
+  }, [screen, result]);
+
+  useEffect(() => {
+    const msgs = (sentMessages ?? []).slice(1);
+    if (msgs.length <= lastSyncedMessages.current) return;
+    setChat((prev) => [
+      ...prev,
+      ...msgs.slice(lastSyncedMessages.current).map((text) => ({ kind: "user" as const, text })),
+    ]);
+    lastSyncedMessages.current = msgs.length;
+  }, [sentMessages]);
 
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -103,9 +106,12 @@ export function PlannerResults({
   if (!result) {
     if (paramsForm) {
       return (
-        <PlannerIntroWindow>
-          <PlannerIntroduction>{paramsForm}</PlannerIntroduction>
-        </PlannerIntroWindow>
+        <div>
+          <PlannerIntroWindow messages={sentMessages}>
+            <PlannerIntroduction>{paramsForm}</PlannerIntroduction>
+          </PlannerIntroWindow>
+          <ChatUserMessages messages={sentMessages} />
+        </div>
       );
     }
     if (snapshot && (snapshot.status === "running" || snapshot.status === "queued")) {
@@ -121,121 +127,23 @@ export function PlannerResults({
     );
   }
 
-  const current = result;
-  const selectedProducts = result.selectedProducts;
-  const addDisabled =
-    !result.canConfirmCart ||
-    result.budgetStatus !== "within_budget";
-  const confirmGate = addDisabled || recurringDirty;
-
-  const cartItems: CartPanelItem[] = selectedProducts.map((product) => ({
-    productId: product.productId,
-    name: product.name,
-    quantity: product.quantity,
-    cartQuantity: cartQuantities[product.productId] ?? product.quantity,
-    sellingUnit: product.sellingUnit,
-    unitPriceMinor: product.unitPriceMinor,
-    lineTotalMinor: product.lineTotalMinor,
-    source: product.source,
-    added: true,
-  }));
-  const activeCartProductIds = cartProductIds ?? [];
-  const visibleCartItems = cartItems.filter((item) => activeCartProductIds.includes(item.productId));
-  const visibleCartTotalMinor = visibleCartItems.reduce(
-    (sum, item) => sum + item.unitPriceMinor * item.cartQuantity,
-    0,
-  );
-  const visibleCartCount = visibleCartItems.reduce((sum, item) => sum + item.cartQuantity, 0);
-
-  function addAllToCart() {
-    onAddedToCartChange(true);
-    onCartProductIdsChange(selectedProducts.map((product) => product.productId));
-    const next = { ...cartQuantities };
-    selectedProducts.forEach((product) => {
-      next[product.productId] = next[product.productId] ?? product.quantity;
-    });
-    onCartQuantitiesChange(next);
-  }
-
-  function toggleRecurring(item: RecurringSuggestion) {
+  function toggleRecurring(item: RecurringSuggestion, planKey: number) {
     setRecurringOverrides((prev) => ({ ...prev, [item.id]: !(prev[item.id] ?? item.selected) }));
-    setRecurringDirty(true);
+    setDirtyPlans((prev) => (prev.includes(planKey) ? prev : [...prev, planKey]));
   }
 
-  function incrementCartItem(productId: string) {
-    const base = selectedProducts.find((p) => p.productId === productId)?.quantity ?? 1;
-    onCartQuantitiesChange({
-      ...cartQuantities,
-      [productId]: (cartQuantities[productId] ?? base) + 1,
-    });
-  }
-
-  function decrementCartItem(productId: string) {
-    const base = selectedProducts.find((p) => p.productId === productId)?.quantity ?? 1;
-    onCartQuantitiesChange({
-      ...cartQuantities,
-      [productId]: Math.max(1, (cartQuantities[productId] ?? base) - 1),
-    });
-  }
-
-  function removeCartItem(productId: string) {
-    const next = { ...cartQuantities };
-    delete next[productId];
-    onCartQuantitiesChange(next);
-    onCartProductIdsChange((cartProductIds ?? []).filter((id) => id !== productId));
-  }
-
-  async function handleAddAll() {
-    setCartBusy(true);
-    try {
-      const preview =
-        sourceMode === "fixtures"
-          ? fixtureCartPreview
-          : await apiPreviewCart(current.runId, current.version, cartScenario);
-      setCartKey(newIdempotencyKey());
-      setCartReceipt(null);
-      setCartPreview(preview);
-    } catch {
-      setSyncError("Не вдалося сформувати попередній перегляд кошика.");
-    } finally {
-      setCartBusy(false);
-    }
-  }
-
-  async function handleConfirmCart() {
-    if (!cartPreview || !cartKey) return;
-    const key = cartKey;
-    setCartBusy(true);
-    try {
-      const receipt =
-        sourceMode === "fixtures"
-          ? fixtureCartPartial
-          : await apiConfirmCart(cartPreview.previewId, key);
-      if (receipt.status === "failed") {
-        // Keep cartPreview + key: retry is a re-send of the same preview with
-        // the same idempotency key, so it cannot double-add.
-        setSyncError("Сталася помилка під час передачі списку товарів у ваш акаунт.");
-        return;
-      }
-      setCartPreview(null);
-      setCartReceipt(receipt);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Сталася помилка під час синхронізації кошика.";
-      setSyncError(message);
-    } finally {
-      setCartBusy(false);
-    }
-  }
-
-  async function handleRetrySync() {
-    setSyncError(null);
-    await handleConfirmCart();
+  function handleRecalculate(planKey: number) {
+    setDirtyPlans((prev) => prev.filter((key) => key !== planKey));
+    setChat((prev) => [
+      ...prev,
+      { kind: "plan", request: "Перерахуйте кошик", result: null, status: "thinking", added: false },
+    ]);
+    setScreen("thinking");
   }
 
   return (
-    <div className="xl:pr-[430px]">
-      <PlannerIntroWindow>
+    <div>
+      <PlannerIntroWindow messages={sentMessages}>
         <PlannerIntroduction>
           {paramsForm ? (
             paramsForm
@@ -244,7 +152,13 @@ export function PlannerResults({
               result={result}
               disabled={recalcBusy}
               loading={recalcBusy}
-              onSubmit={() => setScreen("thinking")}
+              onSubmit={() => {
+                setChat((prev) => [
+                  ...prev,
+                  { kind: "plan", request: "Скласти меню та кошик", result: null, status: "thinking", added: false },
+                ]);
+                setScreen("thinking");
+              }}
             />
           ) : null}
         </PlannerIntroduction>
@@ -252,42 +166,47 @@ export function PlannerResults({
 
       <div className="min-w-0">
         {effectiveScreen !== "setup" && (
-          <>
-            <div className="mb-9 mt-10 flex items-end justify-end gap-3 pr-2 lg:pr-20">
-              <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>
-              <div className="inline-flex items-center gap-3 rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
-                Скласти меню та кошик
-                <span className="flex size-6 items-center justify-center rounded-full border-2 border-brand text-brand">
-                  ✓
-                </span>
-              </div>
-            </div>
-
-            <div ref={resultsRef}>
-              {effectiveScreen === "thinking" ? (
-                <ThinkingMessage />
-              ) : (
-                <ReadyMessage
-                  result={result}
-                  addedToCart={addedToCart}
-                  confirmGate={confirmGate}
-                  recurringOverrides={recurringOverrides}
-                  recurringDirty={recurringDirty}
-                  onToggleRecurring={toggleRecurring}
-                  onAddToCart={addAllToCart}
-                  savedMeals={savedMeals ?? []}
-                  onSavedMealsChange={onSavedMealsChange}
-                  onRecalculate={() => {
-                    onAddedToCartChange(false);
-                    onCartProductIdsChange(null);
-                    onCartQuantitiesChange({});
-                    setRecurringDirty(false);
-                    setScreen("thinking");
-                  }}
-                />
-              )}
-            </div>
-          </>
+          <div className="mt-10 space-y-10">
+            {chat.map((item, index) => {
+              const isLast = index === chat.length - 1;
+              if (item.kind === "user") {
+                return (
+                  <UserChatBubble key={`user-${index}-${item.text}`} text={item.text} />
+                );
+              }
+              const planResult = item.result ?? result;
+              const planAdded = item.added;
+              const planConfirmGate = dirtyPlans.includes(index);
+              return (
+                <div
+                  key={`plan-${index}-${item.request}`}
+                  ref={isLast ? resultsRef : undefined}
+                  className="min-w-0"
+                >
+                  <UserChatBubble text={item.request} />
+                  {item.status === "thinking" ? (
+                    <ThinkingMessage />
+                  ) : (
+                    <ReadyMessage
+                      result={planResult}
+                      addedToCart={planAdded}
+                      confirmGate={planConfirmGate}
+                      recurringOverrides={recurringOverrides}
+                      recurringDirty={dirtyPlans.includes(index)}
+                      onToggleRecurring={(recurringItem) => toggleRecurring(recurringItem, index)}
+                      onAddToCart={() => {
+                        setChat((prev) => prev.map((entry, i) => (i === index ? { ...entry, added: true } : entry)));
+                        onAddToCart(planResult.selectedProducts);
+                      }}
+                      savedMeals={savedMeals ?? []}
+                      onSavedMealsChange={onSavedMealsChange}
+                      onRecalculate={() => handleRecalculate(index)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {recalcBusy && (
@@ -296,71 +215,32 @@ export function PlannerResults({
           </div>
         )}
 
-        {cartReceipt && (
-          <div className="ml-0 mt-5 md:ml-[68px]">
-            <CartReceiptView receipt={cartReceipt} />
-          </div>
-        )}
         <WarningsList warnings={result.warnings} />
-
-        {sentMessages && sentMessages.length > 0 && (
-          <div className="mt-4 flex flex-col items-end gap-2">
-            {sentMessages.map((message, index) => (
-              <div
-                key={`${index}-${message}`}
-                className="max-w-[70%] rounded-[20px] rounded-tr-none bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]"
-              >
-                {message}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
-
-      <div className="mt-8 xl:fixed xl:bottom-28 xl:right-8 xl:top-24 xl:z-30 xl:mt-0 xl:w-[390px] xl:overflow-hidden">
-        <CartPanel
-          items={visibleCartItems}
-          itemCount={visibleCartCount}
-          totalMinor={visibleCartTotalMinor}
-          discountMinor={result.savingsMinor}
-          storeLabel="просп. Бандери, 23 (Самовивіз)"
-          onSync={handleAddAll}
-          onIncrement={incrementCartItem}
-          onDecrement={decrementCartItem}
-          onRemove={removeCartItem}
-          syncDisabled={confirmGate || !addedToCart || visibleCartItems.length === 0}
-          syncBusy={cartBusy}
-          mode={result.dataMode}
-        />
-      </div>
-
-      {cartPreview && (
-        <CartPreviewModal
-          preview={cartPreview}
-          onConfirm={handleConfirmCart}
-          onCancel={() => setCartPreview(null)}
-          busy={cartBusy}
-        />
-      )}
-
-      <SyncFailureModal
-        open={syncError !== null}
-        message={syncError ?? ""}
-        onLater={() => setSyncError(null)}
-        onRetry={handleRetrySync}
-      />
     </div>
   );
 }
 
-function PlannerIntroWindow({ children }: { children: ReactNode }) {
+function PlannerIntroWindow({
+  children,
+  messages = [],
+}: {
+  children: ReactNode;
+  messages?: string[];
+}) {
+  const visibleMessages = messages.length > 0 ? messages.slice(0, 1) : ["Почати планування"];
+
   return (
-    <div className="min-w-0 pt-2 lg:pt-12">
-      <div className="mb-9 flex items-end justify-end gap-3 pr-2 lg:pr-20">
-        <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>
-        <div className="rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
-          Привіт!
-        </div>
+    <div className="min-w-0 pt-1 lg:pt-5">
+      <div className="mb-5 flex flex-col items-end gap-2 pr-2 lg:pr-5">
+        {visibleMessages.map((message, index) => (
+          <div key={`${index}-${message}`} className="flex items-end justify-end gap-3">
+            {index === 0 && <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>}
+            <div className="max-w-[70%] rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
+              {message}
+            </div>
+          </div>
+        ))}
       </div>
       {children}
     </div>
@@ -369,21 +249,52 @@ function PlannerIntroWindow({ children }: { children: ReactNode }) {
 
 function PlannerIntroduction({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-6">
-      <span className="mt-1 hidden size-11 shrink-0 items-center justify-center rounded-full bg-brand text-lg font-bold text-white md:flex">
+    <div className="flex items-start gap-5">
+      <span className="mt-1 hidden size-10 shrink-0 items-center justify-center rounded-full bg-brand text-base font-bold text-white md:flex">
         A
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-6">
-          <p className="max-w-[760px] text-[17px] leading-8 text-[#202124]">
+          <p className="max-w-[760px] text-[15px] leading-6 text-[#202124]">
             Привіт, Катерино! Я ваш автономний планер Сільпо. Допоможу зібрати раціон,
             врахую історію покупок та оптимізую кошик під бюджет. Оберіть параметри
             нижче:
           </p>
           <MessageActions />
         </div>
-        <div className="mt-8 h-px max-w-[820px] bg-[#edf0f3]" />
+        <div className="mt-5 h-px max-w-[820px] bg-[#edf0f3]" />
         {children}
+      </div>
+    </div>
+  );
+}
+
+function ChatUserMessages({ messages }: { messages?: string[] }) {
+  if (!messages || messages.length <= 1) return null;
+
+  return (
+    <div className="mt-4 flex flex-col items-end gap-2 pb-4">
+      {messages.slice(1).map((message, index) => (
+        <div
+          key={`${index}-${message}`}
+          className="max-w-[70%] rounded-[20px] rounded-tr-none bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]"
+        >
+          {message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UserChatBubble({ text }: { text: string }) {
+  return (
+    <div className="mb-9 flex items-end justify-end gap-3 pr-2 lg:pr-5">
+      <span className="pb-2 text-xs text-[#9aa1ad]">10:39</span>
+      <div className="inline-flex items-center gap-3 rounded-[22px] bg-[#fff0df] px-5 py-3 text-base text-[#3b2a1a]">
+        {text}
+        <span className="flex size-6 items-center justify-center rounded-full border-2 border-brand text-brand">
+          ✓
+        </span>
       </div>
     </div>
   );
@@ -465,24 +376,94 @@ function PlannerSetupForm({
 
 function MessageActions() {
   return (
-    <div className="hidden shrink-0 items-center gap-4 pt-3 text-xl text-[#9a9a9a] lg:flex">
-      <button type="button" aria-label="Подобається" className="hover:text-brand">
-        ▰
+    <div className="hidden shrink-0 items-center gap-3 pt-2 text-[#9A9A9A] lg:flex">
+      <button
+        type="button"
+        aria-label="Подобається"
+        className="transition hover:text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+      >
+        <ThumbUpIcon />
       </button>
-      <button type="button" aria-label="Не подобається" className="rotate-180 hover:text-brand">
-        ▰
+
+      <button
+        type="button"
+        aria-label="Не подобається"
+        className="transition hover:text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+      >
+        <ThumbDownIcon />
       </button>
-      <button type="button" aria-label="Копіювати" className="hover:text-brand">
-        ◱
+
+      <button
+        type="button"
+        aria-label="Копіювати"
+        className="transition hover:text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+      >
+        <CopyIcon />
       </button>
     </div>
   );
 }
 
+function ThumbUpIcon() {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M9.2 21H5.5A1.5 1.5 0 0 1 4 19.5v-9A1.5 1.5 0 0 1 5.5 9H9l3.05-6.1A1.5 1.5 0 0 1 13.4 2c.95 0 1.68.84 1.55 1.78L14.25 9H19a2 2 0 0 1 1.95 2.45l-1.7 7A3.25 3.25 0 0 1 16.1 21H9.2Z" />
+    </svg>
+  );
+}
+
+function ThumbDownIcon() {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M14.8 3h3.7A1.5 1.5 0 0 1 20 4.5v9a1.5 1.5 0 0 1-1.5 1.5H15l-3.05 6.1A1.5 1.5 0 0 1 10.6 22c-.95 0-1.68-.84-1.55-1.78L9.75 15H5a2 2 0 0 1-1.95-2.45l1.7-7A3.25 3.25 0 0 1 7.9 3h6.9Z" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect
+        x="8"
+        y="8"
+        width="11"
+        height="13"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v11A1.5 1.5 0 0 0 5.5 18H8"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function ThinkingMessage() {
   return (
-    <div className="mt-2 flex items-start gap-6">
-      <span className="mt-1 hidden size-11 shrink-0 items-center justify-center rounded-full bg-brand text-lg font-bold text-white md:flex">
+    <div className="mt-2 flex items-start gap-5">
+      <span className="mt-1 hidden size-10 shrink-0 items-center justify-center rounded-full bg-brand text-base font-bold text-white md:flex">
         A
       </span>
       <div className="min-w-0 flex-1">
@@ -537,7 +518,7 @@ function ReadyMessage({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-6">
-          <p className="max-w-[760px] text-[17px] leading-8 text-[#202124]">
+          <p className="max-w-[760px] text-[15px] leading-6 text-[#202124]">
             Готово! Ось ваш персональний план, рекомендації щодо регулярних товарів
             та оптимізований кошик:
           </p>
@@ -593,68 +574,133 @@ function PlannerReadyView({
     onSavedMealsChange?.(next);
   }
 
-  const products = result.selectedProducts.slice(0, 4);
-  const meals = result.mealPlan.filter((meal) => meal.day === 1);
+  const meals = result.mealPlan.filter((meal) => meal.day === 1).slice(0, 2);
   const over = result.budgetRemainingMinor < 0;
   const incomplete = result.budgetStatus === "incomplete";
 
-  return (
-    <section className="max-w-[910px] pt-7">
-      <EmptyHistoryBanner warnings={result.warnings} />
+  const regularCards = [
+    {
+      id: "butter-1",
+      type: "butter" as const,
+      name: 'Масло солодковершкове "Галичина" 82,5%',
+      subtitle: "180 г",
+      oldPrice: "124.00 ₴",
+      discount: "-35%",
+      price: "79.99 ₴",
+    },
+    {
+      id: "jameson-1",
+      type: "bottle" as const,
+      name: "Віскі Jameson",
+      subtitle: "0,7 л",
+      oldPrice: "899.00 ₴",
+      discount: "-30%",
+      price: "629.00 ₴",
+    },
+    {
+      id: "butter-2",
+      type: "butter" as const,
+      name: 'Масло солодковершкове "Галичина" 82,5%',
+      subtitle: "180 г",
+      oldPrice: "124.00 ₴",
+      discount: "-35%",
+      price: "79.99 ₴",
+    },
+    {
+      id: "jameson-2",
+      type: "bottle" as const,
+      name: "Віскі Jameson",
+      subtitle: "0,7 л",
+      oldPrice: "899.00 ₴",
+      discount: "-30%",
+      price: "629.00 ₴",
+    },
+  ];
 
+  return (
+    <section className="w-full max-w-[820px] pt-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h3 className="text-lg font-semibold text-[#9a5b17]">Регулярні покупки</h3>
+        <h3 className="text-[15px] font-semibold text-[#9A5B17]">
+          Регулярні покупки
+        </h3>
+
         {recurringDirty && (
-          <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11px] font-medium text-warn-text">
+          <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-medium text-warn-text">
             потрібне перерахування
           </span>
         )}
       </div>
-      <div className="mt-5 grid gap-x-20 gap-y-6 md:grid-cols-2">
-        {products.map((product, index) => {
-          const rec = result.recurringItems.find((item) =>
-            product.recurringSuggestionIds.includes(item.id),
-          );
-          const selected = rec ? recurringOverrides[rec.id] ?? rec.selected : true;
-          return (
-            <ProductSuggestion
-              key={`${product.productId}-${index}`}
-              product={product}
-              variant={index % 2 === 0 ? "dairy" : "bottle"}
-              selected={selected}
-              togglable={Boolean(rec)}
-              onToggle={rec ? () => onToggleRecurring(rec) : undefined}
-            />
-          );
-        })}
-      </div>
-      {recurringDirty && (
-        <p className="mt-3 text-xs text-[#8b94a6]">
-          Вибір змінено — підтвердження кошика розблоковано після перерахунку.
-        </p>
-      )}
 
-      <h3 className="mt-8 text-lg font-semibold text-[#9a5b17]">План харчування</h3>
-      <div className="mt-5 rounded-[24px] border border-[#d9deea] bg-white px-8 py-5">
-        {meals.map((meal, index) => (
-          <MealPreview
-            key={meal.id}
-            meal={meal}
-            number={index + 1}
-            saved={savedMeals.some((item) => item.id === meal.id)}
-            onToggleSave={() => toggleSavedMeal(meal)}
-            first={index === 0}
-          />
+      <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+        {regularCards.map((item) => (
+          <RegularPurchaseCard key={item.id} item={item} />
         ))}
       </div>
 
-      <div className="mt-9">
-        <h3 className="text-lg font-semibold text-[#9a5b17]">Підсумок бюджету та кошика</h3>
-        <p className="mt-3 text-sm leading-6 text-[#202124]">
-          Розрахункова сума: <span className="font-semibold">{formatUah(result.basketTotalMinor)}</span>{" "}
+      {recurringDirty && (
+        <p className="mt-2 text-[10px] text-[#8B94A6]">
+          Вибір змінено — перед підтвердженням кошика виконайте перерахунок.
+        </p>
+      )}
+
+      <h3 className="mt-6 text-[15px] font-semibold text-[#9A5B17]">
+        План харчування
+      </h3>
+
+      <div className="mt-4 overflow-hidden rounded-[24px] border border-[#DADFE8] bg-white">
+        <div className="grid grid-cols-[64px_minmax(0,1fr)]">
+          <div className="flex items-center justify-center border-r border-[#EEF0F3] text-[18px] font-semibold text-[#A66B2A]">
+            1
+          </div>
+
+          <div className="space-y-5 p-6">
+            {(meals.length > 0 ? meals : [null, null]).map((meal, index) => {
+              const fallbackTitle =
+                index === 0 ? "Вівсянка з бананом" : "Паста Карбонара";
+              const fallbackSlot = index === 0 ? "Сніданок" : "Обід";
+              const isSaved = meal
+                ? savedMeals.some((item) => item.id === meal.id)
+                : false;
+
+              return (
+                <MealPlanCard
+                  key={meal?.id ?? `fallback-${index}`}
+                  meal={meal}
+                  title={meal?.title || fallbackTitle}
+                  slot={
+                    meal
+                      ? meal.slot === "breakfast"
+                        ? "Сніданок"
+                        : meal.slot === "lunch"
+                          ? "Обід"
+                          : "Вечеря"
+                      : fallbackSlot
+                  }
+                  saved={isSaved}
+                  onToggleSave={() => {
+                    if (meal) toggleSavedMeal(meal);
+                  }}
+                  productType={index === 0 ? "butter" : "bottle"}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8 pb-8">
+        <h3 className="text-[15px] font-semibold text-[#9A5B17]">
+          Підсумок бюджету та кошика
+        </h3>
+
+        <p className="mt-3 text-[12px] leading-5 text-[#202124]">
+          Розрахункова сума:{" "}
+          <span className="font-semibold">{formatUah(result.basketTotalMinor)}</span>{" "}
           (ліміт: {formatUah(result.budgetMinor)}) | Залишок бюджету:{" "}
           <span className={over ? "text-danger" : "text-success"}>
-            {over ? `-${formatUah(Math.abs(result.budgetRemainingMinor))}` : formatUah(result.budgetRemainingMinor)}
+            {over
+              ? `-${formatUah(Math.abs(result.budgetRemainingMinor))}`
+              : formatUah(result.budgetRemainingMinor)}
           </span>{" "}
           |
           <br />
@@ -665,191 +711,225 @@ function PlannerReadyView({
         </p>
 
         {over && (
-          <p className="mt-3 rounded-lg bg-danger-soft p-2 text-xs text-danger">
-            Бюджет перевищено на {formatUah(Math.abs(result.budgetRemainingMinor))}. Змініть
-            параметри або зменшіть період/кількість людей; порції та обмеження ми не зменшуємо
-            мовчки.
+          <p className="mt-2 rounded-lg bg-danger-soft p-2 text-[10px] text-danger">
+            Бюджет перевищено на {formatUah(Math.abs(result.budgetRemainingMinor))}.
           </p>
         )}
+
         {incomplete && (
-          <p className="mt-3 rounded-lg bg-warn-bg p-2 text-xs text-warn-text">
-            Кошик неповний — не всі інгредієнти підібрані. Підтвердження недоступне.
+          <p className="mt-2 rounded-lg bg-warn-bg p-2 text-[10px] text-warn-text">
+            Кошик неповний — не всі інгредієнти підібрані.
           </p>
         )}
 
-        <p className="mt-2 text-xs text-[#8b94a6]">
-          Сума покриває продукти плану та обрані регулярні/пет-товари. Доставка — окремо й у суму
-          не входить.
-        </p>
-
-        <div className="mt-9 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Button
             variant="outline"
-            className="h-11 min-w-[210px] border-brand text-brand hover:bg-[#fff7ef]"
+            className="h-11 min-w-[190px] rounded-[7px] border-brand px-5 text-[12px] text-brand hover:bg-[#FFF7EF]"
             onClick={onRecalculate}
           >
-            <span className="text-xl leading-none">↻</span>
+            <span className="text-base leading-none">↻</span>
             Перерахувати кошик
           </Button>
+
           <Button
-            className="h-11 min-w-[260px]"
+            className="h-11 min-w-[225px] rounded-[7px] px-5 text-[12px]"
             onClick={onAddToCart}
             disabled={addedToCart || confirmGate}
           >
             {addedToCart ? "Додано в кошик Сільпо" : "Додати все в кошик Сільпо"}
-            <span className="text-xl leading-none">↘</span>
+            <span className="text-base leading-none">↘</span>
           </Button>
         </div>
-        {confirmGate && (
-          <p className="mt-2 text-right text-xs text-[#8b94a6]">
-            Підтвердження недоступне:{" "}
-            {recurringDirty
-              ? "оновіть вибір регулярних покупок через «Перерахувати кошик»."
-              : "результат неповний або бюджет перевищено."}
-          </p>
-        )}
       </div>
     </section>
   );
 }
 
-function ProductSuggestion({
-  product,
-  variant,
-  selected,
-  togglable,
-  onToggle,
+function RegularPurchaseCard({
+  item,
 }: {
-  product: ProductSelection;
-  variant: "dairy" | "bottle";
-  selected: boolean;
-  togglable: boolean;
-  onToggle?: () => void;
+  item: {
+    id: string;
+    type: "butter" | "bottle";
+    name: string;
+    subtitle: string;
+    oldPrice: string;
+    discount: string;
+    price: string;
+  };
 }) {
   return (
-    <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-4">
-      <ProductThumb variant={variant} />
-      <div>
-        <p className="line-clamp-2 text-sm leading-5 text-[#252936]">{product.name}</p>
-        <p className="mt-0.5 text-xs text-[#8b94a6]">
-          {formatQuantity(product.quantity, product.sellingUnit)}
+    <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-3">
+      <ProductVisual type={item.type} />
+
+      <div className="min-w-0">
+        <p className="line-clamp-2 text-[10px] leading-[13px] text-[#2B2F36]">
+          {item.name}
         </p>
-        <p className="mt-2 text-base font-semibold">{formatUah(product.unitPriceMinor)}</p>
-        {togglable ? (
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={selected}
-            onClick={onToggle}
-            className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-              selected
-                ? "border-brand bg-brand text-white"
-                : "border-line bg-white text-muted hover:border-brand hover:text-brand"
-            }`}
-          >
-            <span aria-hidden="true">{selected ? "✓" : ""}</span>
-            {selected ? "Включено" : "Виключено"}
-          </button>
-        ) : (
-          <p className="mt-1 text-xs text-[#8b94a6]">звичайна позиція плану</p>
-        )}
+
+        <p className="mt-0.5 text-[9px] text-[#9AA1AD]">{item.subtitle}</p>
+
+        <div className="mt-1 flex items-center gap-1">
+          <span className="text-[9px] text-[#6E7480] line-through">
+            {item.oldPrice}
+          </span>
+          <span className="rounded-[4px] bg-[#F89F46] px-1 py-[1px] text-[8px] leading-none text-white">
+            {item.discount}
+          </span>
+        </div>
+
+        <p className="mt-0.5 text-[10px] font-semibold text-[#222]">
+          {item.price}
+        </p>
       </div>
     </div>
   );
 }
 
-function MealPreview({
+function MealPlanCard({
   meal,
-  number,
+  title,
+  slot,
   saved,
   onToggleSave,
-  first,
+  productType,
 }: {
-  meal: Meal;
-  number: number;
+  meal: Meal | null;
+  title: string;
+  slot: string;
   saved: boolean;
   onToggleSave: () => void;
-  first: boolean;
+  productType: "butter" | "bottle";
 }) {
-  const kcalText = meal.kcalPerServing === null ? "невідомо" : `${meal.kcalPerServing} ккал`;
+  const subtitle = meal
+    ? `Порцій: ${meal.servings} | Калорії: ${
+        meal.kcalPerServing === null ? "—" : `${meal.kcalPerServing} ккал`
+      }`
+    : "Порцій: 3 | Калорії: 67 | КБЖУ: xx, xx, xx";
+
+  const ingredients = meal?.ingredientAmounts.slice(0, 2) ?? [];
 
   return (
-    <div className={first ? "" : "mt-7"}>
-      <div className="flex items-center gap-2">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-          {number}
-        </span>
-        <span className="rounded-full bg-[#fff4e8] px-3 py-1 text-xs font-medium text-brand">
-          {meal.slot === "breakfast" ? "Сніданок" : meal.slot === "lunch" ? "Обід" : "Вечеря"}
-        </span>
-      </div>
-      <div className="mt-3 rounded-[18px] border border-[#dfe3ee] p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="size-5 rounded-full bg-[#ffe1bd]" />
-            <div>
-              <p className="font-medium text-[#252936]">{meal.title}</p>
-              <p className="mt-1 text-xs text-[#5f687a]">
-                Порцій: {meal.servings} · Калорії: {kcalText}
+    <div>
+      <p className="mb-2 text-[11px] font-medium text-[#F08B2D]">{slot}</p>
+
+      <div className="rounded-[18px] border border-[#E1E5EC] bg-white">
+        <div className="flex items-center justify-between gap-4 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="size-4 shrink-0 rounded-full bg-[#FFE4BD]" />
+
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-[#2A2E35]">
+                {title}
+              </p>
+              <p className="mt-1 truncate text-[10px] text-[#737C8D]">
+                {subtitle}
               </p>
             </div>
           </div>
+
           <button
             type="button"
             onClick={onToggleSave}
             aria-pressed={saved}
-            aria-label={saved ? "Прибрати зі збережених у FatSecret" : "Зберегти у FatSecret"}
-            className={`group relative flex size-9 items-center justify-center transition-colors ${
-              saved ? "text-brand" : "text-[#6f737b] hover:text-brand"
+            className={`flex size-7 shrink-0 items-center justify-center text-[18px] transition ${
+              saved ? "text-brand" : "text-[#777F8B] hover:text-brand"
             }`}
+            aria-label={saved ? "Прибрати зі збережених" : "Зберегти у FatSecret"}
           >
-            <span
-              className="absolute -right-3 -top-9 whitespace-nowrap rounded bg-white px-2.5 py-1.5 text-[10px] font-semibold text-[#344057] opacity-0 shadow-[0_6px_14px_rgba(16,24,40,0.12)] transition-opacity after:absolute after:bottom-[-4px] after:right-7 after:size-2 after:rotate-45 after:bg-white group-hover:opacity-100"
-            >
-              {saved ? "Збережено у FatSecret" : "Зберегти у FatSecret"}
-            </span>
-            <span className={`text-3xl leading-none transition-transform ${saved ? "scale-110" : ""}`}>
-              {saved ? "♥" : "♡"}
-            </span>
+            {saved ? "♥" : "♡"}
           </button>
         </div>
-      </div>
 
-      {meal.ingredientAmounts.length > 0 && (
-        <div className="ml-9 mt-2 space-y-2 border-l border-[#e6e9ef] pl-7">
-          {meal.ingredientAmounts.map((amount) => (
-            <div key={amount.ingredientId} className="grid grid-cols-[40px_minmax(0,1fr)_90px] gap-3">
-              <ProductThumb variant={meal.slot === "breakfast" ? "dairy" : "bottle"} small />
-              <div>
-                <p className="line-clamp-1 text-sm text-[#252936]">{amount.name}</p>
+        <div className="border-t border-[#EDF0F3] px-5 py-4">
+          {(ingredients.length > 0 ? ingredients : [null, null]).map(
+            (ingredient, index) => (
+              <div
+                key={ingredient?.ingredientId ?? `${title}-${index}`}
+                className={`grid grid-cols-[52px_minmax(0,1fr)_96px] items-center gap-4 py-2 ${
+                  index > 0 ? "border-t border-[#F2F3F5]" : ""
+                }`}
+              >
+                <ProductVisual
+                  type={index === 0 ? "butter" : productType}
+                  small
+                />
+
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] leading-4 text-[#30343B]">
+                    {ingredient?.name ||
+                      (index === 0
+                        ? 'Масло солодковершкове "Галичина" 82,5%'
+                        : "Віскі Jameson")}
+                  </p>
+                  <p className="text-[9px] text-[#9AA1AD]">
+                    {ingredient
+                      ? `${ingredient.quantity} ${ingredient.unit}`
+                      : index === 0
+                        ? "180 г | 9876 кк"
+                        : "0,7 л"}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <span className="text-[9px] text-[#777] line-through">
+                      {index === 0 ? "124.00 ₴" : "899.00 ₴"}
+                    </span>
+                    <span className="rounded-[4px] bg-[#F89F46] px-1 py-[1px] text-[8px] leading-none text-white">
+                      {index === 0 ? "-35%" : "-30%"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] font-semibold text-[#222]">
+                    {index === 0 ? "79.99 ₴" : "629.00 ₴"}
+                  </p>
+                </div>
               </div>
-              <div className="text-right text-sm font-semibold">
-                {formatQuantity(amount.quantity, amount.unit)}
-              </div>
-            </div>
-          ))}
+            ),
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function ProductThumb({ variant, small = false }: { variant: "dairy" | "bottle"; small?: boolean }) {
-  const box = small ? "h-8 w-10" : "h-10 w-12";
-  if (variant === "bottle") {
+function ProductVisual({
+  type,
+  small = false,
+}: {
+  type: "butter" | "bottle";
+  small?: boolean;
+}) {
+  if (type === "butter") {
     return (
-      <div className={`flex ${box} items-center justify-center`}>
-        <span className="block h-9 w-2 rounded-sm bg-[#2f5c35]">
-          <span className="block h-2 bg-[#d93025]" />
-        </span>
+      <div
+        className={`flex shrink-0 items-center justify-center ${
+          small ? "h-6 w-8" : "h-9 w-10"
+        }`}
+      >
+        <Image
+          src="/butter-galychyna.png"
+          alt=""
+          width={44}
+          height={32}
+          className="max-h-full w-auto object-contain"
+        />
       </div>
     );
   }
+
   return (
-    <div className={`flex ${box} items-center justify-center rounded bg-[#f7fafc]`}>
-      <span className="block h-4 w-9 rounded-sm bg-white shadow-sm">
-        <span className="mt-2 block h-1.5 w-full bg-[#ff6f43]" />
-      </span>
+    <div
+      className={`flex shrink-0 items-center justify-center ${
+        small ? "h-9 w-10" : "h-12 w-12"
+      }`}
+    >
+      <img
+        src="https://ik.imagekit.io/cvygf2xse/jamesonwhiskey/wp-content/uploads/2026/03/Jameson-Original-Cropped-1.png?tr=q-80%2Cw-151"
+        alt="Jameson Irish Whiskey"
+        className="max-h-full w-auto object-contain"
+      />
     </div>
   );
 }

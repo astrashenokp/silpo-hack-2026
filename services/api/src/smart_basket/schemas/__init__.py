@@ -46,6 +46,7 @@ class PlanningRequest(Model):
             "restrictions": {
                 "peanut-free", "gluten-free", "dairy-free",
                 "tree-nut-free", "shellfish-free", "soy-free", "egg-free", "pork-free",
+                "fish-free", "red-meat-free",
             },
         }
         unknown = set(value) - allowed[info.field_name]

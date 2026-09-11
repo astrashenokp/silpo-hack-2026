@@ -1014,6 +1014,10 @@
             "in": "header",
             "required": false,
             "schema": {
+              "enum": [
+                "success",
+                "failed"
+              ],
               "type": "string",
               "default": "success",
               "title": "X-Demo-Scenario"
@@ -1362,6 +1366,11 @@
             "in": "header",
             "required": false,
             "schema": {
+              "enum": [
+                "success",
+                "partial",
+                "failed"
+              ],
               "type": "string",
               "default": "success",
               "title": "X-Demo-Scenario"
@@ -1688,6 +1697,12 @@
             "in": "header",
             "required": false,
             "schema": {
+              "enum": [
+                "success",
+                "partial",
+                "failed",
+                "unmatched"
+              ],
               "type": "string",
               "default": "success",
               "title": "X-Demo-Scenario"

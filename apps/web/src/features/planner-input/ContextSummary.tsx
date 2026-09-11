@@ -7,6 +7,7 @@ type ContextSummaryProps = {
   isLoading: boolean;
   sessionExpired: boolean;
   hasError: boolean;
+  accountConnected?: boolean;
 };
 
 function formatPets(
@@ -48,8 +49,9 @@ export default function ContextSummary({
   isLoading,
   sessionExpired,
   hasError,
+  accountConnected = true,
 }: ContextSummaryProps) {
-  let connectionLabel = "Підключено";
+  let connectionLabel = accountConnected ? "Підключено" : "Гостьовий режим";
 
   if (isLoading) {
     connectionLabel = "Завантаження...";
@@ -60,90 +62,40 @@ export default function ContextSummary({
   }
 
   return (
-    <section
-      aria-labelledby="profile-context-title"
-      className="mt-8 rounded-xl border border-[#E6E0D8] bg-[#FFFCF8] p-4"
+    <details
+      className="mt-3 rounded-lg border border-[#E6E0D8] bg-[#FFFCF8] px-3 py-2"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <h3
-            id="profile-context-title"
-            className="text-base font-semibold text-[#886432]"
-          >
-            Профіль і контекст
-          </h3>
-
-          <p className="mt-1 text-xs leading-5 text-[#667085]">
-            Дані профілю показані для перевірки.
-            Вони не перезаписують значення, які ви
-            вже ввели у форму.
-          </p>
-        </div>
-
-        <span
-          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
-            context && !sessionExpired && !hasError
-              ? "bg-green-50 text-green-700"
-              : "bg-[#FFF1E5] text-[#886432]"
-          }`}
-        >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[12px] text-[#667085]">
+        <span className="font-medium text-[#886432]">Профіль і контекст</span>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+          context && accountConnected && !sessionExpired && !hasError
+            ? "bg-green-50 text-green-700"
+            : "bg-[#FFF1E5] text-[#886432]"
+        }`}>
           {connectionLabel}
         </span>
-      </div>
+      </summary>
 
       {context && (
-        <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-          <SummaryItem
-            label="Вподобання"
-            value={formatList(context.preferences)}
-          />
-
-          <SummaryItem
-            label="Обмеження"
-            value={formatList(context.restrictions)}
-          />
-
-          <SummaryItem
-            label="Домашні тварини"
-            value={formatPets(context.pets)}
-          />
-
+        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
+          <SummaryItem label="Вподобання" value={formatList(context.preferences)} />
+          <SummaryItem label="Обмеження" value={formatList(context.restrictions)} />
+          <SummaryItem label="Домашні тварини" value={formatPets(context.pets)} />
           <SummaryItem
             label="Історія покупок"
-            value={
-              context.historyAvailable
-                ? "Доступна"
-                : "Недоступна"
-            }
-          />
-
-          <SummaryItem
-            label="Контекст кошика"
-            value={
-              context.cartContextReady
-                ? "Готовий"
-                : "Потрібне налаштування"
-            }
+            value={context.historyAvailable ? "Доступна" : "Недоступна"}
           />
         </div>
       )}
 
       {context?.warnings?.length ? (
-        <div className="mt-4 rounded-lg bg-[#FFF8F1] px-3 py-2">
-          <p className="text-xs font-medium text-[#886432]">
-            Примітка
-          </p>
-
-          <ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-5 text-[#667085]">
-            {context.warnings.map((warning) => (
-              <li key={warning}>
-                {formatWarning(warning)}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-[#667085]">
+          {context.warnings.map((warning) => (
+            <li key={warning}>{formatWarning(warning)}</li>
+          ))}
+        </ul>
       ) : null}
-    </section>
+    </details>
   );
 }
 
@@ -156,11 +108,11 @@ function SummaryItem({
 }) {
   return (
     <div>
-      <p className="text-xs text-[#98A2B3]">
+      <p className="text-[11px] text-[#98A2B3]">
         {label}
       </p>
 
-      <p className="mt-0.5 font-medium text-[#344054]">
+      <p className="mt-0.5 text-xs font-medium text-[#344054]">
         {value}
       </p>
     </div>

@@ -577,10 +577,10 @@ DAY_TEMPLATES: tuple[tuple[MealTemplate, MealTemplate, MealTemplate], ...] = (
 )
 
 
-def build_synthetic_meal_plan(request, filters):
+def build_synthetic_meal_plan(request, filters, *, template_offset: int = 0):
     meals = []
     for day in range(1, request.days + 1):
-        templates = DAY_TEMPLATES[(day - 1) % len(DAY_TEMPLATES)]
+        templates = DAY_TEMPLATES[(day - 1 + template_offset) % len(DAY_TEMPLATES)]
         for index, template in enumerate(templates, start=1):
             meals.append(
                 build_meal_from_template(
