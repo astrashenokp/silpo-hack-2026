@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from smart_basket.cart.service import DemoCartService
+from smart_basket.cart.service import DemoCartService, LiveCartService
+from smart_basket.catalog.live import SessionCatalog
 from smart_basket.core import ApiError
 from smart_basket.demo import DemoCatalog
 from smart_basket.agent import UlianaPlanner
@@ -30,9 +31,10 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None, fatsecret_oauth=
                   responses={code: {"model": ErrorEnvelope} for code in (400, 401, 404, 409, 429, 500, 502, 503)})
     app.state.sessions = {}
     app.state.sessions_lock = RLock()
-    app.state.catalog = catalog if catalog is not None else DemoCatalog()
+    app.state.catalog = catalog if catalog is not None else SessionCatalog(DemoCatalog())
     app.state.planner = planner if planner is not None else UlianaPlanner(app.state.catalog)
     app.state.cart_service = DemoCartService(app.state.catalog)
+    app.state.live_cart_service = LiveCartService()
     app.state.silpo_oauth = silpo_oauth if silpo_oauth is not None else SilpoOAuthManager()
     app.state.fatsecret_oauth = (
         fatsecret_oauth if fatsecret_oauth is not None else FatSecretOAuthManager()
@@ -77,7 +79,7 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None, fatsecret_oauth=
     async def http_error(request, exc):
         return JSONResponse(status_code=exc.status_code, content={"error": {
             "code": "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR",
-            "message": str(exc.detail), "retryable": False}})
+            "message": str(exc.detail), "retryable": False}}, headers=exc.headers)
 
     @app.exception_handler(Exception)
     async def unexpected_error(request, exc):

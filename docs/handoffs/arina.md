@@ -44,7 +44,7 @@
 * [x] Усі функції пройшли локальну перевірку на синтаксичні та імпортні помилки (тести `pytest` пройдені успішно)[cite: 8].
 * [x] Код зафіксовано в гілці `feature/arina-mcp-gateway` та відправлено на GitHub[cite: 8].
 * [x] **Live Silpo check, September 11, 2026:** OAuth completed against the official MCP endpoint; `tools/list` returned the expected 40 read/write tools; live context reported a ready cart; and product search returned a normalized available item with its live price. No token, account identity, cart identifier or product identifier was recorded.
-* [x] The backend keeps provider `companyId` and `branchId` write coordinates privately after search and builds `silpo_add_or_update_cart_products` arguments from the runtime input schema. A reviewed live cart mutation and read-back are still pending Rina's cart-service integration.
+* [x] The backend keeps provider `companyId` and `branchId` write coordinates privately after search and builds `silpo_add_or_update_cart_products` arguments from the runtime input schema. Rina's cart service now provides reviewed preview, confirmed write, idempotency and read-back verification. A user-authorized real-cart acceptance check remains.
 
 ### 🔌 Життєвий цикл сесії та пакет MCP
 - **Пакет:** використовується офіційний Python-пакет `mcp>=1.0.0`[cite: 8].

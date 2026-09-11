@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
 
@@ -27,7 +27,14 @@ def session(request: Request) -> Session:
 
 
 SessionDependency = Annotated[Session, Depends(session)]
-Scenario = Annotated[str, Header(alias="X-Demo-Scenario")]
+PlanScenario = Annotated[Literal["success", "failed"], Header(alias="X-Demo-Scenario")]
+CartScenario = Annotated[
+    Literal["success", "partial", "failed"], Header(alias="X-Demo-Scenario")
+]
+FatSecretScenario = Annotated[
+    Literal["success", "partial", "failed", "unmatched"],
+    Header(alias="X-Demo-Scenario"),
+]
 
 
 def scenario(value: str, allowed: set[str]):
@@ -36,7 +43,10 @@ def scenario(value: str, allowed: set[str]):
     return value
 
 
-def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=False):
+def work(
+    app, owner, run_id, request, previous=None, selected_ids=None, fail=False,
+    supersedes_run_id=None,
+):
     with owner.lock:
         owner.runs[run_id].status = "running"
 
@@ -57,7 +67,7 @@ def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=Fal
         result = PlanningResult.model_validate(result).model_copy(deep=True)
         result.run_id = run_id
         result.version = previous.version + 1 if previous else 1
-        if result.data_mode not in {"demo", "mixed"} or result.effective_request != request:
+        if result.data_mode not in {"live", "demo", "mixed"} or result.effective_request != request:
             raise ValueError("Planner must retain the confirmed request and return a supported data mode.")
         if result.basket_total_minor != sum(p.line_total_minor for p in result.selected_products):
             raise ValueError("Planner returned inconsistent totals.")
@@ -69,6 +79,8 @@ def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=Fal
         with owner.lock:
             owner.runs[run_id].result = result
             owner.runs[run_id].status = "completed"
+            if supersedes_run_id is not None:
+                owner.superseded.add(supersedes_run_id)
             emit_progress("ready", "Demo planning result is ready.")
     except Exception as exc:
         with owner.lock:
@@ -78,12 +90,18 @@ def work(app, owner, run_id, request, previous=None, selected_ids=None, fail=Fal
                 "PLANNER_FAILED", "Planner could not produce a valid result.", 502, True).error
 
 
-def queue_plan(request, tasks, app, owner, *, previous=None, selected_ids=None, fail=False):
+def queue_plan(
+    request, tasks, app, owner, *, previous=None, selected_ids=None, fail=False,
+    supersedes_run_id=None,
+):
     run_id = uid("run")
     initial = RunSnapshot(run_id=run_id, status="queued", stage="context", events=[], result=None, error=None)
     with owner.lock:
         owner.runs[run_id] = initial.model_copy(deep=True)
-    tasks.add_task(work, app, owner, run_id, request, previous, selected_ids, fail)
+    tasks.add_task(
+        work, app, owner, run_id, request, previous, selected_ids, fail,
+        supersedes_run_id,
+    )
     return initial
 
 
@@ -169,7 +187,7 @@ async def silpo_product_search(
 
 @router.post("/plans", status_code=202, response_model=RunSnapshot)
 def create_plan(body: PlanningRequest, tasks: BackgroundTasks, request: Request,
-                owner: SessionDependency, x_demo_scenario: Scenario = "success"):
+                owner: SessionDependency, x_demo_scenario: PlanScenario = "success"):
     scenario(x_demo_scenario, {"success", "failed"})
     return queue_plan(body, tasks, request.app, owner, fail=x_demo_scenario == "failed")
 
@@ -189,20 +207,35 @@ def recalculate(run_id: str, body: RecalculateRequest, tasks: BackgroundTasks,
         if set(body.selected_recurring_ids) - known or len(set(body.selected_recurring_ids)) != len(body.selected_recurring_ids):
             raise ApiError("VALIDATION_ERROR", "Select unique recurring IDs from this result.", 400)
         initial = queue_plan(previous.effective_request, tasks, request.app, owner,
-                             previous=previous, selected_ids=body.selected_recurring_ids)
-        owner.superseded.add(run_id)
+                             previous=previous, selected_ids=body.selected_recurring_ids,
+                             supersedes_run_id=run_id)
         return initial
 
 
 @router.post("/cart/preview", response_model=CartPreview)
-def cart_preview(body: PlanReference, request: Request, owner: SessionDependency,
-                 x_demo_scenario: Scenario = "success"):
+async def cart_preview(body: PlanReference, request: Request, owner: SessionDependency,
+                       x_demo_scenario: CartScenario = "success"):
     scenario(x_demo_scenario, {"success", "partial", "failed"})
+    with owner.lock:
+        plan = owner.get_plan(body.run_id, body.version)
+        live = bool(plan.selected_products) and all(
+            item.source == "silpo" for item in plan.selected_products
+        )
+    if live:
+        return await request.app.state.live_cart_service.preview_cart(
+            body.run_id, body.version, owner
+        )
     return request.app.state.cart_service.preview_cart(body.run_id, body.version, owner, x_demo_scenario)
 
 
 @router.post("/cart/confirm", response_model=CartReceipt)
-def cart_confirm(body: Confirmation, request: Request, owner: SessionDependency):
+async def cart_confirm(body: Confirmation, request: Request, owner: SessionDependency):
+    with owner.lock:
+        live = body.preview_id in owner.live_cart_previews
+    if live:
+        return await request.app.state.live_cart_service.confirm_cart(
+            body.preview_id, body.idempotency_key, owner
+        )
     return request.app.state.cart_service.confirm_cart(body.preview_id, body.idempotency_key, owner)
 
 
@@ -225,7 +258,7 @@ def fatsecret_status(owner: SessionDependency):
 
 @router.post("/fatsecret/exports/preview", response_model=FatSecretPreview)
 async def export_preview(body: FatSecretPreviewRequest, request: Request, owner: SessionDependency,
-                         x_demo_scenario: Scenario = "success"):
+                         x_demo_scenario: FatSecretScenario = "success"):
     scenario(x_demo_scenario, {"success", "partial", "failed", "unmatched"})
     return await request.app.state.export_service.preview(body, owner, x_demo_scenario)
 

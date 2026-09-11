@@ -172,6 +172,16 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
         if match:
             value = match.group(1).replace(",", ".")
             unit = unit or match.group(2)
+    if value is None:
+        label = product.get("title") or product.get("name")
+        if isinstance(label, str):
+            match = re.search(
+                r"(?:^|\s)(\d+(?:[.,]\d+)?)\s*(кг|kg|г|g|мл|ml|л|l|шт|piece)(?:\b|$)",
+                label.casefold(),
+            )
+            if match:
+                value = match.group(1).replace(",", ".")
+                unit = unit or match.group(2)
     aliases = {
         "г": ("g", 1), "g": ("g", 1), "гр": ("g", 1),
         "кг": ("g", 1000), "kg": ("g", 1000),
@@ -268,6 +278,12 @@ def normalize_product_search(payload: Any, query: str) -> ProductSearchResponse:
         if product_id in seen:
             continue
         content_quantity, content_unit = _content_amount(raw)
+        normalized_selling_unit = str(selling_unit).strip().casefold()
+        if content_quantity is None:
+            if normalized_selling_unit in {"kg", "кг"}:
+                content_quantity, content_unit = 1000.0, "g"
+            elif normalized_selling_unit in {"l", "л"}:
+                content_quantity, content_unit = 1000.0, "ml"
         products.append(ProductCandidate(
             id=product_id,
             name=str(name),

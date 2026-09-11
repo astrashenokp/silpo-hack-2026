@@ -10,8 +10,10 @@ account. No account identity, token, secret, or remote identifier is recorded he
 
 The same day's Silpo check completed browser OAuth, discovered the official MCP
 read/write tool set, loaded live cart context and returned a normalized live product
-search result. The low-level schema-driven cart write adapter is implemented; the
-reviewed live cart service and write/read-back check remain separate follow-up work.
+search result. The schema-driven cart adapter is now connected to a reviewed live
+preview/confirmation service with price and availability revalidation, stale-cart
+protection, idempotency, and post-write read-back. Automated provider-boundary tests
+pass; one explicitly authorized real-cart mutation is still required for final live QA.
 
 - Date: September 7, 2026.
 - Revision: local working-tree implementation; no PR or shared commit yet.
@@ -47,8 +49,8 @@ and intentionally warns that it is not nutritionally complete. Nonempty recurrin
 candidate lookup awaits Vika's input contract. Do not treat this as final delivery.
 
 Purchase-history normalization from Arina's nested orders into Vika-compatible flat
-`Purchase` records is connected and covered by tests. Next connections: Arina supplies
-normalized live catalog/context and authenticated provider clients; Sofiia supplies real meal quantities;
+`Purchase` records is connected and covered by tests. The live Silpo catalog/context
+client is connected; Sofiia supplies real meal quantities;
 Vika supplies optimization and recurring demand; Ksiusha adds the Next.js forwarder
 and TypeScript types; Alina checks the mock scenario fixtures and endpoints.
 

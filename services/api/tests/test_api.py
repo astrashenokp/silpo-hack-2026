@@ -73,6 +73,27 @@ def test_same_origin_swagger_posts_are_allowed(client, planning_request):
     assert rejected.json()["error"]["code"] == "ORIGIN_NOT_ALLOWED"
 
 
+def test_openapi_declares_demo_scenario_enums_and_405_allow_header(client):
+    schema = client.get("/openapi.json").json()
+    expected = {
+        "/api/plans": {"success", "failed"},
+        "/api/cart/preview": {"success", "partial", "failed"},
+        "/api/fatsecret/exports/preview": {
+            "success", "partial", "failed", "unmatched",
+        },
+    }
+    for path, values in expected.items():
+        parameter = next(
+            item for item in schema["paths"][path]["post"]["parameters"]
+            if item["name"] == "X-Demo-Scenario"
+        )
+        assert set(parameter["schema"]["enum"]) == values
+
+    response = client.request("TRACE", "/api/plans")
+    assert response.status_code == 405
+    assert response.headers["allow"] == "POST"
+
+
 @pytest.mark.parametrize("field,value", [
     ("budgetMinor", 0), ("budgetMinor", 12.5), ("budgetMinor", "180000"),
     ("budgetMinor", True), ("days", 15), ("people", 0), ("days", True),
@@ -200,6 +221,22 @@ def test_recalculation_rejects_unknown_ids(client, planning_request):
     plan = create_plan(client, planning_request)
     assert client.post(f"/api/plans/{plan['runId']}/recalculate", json={"version": 1,
         "selectedRecurringIds": ["invented"]}).status_code == 400
+
+
+def test_failed_recalculation_keeps_original_plan_confirmable(app, client, planning_request):
+    plan = create_plan(client, planning_request)
+
+    def fail_recalculation(*args, **kwargs):
+        raise RuntimeError("recalculation failed")
+
+    app.state.planner.recalculate_plan = fail_recalculation
+    queued = client.post(
+        f"/api/plans/{plan['runId']}/recalculate",
+        json={"version": 1, "selectedRecurringIds": []},
+    ).json()
+    failed = client.get(f"/api/plans/{queued['runId']}").json()
+    assert failed["status"] == "failed"
+    assert client.post("/api/cart/preview", json=reference(plan)).status_code == 200
 
 
 def test_cors_errors_and_unimplemented_oauth(client, planning_request):
