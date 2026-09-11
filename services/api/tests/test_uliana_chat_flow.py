@@ -95,6 +95,37 @@ class FakeMealReplanner:
             "source":
                 "synthetic",
         }
+class StaticMealReplanner:
+    """
+    Returns exactly the result provided by the test.
+
+    Useful for testing invalid, unchanged,
+    expensive or replacement meal replans.
+    """
+
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def __call__(
+        self,
+        request,
+        effective_context,
+        previous_meals,
+        reason,
+        preserve_meal_slots=None,
+        replace_ingredient=None,
+    ):
+        self.calls.append({
+            "reason": reason,
+            "preserve_meal_slots": list(
+                preserve_meal_slots or []
+            ),
+            "replace_ingredient":
+                replace_ingredient,
+        })
+
+        return self.result
     
 class FakeChatInterpreter:
     """
@@ -1041,4 +1072,669 @@ def test_chat_upgrade_plan():
             "preserve_meal_slots"
         ]
         == ["breakfast"]
+    )
+@pytest.mark.parametrize(
+    "command",
+    [
+        ChatCommand(
+            intent="reduce_cost"
+        ),
+        ChatCommand(
+            intent="upgrade_plan"
+        ),
+        ChatCommand(
+            intent="replace_ingredient",
+            ingredient="rice",
+        ),
+        ChatCommand(
+            intent="explain_plan"
+        ),
+    ],
+)
+def test_chat_modification_requires_existing_plan(
+    command,
+):
+    planner = UlianaPlanner(
+        catalog=DemoCatalog(),
+        chat_interpreter=(
+            FakeChatInterpreter(
+                command
+            )
+        ),
+    )
+
+    response = (
+        planner.handle_chat_message(
+            message="Modify the plan",
+
+            previous_result=None,
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+    )
+
+    assert (
+        response["type"]
+        == "clarification"
+    )
+
+    assert (
+        "create a plan"
+        in response["message"].lower()
+    )
+
+
+def test_meal_replanner_rejects_none_result():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="reduce_cost"
+                )
+            )
+        ),
+
+        meal_replanner=(
+            StaticMealReplanner(
+                None
+            )
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="invalid result",
+    ):
+        planner.handle_chat_message(
+            message="Зроби дешевше",
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+
+
+def test_meal_replanner_rejects_wrong_type():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="reduce_cost"
+                )
+            )
+        ),
+
+        meal_replanner=(
+            StaticMealReplanner(
+                []
+            )
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="invalid result",
+    ):
+        planner.handle_chat_message(
+            message="Зроби дешевше",
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+
+
+def test_meal_replanner_rejects_missing_ingredients():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    invalid_meal_result = {
+        "meals":
+            previous_result.meal_plan,
+
+        # "ingredients" intentionally missing
+
+        "nutrition_summary":
+            previous_result
+            .nutrition_summary,
+
+        "source":
+            "synthetic",
+    }
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="reduce_cost"
+                )
+            )
+        ),
+
+        meal_replanner=(
+            StaticMealReplanner(
+                invalid_meal_result
+            )
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Missing fields: ingredients",
+    ):
+        planner.handle_chat_message(
+            message="Зроби дешевше",
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+
+
+def test_reduce_cost_rejects_non_cheaper_replan():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    # Return exactly the same meals and ingredients.
+    #
+    # Therefore matching + optimizer should
+    # produce exactly the same basket price.
+    same_meal_result = {
+        "meals":
+            previous_result.meal_plan,
+
+        "ingredients":
+            previous_result.ingredients,
+
+        "nutrition_summary":
+            previous_result
+            .nutrition_summary,
+
+        "warnings": [],
+
+        "source":
+            "synthetic",
+    }
+
+    meal_replanner = (
+        StaticMealReplanner(
+            same_meal_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="reduce_cost"
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    response = (
+        planner.handle_chat_message(
+            message="Зроби дешевше",
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+    )
+
+    assert (
+        response["type"]
+        == "no_cost_improvement"
+    )
+
+    assert (
+        response[
+            "previousBasketTotalMinor"
+        ]
+        == 49000
+    )
+
+    assert (
+        response[
+            "candidateBasketTotalMinor"
+        ]
+        == 49000
+    )
+
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "reduce_cost"
+    )
+
+
+def test_upgrade_plan_rejects_plan_over_budget():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    # Make every ingredient extremely large.
+    #
+    # Demo catalog products still match,
+    # but the final basket will exceed
+    # the current 1800 UAH budget.
+    expensive_ingredients = [
+        ingredient.model_copy(
+            update={
+                "quantity":
+                    10000.0
+            }
+        )
+        for ingredient
+        in previous_result.ingredients
+    ]
+
+    expensive_meal_result = {
+        "meals":
+            previous_result.meal_plan,
+
+        "ingredients":
+            expensive_ingredients,
+
+        "nutrition_summary":
+            previous_result
+            .nutrition_summary,
+
+        "warnings": [],
+
+        "source":
+            "synthetic",
+    }
+
+    meal_replanner = (
+        StaticMealReplanner(
+            expensive_meal_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent="upgrade_plan"
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    response = (
+        planner.handle_chat_message(
+            message=(
+                "Зроби меню кращим"
+            ),
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+    )
+
+    assert (
+        response["type"]
+        == "upgrade_not_feasible"
+    )
+
+    assert (
+        response[
+            "budgetMinor"
+        ]
+        == 180000
+    )
+
+    assert (
+        response[
+            "candidateBasketTotalMinor"
+        ]
+        > response["budgetMinor"]
+    )
+
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "upgrade_plan"
+    )
+
+
+def test_replace_ingredient_runs_real_replan():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    # Simulate Sofia successfully replacing rice.
+    #
+    # For this orchestration test we remove
+    # the rice requirement from the returned
+    # ingredient list.
+    replacement_ingredients = [
+        ingredient
+        for ingredient
+        in previous_result.ingredients
+        if ingredient.id != "rice"
+    ]
+
+    replacement_meal_result = {
+        "meals":
+            previous_result.meal_plan,
+
+        "ingredients":
+            replacement_ingredients,
+
+        "nutrition_summary":
+            previous_result
+            .nutrition_summary,
+
+        "warnings":
+            [
+                "Fake ingredient replacement."
+            ],
+
+        "source":
+            "synthetic",
+    }
+
+    meal_replanner = (
+        StaticMealReplanner(
+            replacement_meal_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent=(
+                        "replace_ingredient"
+                    ),
+                    ingredient="rice",
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    result = (
+        planner.handle_chat_message(
+            message="Заміни рис",
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+    )
+
+    assert (
+        result.version
+        ==
+        previous_result.version + 1
+    )
+
+    assert all(
+        ingredient.id != "rice"
+        for ingredient
+        in result.ingredients
+    )
+
+    assert all(
+        ingredient.name
+        != "Dry rice"
+        for ingredient
+        in result.ingredients
+    )
+
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "replace_ingredient"
+    )
+
+    assert (
+        meal_replanner.calls[0][
+            "replace_ingredient"
+        ]
+        == "Dry rice"
+    )
+def test_replace_ingredient_rejects_unchanged_ingredient():
+
+    catalog = DemoCatalog()
+
+    first_planner = UlianaPlanner(
+        catalog=catalog,
+        chat_interpreter=(
+            FailIfCalledInterpreter()
+        ),
+    )
+
+    previous_result = (
+        make_result(first_planner)
+    )
+
+    # Replanner pretends that it completed
+    # the replacement, but actually returns
+    # exactly the same ingredients.
+    unchanged_meal_result = {
+        "meals":
+            previous_result.meal_plan,
+
+        "ingredients":
+            previous_result.ingredients,
+
+        "nutrition_summary":
+            previous_result
+            .nutrition_summary,
+
+        "warnings": [],
+
+        "source":
+            "synthetic",
+    }
+
+    meal_replanner = (
+        StaticMealReplanner(
+            unchanged_meal_result
+        )
+    )
+
+    planner = UlianaPlanner(
+        catalog=catalog,
+
+        chat_interpreter=(
+            FakeChatInterpreter(
+                ChatCommand(
+                    intent=(
+                        "replace_ingredient"
+                    ),
+                    ingredient="rice",
+                )
+            )
+        ),
+
+        meal_replanner=(
+            meal_replanner
+        ),
+    )
+
+    response = (
+        planner.handle_chat_message(
+            message="Заміни рис",
+
+            previous_result=(
+                previous_result
+            ),
+
+            session=object(),
+
+            emit_progress=lambda *_: None,
+        )
+    )
+
+    assert (
+        response["type"]
+        == "invalid_replan"
+    )
+
+    assert (
+        response["ingredient"]
+        == "Dry rice"
+    )
+
+    assert (
+        response["ingredientId"]
+        == "rice"
+    )
+
+    assert len(
+        meal_replanner.calls
+    ) == 1
+
+    assert (
+        meal_replanner.calls[0][
+            "reason"
+        ]
+        == "replace_ingredient"
+    )
+
+    assert (
+        meal_replanner.calls[0][
+            "replace_ingredient"
+        ]
+        == "Dry rice"
     )

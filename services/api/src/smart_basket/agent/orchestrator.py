@@ -54,8 +54,6 @@ class UlianaPlanner:
     HTTP, runId, run status and storage
     are handled by Rina's FastAPI layer.
     """
-    MAX_OPTIMIZATION_PASSES = 2
-    MAX_MEAL_REPLANS = 1
 
     def __init__(
         self,
@@ -110,18 +108,40 @@ class UlianaPlanner:
                 ),
             )
 
-        meal_result = self.meal_replanner(
-            request=request,
-            effective_context=context,
-            previous_meals=previous_meals,
-            reason=reason,
-            preserve_meal_slots=(
-                preserve_meal_slots
-            ),
-            replace_ingredient=(
-                replace_ingredient
-            ),
-        )
+        try:
+            meal_result = self.meal_replanner(
+                request=request,
+                effective_context=context,
+                previous_meals=previous_meals,
+                reason=reason,
+                preserve_meal_slots=(
+                    preserve_meal_slots
+                ),
+                replace_ingredient=(
+                    replace_ingredient
+                ),
+            )
+
+        except UnsupportedMealFilter as exc:
+            raise ApiError(
+                "VALIDATION_ERROR",
+                str(exc),
+                400,
+                False,
+            ) from exc
+
+        except EdamamUnavailable as exc:
+            raise ApiError(
+                "UPSTREAM_UNAVAILABLE",
+                str(exc),
+                502,
+                True,
+            ) from exc
+
+        if not isinstance(meal_result, dict):
+            raise ValueError(
+                "Meal replanner returned an invalid result."
+            )
 
         required_fields = {
             "meals",
@@ -495,6 +515,27 @@ class UlianaPlanner:
                     "Please try again."
                 ),
             }
+        requires_existing_plan = {
+            "change_budget",
+            "reduce_cost",
+            "upgrade_plan",
+            "replace_ingredient",
+            "explain_plan",
+        }
+
+        if (
+            command.intent in requires_existing_plan
+            and previous_result is None
+        ):
+            return {
+                "type": "clarification",
+                "message": (
+                    "Please create a plan before "
+                    "trying to modify it."
+                ),
+                "command": command.model_dump(),
+            }
+
         if command.intent == "create_plan":
             return self._handle_create_plan(
                 command=command,
@@ -1515,7 +1556,25 @@ class UlianaPlanner:
         replanned_ingredients = (
             meal_result["ingredients"]
         )
+        target_still_present = any(
+            ingredient.id == target.id
+            or ingredient.name.strip().lower()
+            == target.name.strip().lower()
+            for ingredient
+            in replanned_ingredients
+        )
 
+        if target_still_present:
+            return {
+                "type": "invalid_replan",
+                "message": (
+                    f"Ingredient '{target.name}' "
+                    "was not replaced by the meal replanner."
+                ),
+                "ingredientId": target.id,
+                "ingredient": target.name,
+                "command": command.model_dump(),
+            }
         matching_context = MatchingContext(
             session=session,
             catalog=self.catalog,
