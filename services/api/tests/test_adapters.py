@@ -254,6 +254,18 @@ def test_product_search_maps_real_silpo_weighted_fields():
     assert [product.selling_unit for product in result.products] == ["piece", "kg"]
     assert result.products[0].regular_price_minor == 5000
     assert result.products[1].quantity_step == 0.1
+    assert result.products[1].content_quantity == 1000
+    assert result.products[1].content_unit == "g"
+
+
+def test_product_search_reads_explicit_package_weight_from_provider_name():
+    result = normalize_product_search({"products": [{
+        "id": "rice-1", "name": "Крупа рисова довгозерниста 1 кг",
+        "price": 82.5, "step": 1, "available": True, "weighted": False,
+    }]}, "рис")
+
+    assert result.products[0].content_quantity == 1000
+    assert result.products[0].content_unit == "g"
 
 
 @pytest.mark.asyncio
