@@ -20,11 +20,22 @@ export type SourceMode = "fixtures" | "live";
 export interface SavedMeal {
   id: string;
   title: string;
+  // Plan version the meal came from; FatSecret previews are made per plan version.
+  runId?: string;
+  version?: number;
 }
 
-type ChatItem =
-  | { kind: "user"; text: string }
-  | { kind: "plan"; request: string; result: PlanningResult | null; status: "thinking" | "ready"; added: boolean };
+type PlanItem = {
+  kind: "plan";
+  id?: string;
+  request: string;
+  result: PlanningResult | null;
+  status: "thinking" | "ready" | "failed";
+  added: boolean;
+  error?: string;
+};
+
+type ChatItem = { kind: "user"; text: string } | PlanItem;
 
 // Cart contents are owned by the parent (page.tsx) so every chat shares the
 // same single cart. The right-hand CartPanel is rendered once at the app level
@@ -39,6 +50,7 @@ export function PlannerResults({
   savedMeals,
   onSavedMealsChange,
   onAddToCart,
+  onRecalculate,
 }: {
   snapshot?: RunSnapshot | null;
   result: PlanningResult | null;
@@ -48,7 +60,9 @@ export function PlannerResults({
   sentMessages?: string[];
   savedMeals?: SavedMeal[];
   onSavedMealsChange?: (meals: SavedMeal[]) => void;
-  onAddToCart: (products: ProductSelection[]) => void;
+  onAddToCart: (products: ProductSelection[], plan: PlanningResult) => void;
+  // Runs the server recalculation of a plan; without it the view replays the plan locally.
+  onRecalculate?: (plan: PlanningResult, selectedRecurringIds: string[]) => Promise<PlanningResult>;
 }) {
   const [screen, setScreen] = useState<"setup" | "thinking" | "ready">(
     result && !paramsForm ? "ready" : "setup",
@@ -97,6 +111,8 @@ export function PlannerResults({
   }, [sentMessages]);
 
   const resultsRef = useRef<HTMLDivElement>(null);
+  // Identifies recalculation messages so a late API answer fills the right one.
+  const recalcSequence = useRef(0);
 
   useEffect(() => {
     if (screen !== "ready") return;
@@ -134,6 +150,33 @@ export function PlannerResults({
 
   function handleRecalculate(planKey: number) {
     setDirtyPlans((prev) => prev.filter((key) => key !== planKey));
+    if (onRecalculate) {
+      const source = chat[planKey];
+      const previous = (source?.kind === "plan" ? source.result : null) ?? result;
+      if (!previous) return;
+      const selectedIds = previous.recurringItems
+        .filter((item) => recurringOverrides[item.id] ?? item.selected)
+        .map((item) => item.id);
+      recalcSequence.current += 1;
+      const id = `recalc-${recalcSequence.current}`;
+      const update = (patch: Partial<PlanItem>) =>
+        setChat((prev) =>
+          prev.map((entry) => (entry.kind === "plan" && entry.id === id ? { ...entry, ...patch } : entry)),
+        );
+      setChat((prev) => [
+        ...prev,
+        { kind: "plan", id, request: "Перерахуйте кошик", result: null, status: "thinking", added: false },
+      ]);
+      onRecalculate(previous, selectedIds).then(
+        (next) => update({ status: "ready", result: next }),
+        (error: unknown) =>
+          update({
+            status: "failed",
+            error: error instanceof Error ? error.message : "Не вдалося перерахувати кошик.",
+          }),
+      );
+      return;
+    }
     setChat((prev) => [
       ...prev,
       { kind: "plan", request: "Перерахуйте кошик", result: null, status: "thinking", added: false },
@@ -186,6 +229,10 @@ export function PlannerResults({
                   <UserChatBubble text={item.request} />
                   {item.status === "thinking" ? (
                     <ThinkingMessage />
+                  ) : item.status === "failed" ? (
+                    <p role="alert" className="mt-2 rounded-lg bg-danger-soft p-3 text-sm text-danger md:ml-[68px]">
+                      Не вдалося перерахувати кошик: {item.error}
+                    </p>
                   ) : (
                     <ReadyMessage
                       result={planResult}
@@ -196,7 +243,7 @@ export function PlannerResults({
                       onToggleRecurring={(recurringItem) => toggleRecurring(recurringItem, index)}
                       onAddToCart={() => {
                         setChat((prev) => prev.map((entry, i) => (i === index ? { ...entry, added: true } : entry)));
-                        onAddToCart(planResult.selectedProducts);
+                        onAddToCart(planResult.selectedProducts, planResult);
                       }}
                       savedMeals={savedMeals ?? []}
                       onSavedMealsChange={onSavedMealsChange}
@@ -570,7 +617,7 @@ function PlannerReadyView({
     const next =
       existingIndex >= 0
         ? savedMeals.filter((item) => item.id !== meal.id)
-        : [...savedMeals, { id: meal.id, title: meal.title }];
+        : [...savedMeals, { id: meal.id, title: meal.title, runId: result.runId, version: result.version }];
     onSavedMealsChange?.(next);
   }
 

@@ -21,10 +21,17 @@ import {
 } from "@/features/planner-results/components/FatSecretFlow";
 import {
   apiConfirmCart,
+  apiConfirmFatSecret,
   apiCreatePlan,
+  apiFatSecretStatus,
   apiPreviewCart,
+  apiPreviewFatSecret,
+  apiRecalculate,
+  apiSilpoStatus,
   newIdempotencyKey,
+  pollExport,
   pollRun,
+  startProviderAuth,
   type DemoScenario,
 } from "@/lib/api/client";
 import {
@@ -123,7 +130,7 @@ export default function Home() {
     {
       id: 1,
       title: "Привіт",
-      mode: "fixtures",
+      mode: "live",
       scenario: "ready",
       view: null,
       sentMessages: [],
@@ -149,11 +156,35 @@ export default function Home() {
   const [fsPreview, setFsPreview] = useState<FatSecretPreview | null>(null);
   const [fsBusy, setFsBusy] = useState(false);
   const [fsExport, setFsExport] = useState<FatSecretExport | null>(null);
+  const [fsKey, setFsKey] = useState<string | null>(null);
+  const [fsMessage, setFsMessage] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  // Plan version whose products were last added to the shared cart; the API previews that plan.
+  const [cartPlan, setCartPlan] = useState<PlanningResult | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
   }, [activeTab, activeChatId]);
+
+  // Connection state lives in the API session. After an OAuth round trip the API sends the
+  // browser back with ?silpo=... or ?fatsecret=...; the session exists by then, so the app reads
+  // both statuses and skips the account gate. A fresh visit has no session yet and asks nothing.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("silpo") && !params.has("fatsecret")) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    let cancelled = false;
+    Promise.allSettled([apiSilpoStatus(), apiFatSecretStatus()]).then(([silpo, fatSecret]) => {
+      if (cancelled) return;
+      setAccountConnected(silpo.status === "fulfilled" && silpo.value.connected);
+      setFatSecretConnected(fatSecret.status === "fulfilled" && fatSecret.value.connected);
+      setEnteredApp(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
 
@@ -218,7 +249,7 @@ export default function Home() {
     const entry: ChatEntry = {
       id,
       title: id === 1 ? "Привіт" : `Новий чат ${id}`,
-      mode: "fixtures",
+      mode: "live",
       scenario: "ready",
       view: null,
       sentMessages: [],
@@ -235,7 +266,7 @@ export default function Home() {
     patchActiveChat({
       screen: "planner",
       view: null,
-      mode: "fixtures",
+      mode: "live",
       sentMessages: [initialMessage],
       title: initialMessage,
     });
@@ -256,7 +287,7 @@ export default function Home() {
       const fallback: ChatEntry = {
         id: fallbackId,
         title: `Новий чат ${fallbackId}`,
-        mode: "fixtures",
+        mode: "live",
         scenario: "ready",
         view: null,
         sentMessages: [],
@@ -279,19 +310,54 @@ export default function Home() {
     patchActiveChat({ scenario: key, mode: "fixtures", view: buildDemo(key), sentMessages: [] });
   }
 
-  function openFatSecretPreview() {
+  async function openFatSecretPreview() {
     if (savedMeals.length === 0) return;
     setFsExport(null);
-    setFsPreview(buildFatSecretPreview(savedMeals));
+    setFsMessage(null);
+    const planned = savedMeals.filter((meal) => meal.runId && meal.version);
+    if (planned.length === 0) {
+      setFsKey(null);
+      setFsPreview(buildFatSecretPreview(savedMeals));
+      return;
+    }
+    // One preview covers one plan version; meals saved from other plans wait for a later export.
+    const { runId, version } = planned[0];
+    const mealIds = planned
+      .filter((meal) => meal.runId === runId && meal.version === version)
+      .map((meal) => meal.id);
+    if (mealIds.length < savedMeals.length) {
+      setFsMessage("Страви з інших планів збережіть окремим експортом.");
+    }
+    setFsBusy(true);
+    try {
+      const preview = await apiPreviewFatSecret(runId as string, version as number, mealIds);
+      setFsKey(newIdempotencyKey());
+      setFsPreview(preview);
+    } catch (error) {
+      setFsMessage(error instanceof Error ? error.message : "Не вдалося підготувати збереження у FatSecret.");
+    } finally {
+      setFsBusy(false);
+    }
   }
 
   async function confirmFatSecret() {
     if (!fsPreview) return;
     setFsBusy(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
-    setFsExport(buildFatSecretExport(savedMeals));
-    setFsPreview(null);
-    setFsBusy(false);
+    try {
+      if (!fsKey) {
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+        setFsExport(buildFatSecretExport(savedMeals));
+      } else {
+        // Retrying with the same key reuses the operation, so a meal is never saved twice.
+        const accepted = await apiConfirmFatSecret(fsPreview.previewId, fsKey);
+        setFsExport(await pollExport(accepted.exportId, 1000));
+      }
+    } catch (error) {
+      setFsMessage(error instanceof Error ? error.message : "Не вдалося зберегти страви у FatSecret.");
+    } finally {
+      setFsPreview(null);
+      setFsBusy(false);
+    }
   }
 
   function sendChat() {
@@ -339,7 +405,8 @@ export default function Home() {
     setCartProductIds((current) => (current ?? []).filter((id) => id !== productId));
   }
 
-  function addPlansToCart(products: ProductSelection[]) {
+  function addPlansToCart(products: ProductSelection[], plan: PlanningResult) {
+    setCartPlan(plan);
     setCartProductIds((current) => {
       const merged = current ? [...current] : [];
       for (const product of products) {
@@ -357,18 +424,24 @@ export default function Home() {
   }
 
   async function handleAddAll() {
-    if (!sourceResult) return;
+    const plan = cartPlan ?? sourceResult;
+    if (!plan) return;
     setCartBusy(true);
     try {
+      // The API previews the plan version that was added last; demo chats keep the local fixture.
       const preview =
         sourceChat.mode === "fixtures"
           ? fixtureCartPreview
-          : await apiPreviewCart(sourceResult.runId, sourceResult.version, apiScenario);
+          : await apiPreviewCart(plan.runId, plan.version);
       setCartKey(newIdempotencyKey());
       setCartReceipt(null);
       setCartPreview(preview);
-    } catch {
-      setSyncError("Не вдалося сформувати попередній перегляд кошика.");
+    } catch (error) {
+      setSyncError(
+        error instanceof Error
+          ? `Не вдалося сформувати попередній перегляд кошика: ${error.message}`
+          : "Не вдалося сформувати попередній перегляд кошика.",
+      );
     } finally {
       setCartBusy(false);
     }
@@ -402,7 +475,24 @@ export default function Home() {
 
   function handleRetrySync() {
     setSyncError(null);
-    void handleConfirmCart();
+    void (cartPreview ? handleConfirmCart() : handleAddAll());
+  }
+
+  async function recalculatePlan(plan: PlanningResult, selectedRecurringIds: string[]) {
+    const queued = await apiRecalculate(plan.runId, { version: plan.version, selectedRecurringIds });
+    const final = await pollRun(queued.runId, 1000);
+    if (final.status !== "completed" || !final.result) {
+      throw new Error(final.error?.message ?? "Сервер не повернув перерахований план.");
+    }
+    // The server supersedes the old version, so a cart built from it follows the new one.
+    const next = final.result;
+    setCartPlan((current) => (current?.runId === plan.runId ? next : current));
+    return next;
+  }
+
+  async function connectProvider(path: "/auth/silpo/start" | "/auth/fatsecret/start") {
+    setAuthError(null);
+    setAuthError(await startProviderAuth(path));
   }
 
   const runPlan = useCallback(
@@ -428,7 +518,6 @@ export default function Home() {
       paramsForm={!chat.view ? (
         <PlannerForm
           onPlanReady={handlePlanReady}
-          demoMode
           accountConnected={accountConnected}
         />
       ) : undefined}
@@ -436,6 +525,7 @@ export default function Home() {
       savedMeals={savedMeals}
       onSavedMealsChange={setSavedMeals}
       onAddToCart={addPlansToCart}
+      onRecalculate={chat.mode === "live" ? recalculatePlan : undefined}
       onRetryPlan={() => {
         if (chat.id === activeChatId) {
           if (chat.mode === "live") runPlan(chat.id);
@@ -470,7 +560,9 @@ export default function Home() {
           >
             <BookmarkIcon />
           </button>
-          <DemoBadge mode={activeChat?.mode === "fixtures" ? "demo" : "live"} />
+          <DemoBadge
+            mode={activeChat?.view?.result?.dataMode ?? (accountConnected ? "mixed" : "demo")}
+          />
         </div>
       </header>
 
@@ -583,14 +675,12 @@ export default function Home() {
             >
               {!enteredApp ? (
                 <AccountGate
-                  onConnect={() => {
-                    setAccountConnected(true);
-                    setEnteredApp(true);
-                  }}
+                  onConnect={() => void connectProvider("/auth/silpo/start")}
                   onGuest={() => {
                     setAccountConnected(false);
                     setEnteredApp(true);
                   }}
+                  error={authError}
                 />
               ) : activeTab === "saved" ? (
                 <SavedMealsTab
@@ -601,6 +691,7 @@ export default function Home() {
                   onExport={openFatSecretPreview}
                   exportBusy={fsBusy}
                   exportResult={fsExport}
+                  message={fsMessage}
                   onBack={() => setActiveTab("chats")}
                 />
               ) : activeChat?.screen === "home" ? (
@@ -610,8 +701,9 @@ export default function Home() {
                   value={chatText}
                   onChange={setChatText}
                   onStartPlanning={startPlanning}
-                  onConnectFatSecret={() => setFatSecretConnected(true)}
+                  onConnectFatSecret={() => void connectProvider("/auth/fatsecret/start")}
                   onQuickPrompt={(prompt) => setChatText(prompt)}
+                  connectError={authError}
                 />
               ) : (
                 chats.map((chat) => (
@@ -721,9 +813,11 @@ export default function Home() {
 function AccountGate({
   onConnect,
   onGuest,
+  error,
 }: {
   onConnect: () => void;
   onGuest: () => void;
+  error?: string | null;
 }) {
   return (
     <section className="flex h-full w-full items-center justify-center overflow-hidden bg-[#FBC890] p-4 sm:p-6">
@@ -753,8 +847,14 @@ function AccountGate({
             </button>
           </div>
           <p className="mt-5 text-xs leading-5 text-[#8B7357]">
-            Демо-режим: підключення імітується у браузері, без передачі реальних облікових даних.
+            Підключення відкриває вхід у Сільпо. Без нього планер працює на демо-даних і не
+            змінює ваш кошик.
           </p>
+          {error && (
+            <p role="alert" className="mt-3 text-xs leading-5 text-danger">
+              Не вдалося підключити Сільпо: {error}
+            </p>
+          )}
         </div>
       </div>
     </section>
@@ -769,6 +869,7 @@ function WelcomeScreen({
   onStartPlanning,
   onConnectFatSecret,
   onQuickPrompt,
+  connectError,
 }: {
   accountConnected: boolean;
   fatSecretConnected: boolean;
@@ -777,6 +878,7 @@ function WelcomeScreen({
   onStartPlanning: () => void;
   onConnectFatSecret: () => void;
   onQuickPrompt: (value: string) => void;
+  connectError?: string | null;
 }) {
   const prompts = [
     "Меню для вечірки",
@@ -836,6 +938,11 @@ function WelcomeScreen({
               {fatSecretConnected ? "FatSecret підключено ✓" : "Підключити FatSecret  🔗"}
             </button>
           </div>
+          {connectError && (
+            <p role="alert" className="mt-3 text-xs text-danger">
+              Не вдалося підключити FatSecret: {connectError}
+            </p>
+          )}
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             {prompts.map((prompt) => (
@@ -1009,6 +1116,7 @@ function SavedMealsTab({
   onExport,
   exportBusy,
   exportResult,
+  message,
   onBack,
 }: {
   meals: SavedMeal[];
@@ -1016,6 +1124,7 @@ function SavedMealsTab({
   onExport: () => void;
   exportBusy: boolean;
   exportResult: FatSecretExport | null;
+  message?: string | null;
   onBack: () => void;
 }) {
   return (
@@ -1077,6 +1186,12 @@ function SavedMealsTab({
             </li>
           ))}
         </ul>
+      )}
+
+      {message && (
+        <p role="status" className="mt-4 rounded-lg bg-warn-bg p-3 text-sm text-warn-text">
+          {message}
+        </p>
       )}
 
       {exportResult && (
