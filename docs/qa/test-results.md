@@ -100,3 +100,18 @@ the active branch; the exact merged revision is not recorded yet (Rina, due Sept
 `docs/handoffs/alina.md`, `docs/handoffs/katia.md` and `docs/design/` do not exist yet.
 Live-path evidence so far: Rina's FatSecret Saved Meal check (September 11); Arina's handoff
 waits for an MCP token; Edamam is credential-gated (Sofiia).
+
+## Run 2 — QA toolkit baseline, September 11, 2026
+
+- **Revision:** `main` @ `0ef7fbb` with the QA toolkit from PR #19 (`feature/polina-qa-toolkit`).
+  Same environment, stack and demo mode as run 1.
+- **Purpose:** first run of every installed tool; see [the QA toolkit](tools.md) once #19 is merged.
+
+| Tool | Result |
+|---|---|
+| Playwright 1.63.0, `desktop` and `mobile` (Pixel 7) | ✅ Smoke and keyboard specs pass on both. `api-wiring` fails as expected: no `POST /api/plans` within 10 s after "Скласти меню та кошик" — BUG-002 confirmed at runtime |
+| axe-core 4.13.0, WCAG 2.1 AA | ❌ `color-contrast` (serious): account gate 5 nodes; planner form 16 nodes on desktop and 5 on mobile — BUG-009. No other serious or critical rule |
+| Lighthouse 13.4.1 | Desktop: performance 100, accessibility 95, best practices 100, SEO 100. Mobile: 89, 95, 100, 100. Local production build, so indicative only |
+| Schemathesis 4.26.1, 25 examples per operation | 13 of 18 operations (sign-in routes and Silpo search excluded), 328 cases, no server errors. Findings: 13 × 405 without `Allow` and 3 × schema-valid `X-Demo-Scenario` values rejected — BUG-010 |
+| MCP Inspector 2.6.0 | Lists 24 tools of Playwright MCP and 29 of Chrome DevTools MCP |
+| `probe_mcp.py` with python-sdk 2.2.0 | Lists 24 tools of a local Playwright MCP over Streamable HTTP. The Silpo MCP server was not contacted |

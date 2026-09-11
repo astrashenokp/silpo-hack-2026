@@ -21,6 +21,8 @@ been sent to the owners; Polina shares it with the team.
 | BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Open |
 | BUG-007 | Low | Days counter stops at 7; the contract allows 1–14 | Ksiusha (confirm with Katia) | Open |
 | BUG-008 | Low | `API_BASE_URL` is documented as runtime configuration but only applies at `next build` | Ksiusha | Open |
+| BUG-009 | Medium | Text contrast below WCAG AA on primary buttons, hints and the cart panel | Katia + Ksiusha + Alina | Open |
+| BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow` | Rina | Open |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -134,3 +136,36 @@ been sent to the owners; Polina shares it with the team.
   the literal destination.
 - **Impact:** a different API address needs a rebuild. `deploy/web.Dockerfile` passes it as a
   build argument; the frontend handoff should say so.
+
+## BUG-009 — Text contrast below WCAG AA
+
+- **Found in:** run 2, axe-core 4.13.0 `color-contrast` rule (WCAG 2.1 AA 1.4.3) through
+  `tests/ui/specs/a11y.spec.ts` (PR #19). Account gate: 5 elements; planner form: 16 on
+  desktop, 5 on mobile.
+- **Actual (text on background, measured ratio):** white on the brand orange `#F89F46`
+  2.09:1 on every primary button ("Новий чат", "Підключити акаунт Сільпо",
+  "Скласти меню та кошик") and the "-35%" badges; `#8E8E93` "Чати" label 3.26:1;
+  `#8B7357` on `#F5E6D2` guest button 3.65:1; hints and unit suffixes in `text-black/50`
+  3.94:1; `#9AA1AD` timestamp 2.6:1; `#7D8798` store line 3.62:1; cart panel `#9A9A9A`
+  2.81:1, `#22A06B` discount 3.32:1, `#777777` old price 4.47:1.
+- **Expected:** at least 4.5:1 for normal text (3:1 for text of 24 px, or 18.66 px bold, and
+  larger), for example dark text on the orange or a darker orange behind white text.
+- **Impact:** hard to read for low-vision users and in a recorded video; Lighthouse
+  accessibility is 95 instead of 100. The spec annotates this rule as a known issue until it
+  is fixed.
+
+## BUG-010 — Contract details found by Schemathesis
+
+- **Found in:** run 2, Schemathesis 4.26.1 via `tests/contract/run_schemathesis.py` (PR #19).
+- **Actual:**
+  - `packages/contracts/openapi.json` declares `X-Demo-Scenario` as free text, while the API
+    accepts only listed values (`success`/`failed` for plans, plus `partial` for cart previews
+    and `unmatched` for FatSecret previews) and answers 400 otherwise, including for an empty
+    header. Three schema-valid requests were rejected this way.
+  - 405 responses (for example `TRACE /api/plans`) have no `Allow` header, which RFC 9110
+    requires: the generic `HTTPException` handler in `services/api/src/smart_basket/app.py:76-80`
+    rebuilds the response without the original headers. 13 operations are affected.
+- **Expected:** the header values as an enum in the OpenAPI contract, and 405 responses that
+  keep `Allow`.
+- **Impact:** none on the demo flow; the contract is less precise for the frontend types and
+  for automated checks.
