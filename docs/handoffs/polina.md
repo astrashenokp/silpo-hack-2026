@@ -5,19 +5,29 @@ submission status on September 14.
 
 - **Delivery date:** in progress. Early intake September 11; release target September 13;
   recording and submission September 14.
-- **PR / commit:** branch `feature/polina-integration-qa`, intake of `main` @ `0ef7fbb`.
+- **PR / commit:** intake of `main` @ `0ef7fbb` (PR #18), QA toolkit (PR #19), round 2 on
+  branch `feature/polina-qa-round2`.
 - **Receiving teammates:** the whole team.
-- **Completed so far:** intake run 1 (setup, backend and frontend checks, HTTP scenarios);
-  automated end-to-end suite; CI workflow; deployment draft; bug list with owners.
-- **Main files:** `tests/e2e/`, `docs/qa/test-results.md`, `docs/qa/bugs.md`, `deploy/`,
-  `.github/workflows/ci.yml`.
+- **Completed so far:** runs 1–3 (setup, backend and frontend checks, HTTP scenarios, UI
+  walk-through, load and security review); end-to-end suite; QA toolkit; CI workflow;
+  deployment draft and local launcher; demo script; submission checklist; bug list with owners.
+- **Main files:** `tests/`, `docs/qa/` (test results, bugs, tools, demo script, submission
+  checklist), `deploy/` (runbook, Docker, `run-local.ps1`), `.github/workflows/ci.yml`.
 - **Checks and results:** [test results](../qa/test-results.md).
 - **Known issues:** [bug list](../qa/bugs.md). Open blockers: BUG-001 (clean setup) and
-  BUG-002 (UI not connected to the API).
+  BUG-002 (UI not connected to the API); for the video also BUG-011 and BUG-012.
 
 ## Launch the local demo today (PowerShell, repository root)
 
-The documented install fails until BUG-001 is fixed. Workaround:
+One command installs what is missing, works around BUG-001 without changing any file, starts
+both services and, with `-Test`, runs the e2e and UI suites:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Test
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Stop
+```
+
+Manual alternative. The documented install fails until BUG-001 is fixed. Workaround:
 
 ```powershell
 python -m venv services/api/.venv
@@ -77,9 +87,9 @@ expected 34 passed, 1 xfailed. After BUG-001 is fixed, follow `services/api/READ
 
 ## Demo plan (draft)
 
-Golden input: 3 people, 4 days, UAH 1,800, 2,000 kcal per person per day, shared vegetarian
-meals, 1 cat, recurring analysis on. Story as in
-[QA and Demo](../QA_DEMO.md#september-14-recording-and-submission). Backup: the same flow in
+Timed script, what to say and not to say, the pre-recording checklist and recovery:
+[demo script](../qa/demo-script.md). Golden input: 3 people, 4 days, UAH 1,800, 2,000 kcal per
+person per day, shared vegetarian meals, 1 cat, recurring analysis on. Backup: the same flow in
 demo mode with the DEMO label visible, never presented as a live run.
 
 ## To decide or fill in
@@ -91,7 +101,7 @@ demo mode with the DEMO label visible, never presented as a live run.
 | Frozen revision | Polina | September 13 |
 | Presenter | Team | — |
 | Submission-account owner | Team | — |
-| Portal requirements (format, duration, fields) | Polina | Check on September 12 at https://ai-factory.silpo.ua/ |
+| Portal requirements | Polina | Read on September 11: [submission checklist](../qa/submission.md); re-check on the 12th and 14th |
 | Recording and backup links | Polina | September 14 |
 
 ## Receiving teammate's verification
