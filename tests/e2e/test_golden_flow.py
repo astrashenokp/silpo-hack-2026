@@ -135,7 +135,7 @@ def test_fatsecret_saves_one_personal_portion(client, planning_request):
     result = completed_result(client, planning_request)
     status = client.get("/api/integrations/fatsecret").json()
     assert status["connected"] is False
-    assert status["accountLabel"] == "Demo account (no FatSecret connection)"
+    assert status["accountLabel"] is None
     assert "DEMO" in status["reason"]
 
     meal = next(m for m in result["mealPlan"] if m["slot"] == "lunch")
@@ -145,6 +145,7 @@ def test_fatsecret_saves_one_personal_portion(client, planning_request):
     preview = response.json()
     assert preview["destination"] == "saved_meals"
     assert preview["portionBasis"] == "one_person"
+    assert preview["accountLabel"] == "Demo account (no FatSecret connection)"
     assert preview["canConfirm"] is True
     [exported] = preview["meals"]
     assert exported["mealId"] == meal["id"] and exported["unresolved"] == []
