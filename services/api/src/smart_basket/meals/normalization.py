@@ -113,26 +113,49 @@ def aggregate_ingredients(
     specs: dict[str, IngredientSpec],
     restrictions: tuple[str, ...],
 ) -> list[IngredientRequirement]:
+    return aggregate_ingredients_from_meals(meals, restrictions, specs)
+
+
+def aggregate_ingredients_from_meals(
+    meals: list[Meal],
+    restrictions: tuple[str, ...],
+    specs: dict[str, IngredientSpec] | None = None,
+) -> list[IngredientRequirement]:
     quantities: dict[str, float] = defaultdict(float)
     meal_ids: dict[str, list[str]] = defaultdict(list)
+    first_amount: dict[str, IngredientAmount] = {}
 
     for meal in meals:
         for amount in meal.ingredient_amounts:
             quantities[amount.ingredient_id] += amount.quantity
             meal_ids[amount.ingredient_id].append(meal.id)
+            first_amount.setdefault(amount.ingredient_id, amount)
 
     ingredients: list[IngredientRequirement] = []
     for ingredient_id in quantities:
-        spec = specs[ingredient_id]
+        spec = specs.get(ingredient_id) if specs is not None else None
+        amount = first_amount[ingredient_id]
+        name = spec.name if spec is not None else amount.name
+        search_terms = (
+            list(spec.search_terms)
+            if spec is not None
+            else _search_terms_for_unknown_ingredient(ingredient_id, name)
+        )
+        unit = normalize_unit(spec.unit) if spec is not None else amount.unit
         ingredients.append(
             IngredientRequirement(
                 id=ingredient_id,
-                name=spec.name,
-                search_terms=list(spec.search_terms),
+                name=name,
+                search_terms=search_terms,
                 quantity=float(quantities[ingredient_id]),
-                unit=normalize_unit(spec.unit),
+                unit=unit,
                 meal_ids=meal_ids[ingredient_id],
                 restrictions=list(restrictions),
             )
         )
     return ingredients
+
+
+def _search_terms_for_unknown_ingredient(ingredient_id: str, name: str) -> list[str]:
+    terms = [ingredient_id.strip().casefold(), name.strip().casefold()]
+    return [term for term in dict.fromkeys(terms) if term]
