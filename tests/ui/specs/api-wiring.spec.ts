@@ -1,9 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-// BUG-002 in docs/qa/bugs.md: the page renders fixtures instead of calling the API.
-// Remove test.fail once the planner form submits to POST /api/plans.
+// BUG-002 regression check: the planner form must create the plan through the Python API.
 test("creating a plan sends the request to the Python API", async ({ page }) => {
-  test.fail(true, "BUG-002: the planner form never calls POST /api/plans");
   const planRequests: string[] = [];
   page.on("request", (request) => {
     if (request.method() === "POST" && new URL(request.url()).pathname === "/api/plans") {
