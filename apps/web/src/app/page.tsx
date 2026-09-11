@@ -1,111 +1,557 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PlannerForm from "@/features/planner-input/PlannerForm";
-import type { RunSnapshot } from "@/lib/api/planner";
+import type { RunSnapshot as PlannerRunSnapshot } from "@/lib/api/planner";
+import {
+  PlannerResults,
+  type SavedMeal,
+  type SourceMode,
+} from "@/features/planner-results/PlannerResults";
+import { CartPanel, type CartPanelItem } from "@/features/planner-results/components/CartPanel";
+import {
+  CartPreviewModal,
+  CartReceiptView,
+} from "@/features/planner-results/components/CartFlow";
+import { SyncFailureModal } from "@/features/planner-results/components/states";
+import { Button, DemoBadge } from "@/features/planner-results/components/ui";
+import {
+  FatSecretOutcomeView,
+  FatSecretPreviewModal,
+} from "@/features/planner-results/components/FatSecretFlow";
+import {
+  apiConfirmCart,
+  apiCreatePlan,
+  apiPreviewCart,
+  newIdempotencyKey,
+  pollRun,
+  type DemoScenario,
+} from "@/lib/api/client";
+import {
+  derivedEmptyHistoryResult,
+  derivedIncompleteResult,
+  derivedOverBudgetResult,
+  derivedRunningSnapshot,
+  derivedWithRecurringResult,
+  fixtureCartPartial,
+  fixtureCartPreview,
+  fixtureFatSecretPreview,
+  fixturePlanningRequest,
+  fixturePlanningResult,
+  fixtureRunFailed,
+} from "@/lib/api/fixtures";
+import type {
+  CartPreview,
+  CartReceipt,
+  DataMode,
+  FatSecretExport,
+  FatSecretPreview,
+  PlanningResult,
+  ProductSelection,
+  RunSnapshot,
+} from "@/lib/api/types";
+
+type DemoScenarioKey =
+  | "ready"
+  | "running"
+  | "failed"
+  | "empty-history"
+  | "over-budget"
+  | "incomplete"
+  | "recurring";
+
+function buildDemo(key: DemoScenarioKey): {
+  snapshot: RunSnapshot;
+  result: PlanningResult | null;
+} {
+  const base = fixturePlanningResult;
+  switch (key) {
+    case "running":
+      return { snapshot: derivedRunningSnapshot(), result: null };
+    case "failed":
+      return { snapshot: fixtureRunFailed, result: null };
+    case "empty-history":
+      return {
+        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
+        result: derivedEmptyHistoryResult(base),
+      };
+    case "over-budget":
+      return {
+        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
+        result: derivedOverBudgetResult(base),
+      };
+    case "incomplete":
+      return {
+        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
+        result: derivedIncompleteResult(base),
+      };
+    case "recurring":
+      return {
+        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
+        result: derivedWithRecurringResult(base),
+      };
+    default:
+      return {
+        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
+        result: base,
+      };
+  }
+}
+
+interface View {
+  snapshot: RunSnapshot | null;
+  result: PlanningResult | null;
+}
+
+interface ChatEntry {
+  id: number;
+  title: string;
+  mode: SourceMode;
+  scenario: DemoScenarioKey;
+  view: View | null;
+  sentMessages: string[];
+  screen: "home" | "planner";
+}
+
+function chatViewKey(chat: ChatEntry): string {
+  const runId = chat.view?.result?.runId ?? chat.view?.snapshot?.runId ?? "empty";
+  return `${chat.mode}:${runId}:${chat.view?.result?.version ?? 0}`;
+}
 
 export default function Home() {
-  const [completedPlan, setCompletedPlan] =
-    useState<RunSnapshot | null>(null);
-
-  const handlePlanReady = useCallback(
-    (snapshot: RunSnapshot) => {
-      setCompletedPlan(snapshot);
-
-      console.log(
-        "Ready plan received by page:",
-        snapshot.result,
-      );
+  const [chats, setChats] = useState<ChatEntry[]>(() => [
+    {
+      id: 1,
+      title: "Привіт",
+      mode: "fixtures",
+      scenario: "ready",
+      view: null,
+      sentMessages: [],
+      screen: "home",
     },
-    [],
+  ]);
+  const [activeChatId, setActiveChatId] = useState(1);
+  const [nextChatId, setNextChatId] = useState(2);
+  const [apiScenario] = useState<DemoScenario>("success");
+  const [chatText, setChatText] = useState("");
+  const [enteredApp, setEnteredApp] = useState(false);
+  const [accountConnected, setAccountConnected] = useState(false);
+  const [fatSecretConnected, setFatSecretConnected] = useState(false);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
+  const [cartProductIds, setCartProductIds] = useState<string[] | null>(null);
+  const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
+  const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
+  const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
+  const [cartBusy, setCartBusy] = useState(false);
+  const [cartKey, setCartKey] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"chats" | "saved">("chats");
+  const [fsPreview, setFsPreview] = useState<FatSecretPreview | null>(null);
+  const [fsBusy, setFsBusy] = useState(false);
+  const [fsExport, setFsExport] = useState<FatSecretExport | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [activeTab, activeChatId]);
+
+  const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
+
+  const productsById = useMemo(() => {
+    const map = new Map<string, { product: ProductSelection; dataMode: DataMode }>();
+    for (const chat of chats) {
+      const result = chat.view?.result;
+      if (!result) continue;
+      for (const product of result.selectedProducts) {
+        if (!map.has(product.productId)) {
+          map.set(product.productId, { product, dataMode: result.dataMode });
+        }
+      }
+    }
+    return map;
+  }, [chats]);
+
+  const cartItems: CartPanelItem[] = (cartProductIds ?? [])
+    .map((productId) => productsById.get(productId))
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    .map(({ product }) => ({
+      productId: product.productId,
+      name: product.name,
+      quantity: product.quantity,
+      cartQuantity: cartQuantities[product.productId] ?? product.quantity,
+      sellingUnit: product.sellingUnit,
+      unitPriceMinor: product.unitPriceMinor,
+      lineTotalMinor: product.lineTotalMinor,
+      source: product.source,
+      added: true,
+    }));
+  const visibleCartCount = cartItems.reduce((sum, item) => sum + item.cartQuantity, 0);
+  const visibleCartTotalMinor = cartItems.reduce(
+    (sum, item) => sum + item.unitPriceMinor * item.cartQuantity,
+    0,
+  );
+
+  const sourceChat =
+    chats.find((chat) =>
+      (chat.view?.result?.selectedProducts ?? []).some((product) =>
+        (cartProductIds ?? []).includes(product.productId),
+      ),
+    ) ?? activeChat;
+  const sourceResult = sourceChat?.view?.result ?? null;
+
+  const patchChat = useCallback((id: number, patch: Partial<ChatEntry>) => {
+    setChats((current) =>
+      current.map((chat) => (chat.id === id ? { ...chat, ...patch } : chat)),
+    );
+  }, []);
+
+  const patchActiveChat = useCallback(
+    (patch: Partial<ChatEntry>) => {
+      patchChat(activeChatId, patch);
+    },
+    [activeChatId, patchChat],
+  );
+
+  function newChat() {
+    const id = nextChatId;
+    setNextChatId(id + 1);
+    const entry: ChatEntry = {
+      id,
+      title: id === 1 ? "Привіт" : `Новий чат ${id}`,
+      mode: "fixtures",
+      scenario: "ready",
+      view: null,
+      sentMessages: [],
+      screen: "home",
+    };
+    setChats((current) => [...current, entry]);
+    setActiveChatId(id);
+    setActiveTab("chats");
+    setChatText("");
+  }
+
+  function startPlanning() {
+    const initialMessage = chatText.trim() || "Почати планування";
+    patchActiveChat({
+      screen: "planner",
+      view: null,
+      mode: "fixtures",
+      sentMessages: [initialMessage],
+      title: initialMessage,
+    });
+    setChatText("");
+  }
+
+  function selectChat(id: number) {
+    setActiveChatId(id);
+    setActiveTab("chats");
+    setChatText("");
+  }
+
+  function deleteChat(id: number) {
+    const remaining = chats.filter((chat) => chat.id !== id);
+    if (remaining.length === 0) {
+      const fallbackId = nextChatId;
+      setNextChatId(fallbackId + 1);
+      const fallback: ChatEntry = {
+        id: fallbackId,
+        title: `Новий чат ${fallbackId}`,
+        mode: "fixtures",
+        scenario: "ready",
+        view: null,
+        sentMessages: [],
+        screen: "home",
+      };
+      setChats([fallback]);
+      setActiveChatId(fallbackId);
+      setActiveTab("chats");
+      setChatText("");
+      return;
+    }
+    setChats(remaining);
+    if (activeChatId === id) {
+      setActiveChatId(remaining[0].id);
+      setChatText("");
+    }
+  }
+
+  function selectDemo(key: DemoScenarioKey) {
+    patchActiveChat({ scenario: key, mode: "fixtures", view: buildDemo(key), sentMessages: [] });
+  }
+
+  function openFatSecretPreview() {
+    if (savedMeals.length === 0) return;
+    setFsExport(null);
+    setFsPreview(buildFatSecretPreview(savedMeals));
+  }
+
+  async function confirmFatSecret() {
+    if (!fsPreview) return;
+    setFsBusy(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    setFsExport(buildFatSecretExport(savedMeals));
+    setFsPreview(null);
+    setFsBusy(false);
+  }
+
+  function sendChat() {
+    const text = chatText.trim();
+    if (activeChat && text) {
+      patchActiveChat({ sentMessages: [...activeChat.sentMessages, text] });
+    }
+    setChatText("");
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    });
+  }
+
+  function handlePlanReady(snapshot: PlannerRunSnapshot) {
+    patchActiveChat({
+      view: {
+        snapshot: snapshot as unknown as RunSnapshot,
+        result: (snapshot.result as unknown as PlanningResult | null) ?? null,
+      },
+    });
+  }
+
+  function incrementCartItem(productId: string) {
+    const base = productsById.get(productId)?.product.quantity ?? 1;
+    setCartQuantities((current) => ({
+      ...current,
+      [productId]: (current[productId] ?? base) + 1,
+    }));
+  }
+
+  function decrementCartItem(productId: string) {
+    const base = productsById.get(productId)?.product.quantity ?? 1;
+    setCartQuantities((current) => ({
+      ...current,
+      [productId]: Math.max(1, (current[productId] ?? base) - 1),
+    }));
+  }
+
+  function removeCartItem(productId: string) {
+    setCartQuantities((current) => {
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
+    setCartProductIds((current) => (current ?? []).filter((id) => id !== productId));
+  }
+
+  function addPlansToCart(products: ProductSelection[]) {
+    setCartProductIds((current) => {
+      const merged = current ? [...current] : [];
+      for (const product of products) {
+        if (!merged.includes(product.productId)) merged.push(product.productId);
+      }
+      return merged;
+    });
+    setCartQuantities((current) => {
+      const next = { ...current };
+      for (const product of products) {
+        next[product.productId] = (next[product.productId] ?? 0) + product.quantity;
+      }
+      return next;
+    });
+  }
+
+  async function handleAddAll() {
+    if (!sourceResult) return;
+    setCartBusy(true);
+    try {
+      const preview =
+        sourceChat.mode === "fixtures"
+          ? fixtureCartPreview
+          : await apiPreviewCart(sourceResult.runId, sourceResult.version, apiScenario);
+      setCartKey(newIdempotencyKey());
+      setCartReceipt(null);
+      setCartPreview(preview);
+    } catch {
+      setSyncError("Не вдалося сформувати попередній перегляд кошика.");
+    } finally {
+      setCartBusy(false);
+    }
+  }
+
+  async function handleConfirmCart() {
+    if (!cartPreview || !cartKey) return;
+    const key = cartKey;
+    setCartBusy(true);
+    try {
+      const receipt =
+        sourceChat.mode === "fixtures"
+          ? fixtureCartPartial
+          : await apiConfirmCart(cartPreview.previewId, key);
+      if (receipt.status === "failed") {
+        // Keep cartPreview + key: retry is a re-send of the same preview with
+        // the same idempotency key, so it cannot double-add.
+        setSyncError("Сталася помилка під час передачі списку товарів у ваш акаунт.");
+        return;
+      }
+      setCartPreview(null);
+      setCartReceipt(receipt);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Сталася помилка під час синхронізації кошика.";
+      setSyncError(message);
+    } finally {
+      setCartBusy(false);
+    }
+  }
+
+  function handleRetrySync() {
+    setSyncError(null);
+    void handleConfirmCart();
+  }
+
+  const runPlan = useCallback(
+    async (chatId: number) => {
+      try {
+        const created = await apiCreatePlan(fixturePlanningRequest, apiScenario);
+        const final = await pollRun(created.runId, 1500, (s) =>
+          patchChat(chatId, { view: { snapshot: s, result: s.result } }),
+        );
+        patchChat(chatId, { view: { snapshot: final, result: final.result } });
+      } catch (error) {
+        patchChat(chatId, { view: { snapshot: liveErrorSnapshot(error), result: null } });
+      }
+    },
+    [apiScenario, patchChat],
+  );
+
+  const renderResults = (chat: ChatEntry) => (
+    <PlannerResults
+      snapshot={chat.view?.snapshot}
+      result={chat.view?.result ?? null}
+      recalcBusy={false}
+      paramsForm={!chat.view ? (
+        <PlannerForm
+          onPlanReady={handlePlanReady}
+          demoMode
+          accountConnected={accountConnected}
+        />
+      ) : undefined}
+      sentMessages={chat.sentMessages}
+      savedMeals={savedMeals}
+      onSavedMealsChange={setSavedMeals}
+      onAddToCart={addPlansToCart}
+      onRetryPlan={() => {
+        if (chat.id === activeChatId) {
+          if (chat.mode === "live") runPlan(chat.id);
+          else selectDemo("running");
+        }
+      }}
+    />
   );
 
   return (
-    <div className="min-h-dvh bg-white font-sans text-black">
-      {/* HEADER */}
+    <div className="min-h-dvh bg-white font-sans text-[#202124]">
+      {fsPreview && (
+        <FatSecretPreviewModal
+          preview={fsPreview}
+          onConfirm={confirmFatSecret}
+          onCancel={() => setFsPreview(null)}
+          busy={fsBusy}
+        />
+      )}
+
       <header className="sticky top-0 z-30 flex h-16 items-center border-b border-[#E6E6E6] bg-white px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2">
           <AgentLogo className="h-8 w-8 text-[#F89F46]" />
-
-          <span className="text-[19px] font-medium">
-            Агент
-          </span>
+          <span className="text-[18px] font-medium">Агент</span>
+        </div>
+        <div className="ml-auto flex items-center gap-3 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setActiveTab(activeTab === "saved" ? "chats" : "saved")}
+            aria-label="Збережені у FatSecret"
+            className="rounded-lg p-2 text-[#886432] transition-colors hover:bg-[#FFF0E1]"
+          >
+            <BookmarkIcon />
+          </button>
+          <DemoBadge mode={activeChat?.mode === "fixtures" ? "demo" : "live"} />
         </div>
       </header>
 
-      {/* PAGE BODY */}
-      <div className="flex min-h-[calc(100dvh-64px)]">
-
-        {/* SIDEBAR — desktop only */}
-        <aside className="hidden w-[272px] shrink-0 flex-col border-r border-[#E6E6E6] bg-white lg:flex">
-          <div className="flex flex-col items-center gap-6 px-6 py-8">
-
+      <div className="flex h-[calc(100dvh-64px)] overflow-hidden">
+        <aside className="sticky top-16 hidden h-[calc(100dvh-64px)] w-[272px] shrink-0 self-start flex-col overflow-hidden border-r border-[#E6E6E6] bg-white lg:flex">
+          <div className="flex flex-col items-center gap-4 px-6 py-6">
             <button
               type="button"
-              className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-sm font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              onClick={newChat}
+              className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-[14px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
             >
               <span className="text-xl font-light">+</span>
               Новий чат
             </button>
 
-            <div className="flex w-[224px] flex-col">
-              <button
-                type="button"
-                className="flex h-10 items-center gap-2 rounded-lg bg-[rgba(248,159,70,0.2)] px-2 text-left text-sm font-medium text-[#886432] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
-              >
-                <ChatIcon />
-                <span className="truncate">Привіт</span>
-              </button>
+          </div>
 
-              <button
-                type="button"
-                className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
-              >
-                <ChatIcon />
-                <span className="truncate">
-                  Раціон на місяць на сім&apos;ю...
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
-              >
-                <ChatIcon />
-                <span className="truncate">
-                  Планувальник дієти на...
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className="flex h-10 items-center gap-2 rounded-lg px-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
-              >
-                <ChatIcon />
-                <span className="truncate">
-                  Влаштування вечірки...
-                </span>
-              </button>
+          <div className="flex min-h-0 flex-1 flex-col px-6 pb-2">
+            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-[#8E8E93]">
+              Чати
+            </p>
+            <div className="mt-2 flex flex-col gap-0.5">
+              {chats.map((chat) => {
+                const active = chat.id === activeChatId;
+                return (
+                  <div
+                    key={chat.id}
+                    className={`group flex w-full items-center gap-1 rounded-lg ${
+                      active ? "bg-[rgba(248,159,70,0.2)]" : "hover:bg-[#FFF7EF]"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => selectChat(chat.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left"
+                    >
+                      <ChatIcon className={active ? "text-[#F89F46]" : "text-[#8E8E93]"} />
+                      <span
+                        className={`truncate text-[14px] ${
+                          active ? "font-medium text-[#886432]" : "text-[#2c2c2c]"
+                        }`}
+                      >
+                        {chat.title}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteChat(chat.id)}
+                      aria-label={`Видалити ${chat.title}`}
+                      className="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-[#8E8E93] opacity-0 transition-opacity hover:bg-[#FFE4D1] hover:text-[#D92D20] focus:opacity-100 group-hover:opacity-100"
+                    >
+                      <span className="pointer-events-none select-none text-sm leading-none">⌫</span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          <div className="mt-auto">
+          <div className="mt-auto shrink-0 border-t border-[#F2F2F2] bg-white">
             <button
               type="button"
-              className="flex h-10 w-full items-center gap-2 px-8 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-inset"
+              onClick={() => setActiveTab(activeTab === "saved" ? "chats" : "saved")}
+              className={`flex h-10 w-full items-center gap-2 px-8 text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-inset ${
+                activeTab === "saved"
+                  ? "bg-[rgba(248,159,70,0.2)] text-[#886432]"
+                  : "text-[#2c2c2c]"
+              }`}
             >
-              <BookmarkIcon />
-              Збережені у FatSecret
+              <BookmarkIcon className={activeTab === "saved" ? "text-[#F89F46]" : ""} />
+              <span className="flex-1 text-left">Збережені у FatSecret</span>
+              {savedMeals.length > 0 && (
+                <span className="rounded-full bg-[#FFF0E1] px-2 py-0.5 text-xs font-semibold text-[#886432]">
+                  {savedMeals.length}
+                </span>
+              )}
             </button>
 
             <div className="flex h-16 items-center gap-2 px-8">
               <div className="h-8 w-8 shrink-0 rounded-full bg-[#BABABA]" />
-
-              <span className="flex-1 text-sm">
-                Катерина
-              </span>
-
+              <span className="flex-1 text-[14px]">{accountConnected ? "Катерина" : "Гість"}</span>
               <button
                 type="button"
                 aria-label="Меню профілю"
@@ -117,189 +563,301 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* MAIN AREA */}
         <main className="min-w-0 flex-1 bg-white">
-          <div className="mx-auto flex w-full max-w-[1500px] flex-col xl:flex-row">
-
-            {/* CHAT + FORM */}
-            <section className="min-w-0 flex-1 px-4 pb-6 pt-6 sm:px-6 md:px-8 lg:px-10">
-
-              <div className="mx-auto w-full max-w-[858px]">
-
-                {/* USER MESSAGE */}
-                <div className="mb-8 flex justify-end">
-                  <div className="flex items-end gap-2">
-                    <span className="text-[10px] text-[#808080]">
-                      10:39
-                    </span>
-
-                    <div className="rounded-[24px] bg-[rgba(248,159,70,0.2)] px-4 py-3 text-base">
-                      Привіт!
-                    </div>
+          <div
+            ref={scrollRef}
+            className={
+              !enteredApp ||
+              (activeTab === "chats" && activeChat?.screen === "home")
+                ? "h-[calc(100dvh-64px)] overflow-hidden"
+                : "h-[calc(100dvh-64px)] overflow-y-auto px-4 pb-28 pt-3 sm:px-6 md:px-8 lg:px-8"
+            }
+          >
+            <div
+              className={
+                !enteredApp ||
+                (activeTab === "chats" && activeChat?.screen === "home")
+                  ? "h-full w-full"
+                  : `mx-auto w-full max-w-[1500px] ${activeTab === "chats" && activeChat?.screen === "planner" ? "xl:pr-[350px]" : ""}`
+              }
+            >
+              {!enteredApp ? (
+                <AccountGate
+                  onConnect={() => {
+                    setAccountConnected(true);
+                    setEnteredApp(true);
+                  }}
+                  onGuest={() => {
+                    setAccountConnected(false);
+                    setEnteredApp(true);
+                  }}
+                />
+              ) : activeTab === "saved" ? (
+                <SavedMealsTab
+                  meals={savedMeals}
+                  onRemove={(id) =>
+                    setSavedMeals((current) => current.filter((meal) => meal.id !== id))
+                  }
+                  onExport={openFatSecretPreview}
+                  exportBusy={fsBusy}
+                  exportResult={fsExport}
+                  onBack={() => setActiveTab("chats")}
+                />
+              ) : activeChat?.screen === "home" ? (
+                <WelcomeScreen
+                  accountConnected={accountConnected}
+                  fatSecretConnected={fatSecretConnected}
+                  value={chatText}
+                  onChange={setChatText}
+                  onStartPlanning={startPlanning}
+                  onConnectFatSecret={() => setFatSecretConnected(true)}
+                  onQuickPrompt={(prompt) => setChatText(prompt)}
+                />
+              ) : (
+                chats.map((chat) => (
+                  <div
+                    key={`${chat.id}:${chat.id === activeChatId ? "active" : "idle"}:${chatViewKey(chat)}`}
+                    className={chat.id === activeChatId ? "" : "hidden"}
+                  >
+                    {renderResults(chat)}
                   </div>
-                </div>
+                ))
+              )}
 
-                {/* AI MESSAGE */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:gap-3">
-
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-white sm:h-10 sm:w-10">
-                    <AgentLogo className="h-5 w-5 text-white" />
+              {enteredApp &&
+                activeTab === "chats" &&
+                activeChat?.screen === "planner" &&
+                cartReceipt && (
+                  <div className="mt-5 max-w-[820px]">
+                    <CartReceiptView receipt={cartReceipt} />
                   </div>
+                )}
+            </div>
+          </div>
 
-                  <div className="min-w-0 flex-1">
-
-                    <div className="flex flex-col gap-3 border-b border-[#EAECF0] pb-6 sm:flex-row sm:items-start">
-                      <p className="max-w-[624px] px-0 py-2 text-sm leading-6 sm:px-4 sm:text-base">
-                        Привіт, Катерино! Я ваш автономний планер Сільпо.
-                        Допоможу зібрати раціон, врахую історію покупок та
-                        оптимізую кошик під бюджет. Оберіть параметри нижче:
-                      </p>
-
-                      <div className="flex items-center gap-1 text-[#9C9C9C] sm:ml-auto">
-                        <button
-                          type="button"
-                          aria-label="Подобається"
-                          className="flex h-8 w-8 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-                        >
-                          <ThumbUpIcon />
-                        </button>
-
-                        <button
-                          type="button"
-                          aria-label="Не подобається"
-                          className="flex h-8 w-8 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-                        >
-                          <ThumbDownIcon />
-                        </button>
-
-                        <button
-                          type="button"
-                          aria-label="Копіювати"
-                          className="flex h-8 w-8 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-                        >
-                          <CopyIcon />
-                        </button>
-                      </div>
-                    </div>
-
-                    <PlannerForm onPlanReady={handlePlanReady} />
-
-                  </div>
-                </div>
-
-              </div>
-
-              {/* CHAT INPUT — inline on narrow screens */}
-              <div className="mx-auto mt-8 flex h-12 w-full max-w-[850px] items-center gap-2 rounded-full border border-[#E6E6E6] bg-white p-1 sm:gap-4">
-
+          {enteredApp && activeTab === "chats" && activeChat?.screen === "planner" && (
+            <div className="fixed bottom-0 right-0 left-0 z-20 border-t border-[#E6E6E6] bg-white/95 px-4 py-3 backdrop-blur lg:left-[272px] xl:right-[350px]">
+              <form
+                className="mx-auto flex h-11 w-full max-w-[760px] items-center gap-2 rounded-full border border-[#E6E6E6] bg-white p-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  sendChat();
+                }}
+              >
                 <button
                   type="button"
                   aria-label="Додати"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-xl text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-xl text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
                 >
                   +
                 </button>
-
                 <input
-                  className="min-w-0 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-[#BABABA] sm:text-base"
+                  value={chatText}
+                  onChange={(event) => setChatText(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent px-1 text-[14px] outline-none placeholder:text-[#BABABA]"
                   placeholder="Опишіть, що ви хочете приготувати або спланувати..."
+                  aria-label="Повідомлення"
                 />
-
                 <button
                   type="button"
                   aria-label="Голосове введення"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
                 >
                   <MicIcon />
                 </button>
-
                 <button
-                  type="button"
+                  type="submit"
                   aria-label="Надіслати"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
                 >
                   <ArrowUpIcon />
                 </button>
-
-              </div>
-            </section>
-
-            {/* SMART CART — right on desktop, below content on smaller screens */}
-            <aside className="w-full shrink-0 px-4 pb-8 sm:px-6 md:px-8 xl:w-[394px] xl:px-5 xl:py-[43px]">
-              <div className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-[#F47B4A] border-l-[6px] bg-white xl:h-[calc(100vh-150px)]">
-
-                {/* HEADER */}
-                <div className="shrink-0 px-5 pt-6 sm:px-7 sm:pt-8">
-                  <h2 className="text-[20px] font-medium text-[#886432] sm:text-[22px]">
-                    Смарт кошик Сільпо
-                  </h2>
-
-                  <p className="mt-2 text-sm leading-5 text-[#667085] sm:text-base">
-                    Супермаркет: просп. Бандери, 23
-                    <br />
-                    (Самовивіз)
-                  </p>
-
-                  <p className="mt-6 text-sm sm:mt-8 sm:text-base">
-                    У кошику: 2 товари
-                  </p>
-                </div>
-
-                {/* ITEMS */}
-                <div className="min-h-0 flex-1 px-5 py-5 sm:px-7 xl:overflow-y-auto">
-                  <CartItem />
-                  <CartItem />
-                </div>
-
-                {/* BOTTOM */}
-                <div className="shrink-0 border-t border-[#F3E5D8] bg-white px-5 pb-6 pt-5 sm:px-7 sm:pb-8">
-                  <div className="mb-5 text-right">
-                    <p className="text-sm text-[#1D192B]">
-                      Сума знижки:{" "}
-                      <span className="font-medium text-[#16A34A]">
-                        -88,02 ₴
-                      </span>
-                    </p>
-
-                    <p className="mt-2 text-base font-semibold text-[#1D192B]">
-                      Загальна сума: 159,98 ₴
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!completedPlan}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-[rgba(248,159,70,0.2)] bg-white text-sm font-semibold text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:text-[rgba(248,159,70,0.3)] sm:text-base"
-                  >
-                    <UploadIcon />
-                    Синхронізувати з Сільпо
-                  </button>
-                </div>
-
-              </div>
-            </aside>
-
-          </div>
+              </form>
+            </div>
+          )}
         </main>
       </div>
+
+      {enteredApp && activeTab === "chats" && activeChat?.screen === "planner" && (
+        <>
+          <div className="fixed bottom-28 right-8 top-24 z-30 hidden w-[300px] overflow-hidden xl:block">
+            <CartPanel
+              items={cartItems}
+              itemCount={visibleCartCount}
+              totalMinor={visibleCartTotalMinor}
+              discountMinor={sourceResult?.savingsMinor ?? null}
+              storeLabel="просп. Бандери, 23 (Самовивіз)"
+              onSync={handleAddAll}
+              onIncrement={incrementCartItem}
+              onDecrement={decrementCartItem}
+              onRemove={removeCartItem}
+              syncDisabled={!sourceResult || cartItems.length === 0}
+              syncBusy={cartBusy}
+              mode={sourceResult?.dataMode ?? "mixed"}
+            />
+          </div>
+
+          {cartPreview && (
+            <CartPreviewModal
+              preview={cartPreview}
+              onConfirm={handleConfirmCart}
+              onCancel={() => setCartPreview(null)}
+              busy={cartBusy}
+            />
+          )}
+
+          <SyncFailureModal
+            open={syncError !== null}
+            message={syncError ?? ""}
+            onLater={() => setSyncError(null)}
+            onRetry={handleRetrySync}
+          />
+        </>
+      )}
     </div>
   );
 }
 
+function AccountGate({
+  onConnect,
+  onGuest,
+}: {
+  onConnect: () => void;
+  onGuest: () => void;
+}) {
+  return (
+    <section className="flex h-full w-full items-center justify-center overflow-hidden bg-[#FBC890] p-4 sm:p-6">
+      <div className="flex aspect-square w-[min(72vw,calc(100dvh-112px),650px)] max-w-[650px] items-center justify-center rounded-full bg-[#FFF8EC] p-8 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]">
+        <div className="max-w-[460px]">
+          <h1 className="silpo-page-title">
+            Підключіть ваш акаунт Сільпо
+          </h1>
+          <p className="mx-auto mt-6 max-w-[430px] silpo-page-subtitle">
+            Автономний AI-планер використовує «Власний Рахунок», щоб автоматично враховувати
+            ваші знижки, історію чеків та улюблені товари.
+          </p>
+          <div className="mx-auto mt-8 flex max-w-[310px] flex-col gap-3">
+            <button
+              type="button"
+              onClick={onConnect}
+              className="h-12 rounded-lg bg-[#F89F46] px-5 font-semibold text-white transition hover:bg-[#E88E36] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+            >
+              Підключити акаунт Сільпо&nbsp; ◎
+            </button>
+            <button
+              type="button"
+              onClick={onGuest}
+              className="h-12 rounded-lg bg-[#F5E6D2] px-5 font-medium text-[#8B7357] transition hover:bg-[#EEDCC5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+            >
+              Продовжити як гість (без історії)
+            </button>
+          </div>
+          <p className="mt-5 text-xs leading-5 text-[#8B7357]">
+            Демо-режим: підключення імітується у браузері, без передачі реальних облікових даних.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-/* ------------------------------------------------ */
-/* SMALL COMPONENTS */
-/* ------------------------------------------------ */
+function WelcomeScreen({
+  accountConnected,
+  fatSecretConnected,
+  value,
+  onChange,
+  onStartPlanning,
+  onConnectFatSecret,
+  onQuickPrompt,
+}: {
+  accountConnected: boolean;
+  fatSecretConnected: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onStartPlanning: () => void;
+  onConnectFatSecret: () => void;
+  onQuickPrompt: (value: string) => void;
+}) {
+  const prompts = [
+    "Меню для вечірки",
+    "Вкластися у бюджет",
+    "Корм для тварин",
+    "Персональна дієта/КБЖУ",
+    "Автопоповнення продуктів",
+  ];
 
+  return (
+    <section className="flex h-full w-full items-center justify-center overflow-hidden bg-[#FBC890] p-4 sm:p-6">
+      <div className="flex aspect-square w-[min(72vw,calc(100dvh-112px),690px)] max-w-[690px] items-center justify-center rounded-full bg-[#FFF8EC] p-7 text-center sm:p-12">
+        <div className="w-full max-w-[540px]">
+          <h1 className="silpo-page-title">Сільпо AI помічник</h1>
+          <p className="mx-auto mt-5 max-w-[430px] silpo-page-subtitle">
+            {accountConnected
+              ? "Вітаю, Катерино. Чим я можу допомогти вам сьогодні?"
+              : "Вітаю! Чим я можу допомогти вам сьогодні?"}
+          </p>
+
+          <form
+            className="mt-10 flex h-12 w-full items-center rounded-full border border-[#E7E7E7] bg-white px-1 shadow-sm"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onStartPlanning();
+            }}
+          >
+            <span className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#FFF0E1] text-xl text-[#F89F46]">+</span>
+            <input
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-[#B8B8B8]"
+              placeholder="Опишіть, що ви хочете приготувати або спланувати..."
+              aria-label="Запит до помічника"
+            />
+            <button type="button" aria-label="Голосове введення" className="flex size-9 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">
+              <MicIcon />
+            </button>
+            <button type="submit" aria-label="Надіслати" className="ml-1 flex size-9 items-center justify-center rounded-full bg-[#F89F46] text-white">
+              <ArrowUpIcon />
+            </button>
+          </form>
+
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={onStartPlanning}
+              className="rounded-lg bg-[#F89F46] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#E88E36]"
+            >
+              Почати планування&nbsp; 🚀
+            </button>
+            <button
+              type="button"
+              onClick={onConnectFatSecret}
+              className="rounded-lg border border-[#F89F46] bg-white px-6 py-3 text-[14px] font-semibold text-[#F89F46] transition hover:bg-[#FFF8F1]"
+            >
+              {fatSecretConnected ? "FatSecret підключено ✓" : "Підключити FatSecret  🔗"}
+            </button>
+          </div>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {prompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => onQuickPrompt(prompt)}
+                className="rounded-full bg-[#FFF2DE] px-4 py-2 text-[12px] font-medium text-[#8A5D2A] transition hover:bg-[#FCE7C6]"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function AgentLogo({ className = "" }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 40 40"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-    >
+    <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" className={className}>
       <path
         d="M8.2 29.6L16.2 16.1"
         stroke="currentColor"
@@ -322,105 +880,13 @@ function AgentLogo({ className = "" }: { className?: string }) {
   );
 }
 
-function ThumbUpIcon() {
+function ChatIcon({ className = "" }: { className?: string }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M7.5 10.5V20H4.25C3.56 20 3 19.44 3 18.75v-7c0-.69.56-1.25 1.25-1.25H7.5Z"
-        fill="currentColor"
-      />
-      <path
-        d="M9 20V10.7l3.35-6.1c.3-.55.88-.89 1.51-.89.94 0 1.7.76 1.7 1.7v3.17h3.64c1.24 0 2.16 1.15 1.89 2.36l-1.57 7A2.62 2.62 0 0 1 16.96 20H9Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function ThumbDownIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <g transform="rotate(180 12 12)">
-        <path
-          d="M7.5 10.5V20H4.25C3.56 20 3 19.44 3 18.75v-7c0-.69.56-1.25 1.25-1.25H7.5Z"
-          fill="currentColor"
-        />
-        <path
-          d="M9 20V10.7l3.35-6.1c.3-.55.88-.89 1.51-.89.94 0 1.7.76 1.7 1.7v3.17h3.64c1.24 0 2.16 1.15 1.89 2.36l-1.57 7A2.62 2.62 0 0 1 16.96 20H9Z"
-          fill="currentColor"
-        />
-      </g>
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect
-        x="8"
-        y="6"
-        width="10"
-        height="13"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M6 16H5.5A1.5 1.5 0 0 1 4 14.5v-9A1.5 1.5 0 0 1 5.5 4h7A1.5 1.5 0 0 1 14 5.5V6"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M8 9v8M12 9v8M16 9v8M5 6h14M9 6V4h6v2M7 6l.75 14h8.5L17 6"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function MinusIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 12h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 12h12M12 6v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className="shrink-0"
-    >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`shrink-0 ${className}`}>
       <path
         d="M4 4.5H14.5C15.88 4.5 17 5.62 17 7V12C17 13.38 15.88 14.5 14.5 14.5H9L5.5 17V14.5H4C2.62 14.5 1.5 13.38 1.5 12V7C1.5 5.62 2.62 4.5 4 4.5Z"
         fill="currentColor"
       />
-
       <path
         d="M9.5 9H20C21.38 9 22.5 10.12 22.5 11.5V16.5C22.5 17.88 21.38 19 20 19H18.5V21.5L15 19H9.5C8.12 19 7 17.88 7 16.5V11.5C7 10.12 8.12 9 9.5 9Z"
         fill="currentColor"
@@ -431,15 +897,9 @@ function ChatIcon() {
   );
 }
 
-function BookmarkIcon() {
+function BookmarkIcon({ className = "" }: { className?: string }) {
   return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`shrink-0 ${className}`}>
       <path
         d="M7.5 4.75C7.5 3.78 8.28 3 9.25 3H14.75C15.72 3 16.5 3.78 16.5 4.75V20L12 17.25L7.5 20V4.75Z"
         stroke="currentColor"
@@ -452,49 +912,22 @@ function BookmarkIcon() {
 
 function MicIcon() {
   return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect
-        x="9"
-        y="3"
-        width="6"
-        height="11"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-      />
-
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.6" />
       <path
         d="M6 11C6 14.3 8.7 17 12 17C15.3 17 18 14.3 18 11"
         stroke="currentColor"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
-
-      <path
-        d="M12 17V21"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
+      <path d="M12 17V21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
 
 function ArrowUpIcon() {
   return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M12 19V5M12 5L6.5 10.5M12 5L17.5 10.5"
         stroke="currentColor"
@@ -506,110 +939,151 @@ function ArrowUpIcon() {
   );
 }
 
-function CartItem() {
-  return (
-    <div className="mb-5 flex gap-4">
-
-      <div className="flex h-[54px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded bg-white">
-        <Image
-          src="/butter-galychyna.png"
-          alt='Масло солодковершкове "Галичина" 82,5%'
-          width={64}
-          height={54}
-          className="h-full w-full object-contain"
-        />
-      </div>
-
-      <div className="min-w-0 flex-1">
-
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm leading-5">
-            Масло солодковершкове
-            <br />
-            &quot;Галичина&quot; 82,5%
-          </p>
-
-          <button
-            type="button"
-            aria-label="Видалити товар"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[#F89F46] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-          >
-            <TrashIcon />
-          </button>
-        </div>
-
-        <p className="text-xs text-[#8E8E93]">
-          180 г
-        </p>
-
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-
-          <div>
-            <div className="flex items-center gap-1">
-              <span className="text-sm line-through">
-                124.00 ₴
-              </span>
-
-              <span className="rounded bg-[#F89F46] px-1 text-[11px] text-white">
-                -35%
-              </span>
-            </div>
-
-            <p className="font-semibold">
-              79.99 ₴
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-
-            <button
-              type="button"
-              aria-label="Зменшити кількість"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-            >
-              <MinusIcon />
-            </button>
-
-            <span className="min-w-4 text-center text-base font-medium text-[#8B612E]">1</span>
-
-            <button
-              type="button"
-              aria-label="Збільшити кількість"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-            >
-              <PlusIcon />
-            </button>
-
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+function liveErrorSnapshot(error: unknown): RunSnapshot {
+  const message = error instanceof Error ? error.message : "Невідома помилка";
+  return {
+    runId: "live-error",
+    status: "failed",
+    stage: "context",
+    events: [],
+    result: null,
+    error: { code: "CLIENT_ERROR", message, retryable: true },
+  };
 }
 
-function UploadIcon() {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 16V8M12 8L9 11M12 8L15 11"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+function buildFatSecretPreview(meals: SavedMeal[]): FatSecretPreview {
+  const base = fixtureFatSecretPreview;
+  const fallbackItem = {
+    ingredientId: "demo-ingredient",
+    foodId: "demo-food",
+    servingId: "demo-serving",
+    matchedName: "Demo food",
+    numberOfUnits: 1,
+    sourceQuantity: 100,
+    sourceUnit: "g" as const,
+  };
+  return {
+    ...base,
+    previewId: `demo-export-preview-${meals.length}`,
+    runId: "demo-run-hybrid",
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    meals: meals.map((meal, index) => {
+      const template = base.meals[index % Math.max(base.meals.length, 1)];
+      return {
+        mealId: meal.id,
+        title: meal.title,
+        sourceKcalPerServing: template?.sourceKcalPerServing ?? null,
+        fatsecretKcalPerServing: template?.fatsecretKcalPerServing ?? null,
+        items: template?.items[0] ? [template.items[0]] : [fallbackItem],
+        unresolved: [],
+      };
+    }),
+  };
+}
 
-      <path
-        d="M7 18H6C4.34 18 3 16.66 3 15C3 13.45 4.18 12.17 5.69 12.02C6.12 9.15 8.6 7 11.5 7C14.46 7 16.92 9.2 17.31 12.08C19.38 12.23 21 13.95 21 16C21 18.21 19.21 20 17 20H7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+function buildFatSecretExport(meals: SavedMeal[]): FatSecretExport {
+  const partialDemo = meals.length > 2;
+  return {
+    exportId: "demo-export-op-1",
+    status: partialDemo ? "partial" : "success",
+    meals: meals.map((meal, index) => ({
+      mealId: meal.id,
+      status: partialDemo && index === 0 ? "failed" : "saved",
+      savedMealId: partialDemo && index === 0 ? null : `saved-${meal.id}`,
+      message:
+        partialDemo && index === 0
+          ? "DEMO: інгредієнт не зіставлено — не збережено."
+          : "Додано й прочитано назад (demo).",
+    })),
+    error: null,
+    warnings: [
+      "DEMO: синтетичні дані; у вашому FatSecret-акаунті нічого не створено.",
+      "Повторне збереження того самого набору повторює ту саму операцію без дублікатів.",
+    ],
+  };
+}
+
+function SavedMealsTab({
+  meals,
+  onRemove,
+  onExport,
+  exportBusy,
+  exportResult,
+  onBack,
+}: {
+  meals: SavedMeal[];
+  onRemove: (id: string) => void;
+  onExport: () => void;
+  exportBusy: boolean;
+  exportResult: FatSecretExport | null;
+  onBack: () => void;
+}) {
+  return (
+    <div className="pt-2 lg:pt-6">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[18px] font-semibold text-[#886432]">Збережені у FatSecret</h2>
+          <p className="mt-1 text-sm text-[#667085]">
+            Страви, які ви зберегли у FatSecret як Saved Meals. Натисніть сердечко біля страви в
+            плані харчування, щоб додати її сюди, потім збережіть у свій акаунт.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            onClick={onExport}
+            disabled={meals.length === 0 || exportBusy}
+            loading={exportBusy}
+          >
+            <span className="text-lg leading-none">♥</span>
+            Зберегти у FatSecret
+          </Button>
+          <Button type="button" variant="outline" onClick={onBack}>
+            ← До чатів
+          </Button>
+        </div>
+      </div>
+
+      {meals.length === 0 ? (
+        <div className="rounded-2xl border border-[#E6E6E6] bg-white p-10 text-center text-[#667085]">
+          Ще нічого не збережено. Збережіть страву сердечком у плані харчування, і вона зʼявиться
+          тут.
+        </div>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {meals.map((meal, index) => (
+            <li
+              key={meal.id}
+              className="flex items-start justify-between gap-3 rounded-2xl border border-[#E6E6E6] bg-white p-4"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xs font-bold text-white">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{meal.title}</p>
+                  <p className="mt-0.5 text-xs text-[#8E8E93]">Saved Meal у FatSecret</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemove(meal.id)}
+                aria-label={`Прибрати ${meal.title}`}
+                title="Прибрати зі збережених"
+                className="shrink-0 text-[#F89F46] transition-transform hover:scale-110"
+              >
+                <span className="pointer-events-none select-none text-xl leading-none">♥</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {exportResult && (
+        <div className="mt-4">
+          <FatSecretOutcomeView exportResult={exportResult} />
+        </div>
+      )}
+    </div>
   );
 }

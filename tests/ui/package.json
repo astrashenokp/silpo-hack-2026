@@ -1,0 +1,19 @@
+{
+  "name": "smart-basket-ui-qa",
+  "private": true,
+  "description": "Polina's browser QA: Playwright UI checks, axe accessibility scans and Lighthouse audits.",
+  "scripts": {
+    "test": "playwright test",
+    "test:desktop": "playwright test --project=desktop",
+    "test:mobile": "playwright test --project=mobile",
+    "report": "playwright show-report reports/playwright",
+    "lighthouse": "node lighthouse.mjs",
+    "lighthouse:mobile": "node lighthouse.mjs --mobile"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "chrome-launcher": "1.2.1",
+    "lighthouse": "13.4.1"
+  }
+}

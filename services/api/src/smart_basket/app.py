@@ -9,18 +9,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
-from smart_basket.cart.service import DemoCartService
+from smart_basket.cart.service import DemoCartService, LiveCartService
+from smart_basket.catalog.live import SessionCatalog
 from smart_basket.core import ApiError
 from smart_basket.demo import DemoCatalog
 from smart_basket.agent import UlianaPlanner
-from smart_basket.fatsecret.export import DemoExportService
+from smart_basket.fatsecret.export import FatSecretExportService
+from smart_basket.fatsecret.auth import FatSecretOAuthManager
 from smart_basket.routes.api import router
 from smart_basket.routes.auth import router as silpo_auth_router
 from smart_basket.mcp.oauth import SilpoOAuthManager
 from smart_basket.schemas import ErrorEnvelope
 
 
-def create_app(*, planner=None, catalog=None, silpo_oauth=None):
+def create_app(*, planner=None, catalog=None, silpo_oauth=None, fatsecret_oauth=None,
+               export_service=None):
     if os.getenv("SMART_BASKET_MODE", "demo") != "demo":
         raise RuntimeError("Only demo mode is implemented. Live adapters and durable storage are required first.")
     app = FastAPI(title="Smart Basket API (demo)", version="0.2.0",
@@ -28,11 +31,18 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None):
                   responses={code: {"model": ErrorEnvelope} for code in (400, 401, 404, 409, 429, 500, 502, 503)})
     app.state.sessions = {}
     app.state.sessions_lock = RLock()
-    app.state.catalog = catalog if catalog is not None else DemoCatalog()
+    app.state.catalog = catalog if catalog is not None else SessionCatalog(DemoCatalog())
     app.state.planner = planner if planner is not None else UlianaPlanner(app.state.catalog)
     app.state.cart_service = DemoCartService(app.state.catalog)
-    app.state.export_service = DemoExportService()
+    app.state.live_cart_service = LiveCartService()
     app.state.silpo_oauth = silpo_oauth if silpo_oauth is not None else SilpoOAuthManager()
+    app.state.fatsecret_oauth = (
+        fatsecret_oauth if fatsecret_oauth is not None else FatSecretOAuthManager()
+    )
+    app.state.export_service = (
+        export_service if export_service is not None
+        else FatSecretExportService(app.state.fatsecret_oauth)
+    )
     origins = [s.strip() for s in os.getenv("SMART_BASKET_CORS_ORIGINS", "http://localhost:3000").split(",") if s.strip()]
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
                        allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-Demo-Scenario"])
@@ -41,7 +51,13 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None):
     async def demo_response_headers(request: Request, call_next):
         # Cookie-authenticated mutations must originate from an explicitly allowed browser origin.
         origin = request.headers.get("origin")
-        if request.method == "POST" and origin and origin not in origins:
+        request_origin = f"{request.url.scheme}://{request.url.netloc}"
+        if (
+            request.method == "POST"
+            and origin
+            and origin != request_origin
+            and origin not in origins
+        ):
             return JSONResponse(status_code=403, content={"error": {"code": "ORIGIN_NOT_ALLOWED",
                 "message": "Browser origin is not allowed.", "retryable": False}})
         response = await call_next(request)
@@ -63,7 +79,7 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None):
     async def http_error(request, exc):
         return JSONResponse(status_code=exc.status_code, content={"error": {
             "code": "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR",
-            "message": str(exc.detail), "retryable": False}})
+            "message": str(exc.detail), "retryable": False}}, headers=exc.headers)
 
     @app.exception_handler(Exception)
     async def unexpected_error(request, exc):

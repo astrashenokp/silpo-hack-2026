@@ -1,0 +1,35 @@
+# Demo stack for one machine (local rehearsal or a single VM). From the repository root:
+#   docker compose -f deploy/docker-compose.yml up --build
+# Only the web origin is published; the browser reaches Python through Next.js /api forwarding.
+# Set PUBLIC_WEB_ORIGIN to the public https origin when hosting. Secrets go into deploy/.env.api
+# (ignored by git through the root .env.* rule); see deploy/README.md.
+name: smart-basket
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    env_file:
+      - path: ./.env.api
+        required: false
+    environment:
+      SMART_BASKET_MODE: demo
+      SMART_BASKET_CORS_ORIGINS: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}
+      SMART_BASKET_FRONTEND_URL: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}
+      SILPO_OAUTH_CALLBACK_URL: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}/api/auth/silpo/callback
+      FATSECRET_OAUTH_CALLBACK_URL: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}/api/auth/fatsecret/callback
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        API_BASE_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

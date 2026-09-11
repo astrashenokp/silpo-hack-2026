@@ -66,7 +66,7 @@ Example: a 3-serving meal requires 150 g of dry oats. Exporting one personal por
 | `GET /api/auth/fatsecret/start` | Browser navigation | Starts user authorization; Arina |
 | `GET /api/auth/fatsecret/callback` | Provider redirect | Validates the OAuth flow, binds the authorized account to the application session; Arina |
 | `GET /api/integrations/fatsecret` | Session | `{ connected, accountLabel, exportAvailable, reason }`; public status only, no tokens |
-| `POST /api/fatsecret/exports/preview` | `{ runId, version, mealIds }` | `FatSecretPreview`; Rina |
+| `POST /api/fatsecret/exports/preview` | `{ runId, version, mealIds, selections? }` | `FatSecretPreview`; unresolved ingredients include verified candidates; repeat with selected `{mealId, ingredientId, foodId, servingId}` values; Rina |
 | `POST /api/fatsecret/exports/confirm` | `{ previewId, idempotencyKey }` | 202 `{ exportId }`; Rina queues the operation |
 | `GET /api/fatsecret/exports/:exportId` | Session-scoped operation ID | `FatSecretExport`; poll until terminal, Rina |
 

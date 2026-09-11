@@ -1,0 +1,15 @@
+{
+  "name": "smart-basket-mcp-qa",
+  "private": true,
+  "description": "Polina's MCP QA: Inspector for the Silpo MCP server plus pinned Playwright and Chrome DevTools MCP servers.",
+  "scripts": {
+    "inspector": "mcp-inspector",
+    "tools:playwright": "mcp-inspector --cli --config servers.json --server playwright --method tools/list",
+    "tools:chrome-devtools": "mcp-inspector --cli --config servers.json --server chrome-devtools --method tools/list"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/inspector": "2.6.0",
+    "@playwright/mcp": "0.0.80",
+    "chrome-devtools-mcp": "1.9.0"
+  }
+}
