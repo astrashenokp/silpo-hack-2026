@@ -13,10 +13,10 @@ been sent to the owners; Polina shares it with the team.
 
 | ID | Severity | Summary | Owner | Status |
 |---|---|---|---|---|
-| BUG-001 | Blocker | Backend cannot be installed or tested from a clean checkout (`pyproject.toml` syntax error) | Rina (file owner); introduced by merge `f7b10e0` from Uliana's branch | Open |
+| BUG-001 | Blocker | Backend cannot be installed or tested from a clean checkout (`pyproject.toml` syntax error) | Rina (file owner); introduced by merge `f7b10e0` from Uliana's branch | Fixed in #20; retested ✅ (run 4) |
 | BUG-002 | Blocker | Web UI never calls the Python API: plan, cart and FatSecret are simulated in the browser | Ksiusha + Alina | Open |
-| BUG-003 | High | "Recalculate basket" always fails with `PLANNER_FAILED` and leaves no confirmable plan | Uliana | Open |
-| BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 5 of 10 fail | Uliana | Open |
+| BUG-003 | High | "Recalculate basket" always fails with `PLANNER_FAILED` and leaves no confirmable plan | Uliana | Fixed in #22; retested ✅ (run 4) |
+| BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 3 of 10 still fail | Uliana | Open; retested in run 4 |
 | BUG-005 | High | Unsupported dietary restrictions typed in the form are silently moved into `notes` | Ksiusha | Open |
 | BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Open |
 | BUG-007 | Low | Days counter stops at 7; the contract allows 1–14 | Ksiusha (confirm with Katia) | Open |
@@ -26,6 +26,9 @@ been sent to the owners; Polina shares it with the team.
 | BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Open |
 | BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Open |
 | BUG-013 | Medium | Public-deployment hardening: unbounded sessions and runs, no rate limit, cookie without `Secure` | Rina | Open |
+| BUG-014 | Medium | The generated OpenAPI contract is stale after the live cart changes (`export_contracts.py --check` fails) | Rina | Open |
+| BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Open |
+| BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Open |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -97,6 +100,9 @@ been sent to the owners; Polina shares it with the team.
   same root cause as BUG-003), `assert 49000 == 34000` (2 tests; expected totals predate the
   current meal module), and the explanation test expects `1460.00 UAH` while the plan reports
   `1310.00 UAH`.
+- **Retest (run 4, after #22):** the `MatchingContext` failures are gone. Collection without a key
+  still fails, and with a dummy key 3 tests still fail on the stale expectations (`34000` twice,
+  `1460.00 UAH`).
 - **Expected:** the suite runs and passes without secrets, with Gemini mocked or injected.
 - **Impact:** CI stays red and the handoffs' test counts cannot be reproduced.
 
@@ -234,3 +240,42 @@ been sent to the owners; Polina shares it with the team.
   sessions; 30 parallel sessions without a leak), the POST origin allowlist, the FatSecret callback
   token check with `hmac.compare_digest`, no provider tokens in status responses, and generic
   500 messages.
+
+## BUG-014 — Stale generated API contract
+
+- **Found in:** run 4, the retest after #20–#22.
+- **Steps:** `& services/api/.venv/Scripts/python.exe services/api/scripts/export_contracts.py --check`.
+- **Actual:** `Generated artifacts are stale: packages/contracts/openapi.json`. The live catalog and
+  cart work in #21 and #22 changed the server without regenerating the contract.
+- **Expected:** `--check` passes; regenerate with `export_contracts.py` and review the diff
+  (`services/api/README.md`).
+- **Impact:** frontend types and fixtures can drift from the API, and the CI backend job fails at
+  this step even after BUG-004 is fixed.
+
+## BUG-015 — No cart panel below 1280 px
+
+- **Found in:** run 4, the retest of Alina's shared cart (`1a121e0`); confirmed by
+  `tests/ui/specs/flows.spec.ts` (`test.fail` on the mobile project).
+- **Actual:** after "Додати все в кошик Сільпо" the button turns into the disabled
+  "Додано в кошик Сільпо". At 1280 and 1440 px the side panel "Смарт кошик Сільпо" with
+  "↥ Синхронізувати з Сільпо" appears; at 1279, 1024 and 768 px and on a Pixel 7 there is no cart
+  panel and no other way to preview or confirm the cart. The limit matches Tailwind's `xl`
+  breakpoint.
+- **Expected:** the cart and its preview and confirmation are reachable at every supported width
+  (the design includes mobile layouts), for example as a drawer or a section of the page.
+- **Impact:** phones, tablets and laptop windows under 1280 px cannot finish the cart flow; the
+  recording has to use a wide window.
+
+## BUG-016 — Over-budget plans can go to the cart
+
+- **Found in:** run 4; confirmed by `tests/ui/specs/flows.spec.ts` (`test.fail`).
+- **Actual:** with a budget of 100 UAH the result says "Бюджет перевищено на 390,00 грн.", yet
+  "Додати все в кошик Сільпо" stays enabled and "↥ Синхронізувати з Сільпо" opens the preview.
+  Commit `1a121e0` describes this as intended: "budget overrun no longer blocks adding (warning
+  shown instead)".
+- **Contract:** `docs/CONTRACTS.md` enables cart confirmation only for a complete plan within the
+  budget and otherwise asks to disable it with an explanation. The API already refuses such
+  previews with 409 (e2e `test_over_budget_plan_cannot_reach_the_cart`).
+- **Decision needed:** keep the contract and disable adding with an explanation, or change the
+  contract and the API together.
+- **Impact:** once the UI calls the API (BUG-002), this path ends in a 409 the user does not expect.

@@ -161,3 +161,27 @@ through the registration form by September 14, 23:59 Kyiv time, the Silpo MCP as
 significant component, a list of third-party objects, a generative-AI disclosure and 90 days of
 access for the organizer. Details and the risks they create: [submission checklist](submission.md);
 the recording plan: [demo script](demo-script.md).
+
+## Run 4 — retest after PRs #20–#22, September 11, 2026
+
+- **Revision:** `main` @ `333d037` (Rina's #20 syntax fix, #21 cart adapter and #22 live catalog
+  and cart flow; Alina's shared cart `1a121e0`) merged into `feature/polina-qa-round2`. Demo
+  mode; the frontend was rebuilt.
+
+| Check | Result |
+|---|---|
+| Documented install `pip install -e 'services/api[test]'` | ✅ Works — BUG-001 fixed |
+| Documented backend tests | ❌ Collection still stops on `GEMINI_API_KEY` — BUG-004 |
+| Backend tests without the chat module | ✅ 148 passed, including the recalculation variant that failed before — BUG-003 fixed |
+| Chat module with a dummy key | ❌ 7 passed, 3 failed (stale 34000 and "1460.00 UAH" expectations) — BUG-004 |
+| Generated contracts | ❌ `packages/contracts/openapi.json` is stale — BUG-014 (new) |
+| e2e through Next.js, BUG-003 `xfail` removed | ✅ 35 of 35 |
+| UI specs on desktop and Pixel 7 | ✅ 27 passed, 1 skipped; expected failures reproduce BUG-002, BUG-006, BUG-011, BUG-012, BUG-015 (mobile) and BUG-016 |
+| Cart panel by window width | ❌ Absent at 768, 1024 and 1279 px, present at 1280 and 1440 px — BUG-015 (new) |
+| Over-budget plan (budget 100) | ⚠️ "Бюджет перевищено на 390,00 грн." is shown, but "Додати все в кошик Сільпо" stays enabled and the preview opens — BUG-016 (new) |
+| CI on PR #23 before these updates | Images ✅ (the API image builds again), frontend ✅; backend ❌ BUG-004; e2e ❌ only the strict XPASS of the fixed BUG-003; UI ❌ one timeout caused by BUG-015 |
+| `deploy/run-local.ps1` | ✅ Cold start with captured output, restart with only the web app down, `-Test`, `-Stop` |
+
+The live Silpo checks that Arina and Rina reported on September 11 (OAuth, 40 tools, ready cart
+context, live product search, a reviewed cart write with read-back awaiting one authorized
+real-cart check) were not repeated by Polina, and the UI does not use these paths yet (BUG-002).
