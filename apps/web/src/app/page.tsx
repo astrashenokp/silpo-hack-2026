@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PlannerForm from "@/features/planner-input/PlannerForm";
 import type { RunSnapshot as PlannerRunSnapshot } from "@/lib/api/planner";
 import {
@@ -9,27 +8,46 @@ import {
   type SavedMeal,
   type SourceMode,
 } from "@/features/planner-results/PlannerResults";
+import { CartPanel, type CartPanelItem } from "@/features/planner-results/components/CartPanel";
+import {
+  CartPreviewModal,
+  CartReceiptView,
+} from "@/features/planner-results/components/CartFlow";
+import { SyncFailureModal } from "@/features/planner-results/components/states";
 import { Button, DemoBadge } from "@/features/planner-results/components/ui";
 import {
   FatSecretOutcomeView,
   FatSecretPreviewModal,
 } from "@/features/planner-results/components/FatSecretFlow";
-import { apiCreatePlan, pollRun, type DemoScenario } from "@/lib/api/client";
+import {
+  apiConfirmCart,
+  apiCreatePlan,
+  apiPreviewCart,
+  newIdempotencyKey,
+  pollRun,
+  type DemoScenario,
+} from "@/lib/api/client";
 import {
   derivedEmptyHistoryResult,
   derivedIncompleteResult,
   derivedOverBudgetResult,
   derivedRunningSnapshot,
   derivedWithRecurringResult,
+  fixtureCartPartial,
+  fixtureCartPreview,
   fixtureFatSecretPreview,
   fixturePlanningRequest,
   fixturePlanningResult,
   fixtureRunFailed,
 } from "@/lib/api/fixtures";
 import type {
+  CartPreview,
+  CartReceipt,
+  DataMode,
   FatSecretExport,
   FatSecretPreview,
   PlanningResult,
+  ProductSelection,
   RunSnapshot,
 } from "@/lib/api/types";
 
@@ -120,9 +138,13 @@ export default function Home() {
   const [accountConnected, setAccountConnected] = useState(false);
   const [fatSecretConnected, setFatSecretConnected] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
-  const [addedToCart, setAddedToCart] = useState(false);
   const [cartProductIds, setCartProductIds] = useState<string[] | null>(null);
   const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
+  const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
+  const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
+  const [cartBusy, setCartBusy] = useState(false);
+  const [cartKey, setCartKey] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"chats" | "saved">("chats");
   const [fsPreview, setFsPreview] = useState<FatSecretPreview | null>(null);
   const [fsBusy, setFsBusy] = useState(false);
@@ -134,6 +156,48 @@ export default function Home() {
   }, [activeTab, activeChatId]);
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
+
+  const productsById = useMemo(() => {
+    const map = new Map<string, { product: ProductSelection; dataMode: DataMode }>();
+    for (const chat of chats) {
+      const result = chat.view?.result;
+      if (!result) continue;
+      for (const product of result.selectedProducts) {
+        if (!map.has(product.productId)) {
+          map.set(product.productId, { product, dataMode: result.dataMode });
+        }
+      }
+    }
+    return map;
+  }, [chats]);
+
+  const cartItems: CartPanelItem[] = (cartProductIds ?? [])
+    .map((productId) => productsById.get(productId))
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    .map(({ product }) => ({
+      productId: product.productId,
+      name: product.name,
+      quantity: product.quantity,
+      cartQuantity: cartQuantities[product.productId] ?? product.quantity,
+      sellingUnit: product.sellingUnit,
+      unitPriceMinor: product.unitPriceMinor,
+      lineTotalMinor: product.lineTotalMinor,
+      source: product.source,
+      added: true,
+    }));
+  const visibleCartCount = cartItems.reduce((sum, item) => sum + item.cartQuantity, 0);
+  const visibleCartTotalMinor = cartItems.reduce(
+    (sum, item) => sum + item.unitPriceMinor * item.cartQuantity,
+    0,
+  );
+
+  const sourceChat =
+    chats.find((chat) =>
+      (chat.view?.result?.selectedProducts ?? []).some((product) =>
+        (cartProductIds ?? []).includes(product.productId),
+      ),
+    ) ?? activeChat;
+  const sourceResult = sourceChat?.view?.result ?? null;
 
   const patchChat = useCallback((id: number, patch: Partial<ChatEntry>) => {
     setChats((current) =>
@@ -167,12 +231,13 @@ export default function Home() {
   }
 
   function startPlanning() {
+    const initialMessage = chatText.trim() || "Почати планування";
     patchActiveChat({
       screen: "planner",
       view: null,
       mode: "fixtures",
-      sentMessages: [],
-      title: "Планування меню",
+      sentMessages: [initialMessage],
+      title: initialMessage,
     });
     setChatText("");
   }
@@ -249,6 +314,97 @@ export default function Home() {
     });
   }
 
+  function incrementCartItem(productId: string) {
+    const base = productsById.get(productId)?.product.quantity ?? 1;
+    setCartQuantities((current) => ({
+      ...current,
+      [productId]: (current[productId] ?? base) + 1,
+    }));
+  }
+
+  function decrementCartItem(productId: string) {
+    const base = productsById.get(productId)?.product.quantity ?? 1;
+    setCartQuantities((current) => ({
+      ...current,
+      [productId]: Math.max(1, (current[productId] ?? base) - 1),
+    }));
+  }
+
+  function removeCartItem(productId: string) {
+    setCartQuantities((current) => {
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
+    setCartProductIds((current) => (current ?? []).filter((id) => id !== productId));
+  }
+
+  function addPlansToCart(products: ProductSelection[]) {
+    setCartProductIds((current) => {
+      const merged = current ? [...current] : [];
+      for (const product of products) {
+        if (!merged.includes(product.productId)) merged.push(product.productId);
+      }
+      return merged;
+    });
+    setCartQuantities((current) => {
+      const next = { ...current };
+      for (const product of products) {
+        next[product.productId] = (next[product.productId] ?? 0) + product.quantity;
+      }
+      return next;
+    });
+  }
+
+  async function handleAddAll() {
+    if (!sourceResult) return;
+    setCartBusy(true);
+    try {
+      const preview =
+        sourceChat.mode === "fixtures"
+          ? fixtureCartPreview
+          : await apiPreviewCart(sourceResult.runId, sourceResult.version, apiScenario);
+      setCartKey(newIdempotencyKey());
+      setCartReceipt(null);
+      setCartPreview(preview);
+    } catch {
+      setSyncError("Не вдалося сформувати попередній перегляд кошика.");
+    } finally {
+      setCartBusy(false);
+    }
+  }
+
+  async function handleConfirmCart() {
+    if (!cartPreview || !cartKey) return;
+    const key = cartKey;
+    setCartBusy(true);
+    try {
+      const receipt =
+        sourceChat.mode === "fixtures"
+          ? fixtureCartPartial
+          : await apiConfirmCart(cartPreview.previewId, key);
+      if (receipt.status === "failed") {
+        // Keep cartPreview + key: retry is a re-send of the same preview with
+        // the same idempotency key, so it cannot double-add.
+        setSyncError("Сталася помилка під час передачі списку товарів у ваш акаунт.");
+        return;
+      }
+      setCartPreview(null);
+      setCartReceipt(receipt);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Сталася помилка під час синхронізації кошика.";
+      setSyncError(message);
+    } finally {
+      setCartBusy(false);
+    }
+  }
+
+  function handleRetrySync() {
+    setSyncError(null);
+    void handleConfirmCart();
+  }
+
   const runPlan = useCallback(
     async (chatId: number) => {
       try {
@@ -268,8 +424,6 @@ export default function Home() {
     <PlannerResults
       snapshot={chat.view?.snapshot}
       result={chat.view?.result ?? null}
-      sourceMode={chat.mode}
-      cartScenario={apiScenario}
       recalcBusy={false}
       paramsForm={!chat.view ? (
         <PlannerForm
@@ -281,12 +435,7 @@ export default function Home() {
       sentMessages={chat.sentMessages}
       savedMeals={savedMeals}
       onSavedMealsChange={setSavedMeals}
-      addedToCart={addedToCart}
-      cartProductIds={cartProductIds}
-      cartQuantities={cartQuantities}
-      onAddedToCartChange={setAddedToCart}
-      onCartProductIdsChange={setCartProductIds}
-      onCartQuantitiesChange={setCartQuantities}
+      onAddToCart={addPlansToCart}
       onRetryPlan={() => {
         if (chat.id === activeChatId) {
           if (chat.mode === "live") runPlan(chat.id);
@@ -429,7 +578,7 @@ export default function Home() {
                 !enteredApp ||
                 (activeTab === "chats" && activeChat?.screen === "home")
                   ? "h-full w-full"
-                  : `mx-auto w-full max-w-[1500px] ${activeTab === "chats" && activeChat?.screen === "planner" && !activeChat.view ? "xl:pr-[350px]" : ""}`
+                  : `mx-auto w-full max-w-[1500px] ${activeTab === "chats" && activeChat?.screen === "planner" ? "xl:pr-[350px]" : ""}`
               }
             >
               {!enteredApp ? (
@@ -478,7 +627,11 @@ export default function Home() {
               {enteredApp &&
                 activeTab === "chats" &&
                 activeChat?.screen === "planner" &&
-                !activeChat.view && <SetupCartPreview />}
+                cartReceipt && (
+                  <div className="mt-5 max-w-[820px]">
+                    <CartReceiptView receipt={cartReceipt} />
+                  </div>
+                )}
             </div>
           </div>
 
@@ -524,63 +677,44 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {enteredApp && activeTab === "chats" && activeChat?.screen === "planner" && (
+        <>
+          <div className="fixed bottom-28 right-8 top-24 z-30 hidden w-[300px] overflow-hidden xl:block">
+            <CartPanel
+              items={cartItems}
+              itemCount={visibleCartCount}
+              totalMinor={visibleCartTotalMinor}
+              discountMinor={sourceResult?.savingsMinor ?? null}
+              storeLabel="просп. Бандери, 23 (Самовивіз)"
+              onSync={handleAddAll}
+              onIncrement={incrementCartItem}
+              onDecrement={decrementCartItem}
+              onRemove={removeCartItem}
+              syncDisabled={!sourceResult || cartItems.length === 0}
+              syncBusy={cartBusy}
+              mode={sourceResult?.dataMode ?? "mixed"}
+            />
+          </div>
+
+          {cartPreview && (
+            <CartPreviewModal
+              preview={cartPreview}
+              onConfirm={handleConfirmCart}
+              onCancel={() => setCartPreview(null)}
+              busy={cartBusy}
+            />
+          )}
+
+          <SyncFailureModal
+            open={syncError !== null}
+            message={syncError ?? ""}
+            onLater={() => setSyncError(null)}
+            onRetry={handleRetrySync}
+          />
+        </>
+      )}
     </div>
-  );
-}
-
-
-function SetupCartPreview() {
-  const items = [1, 2];
-
-  return (
-    <aside className="fixed bottom-[92px] right-6 top-[96px] z-10 hidden w-[300px] flex-col rounded-[18px] border border-[#F28A64] border-l-[6px] bg-white px-4 py-5 shadow-sm xl:flex">
-      <div>
-        <h2 className="text-[17px] font-semibold text-[#9A6A31]">Смарт кошик Сільпо</h2>
-        <p className="mt-1 text-[11px] leading-4 text-[#7D8798]">
-          Супермаркет: просп. Бандери, 23<br />(Самовивіз)
-        </p>
-        <p className="mt-5 text-[12px] text-[#333]">У кошику: 2 товари</p>
-
-        <div className="mt-4 space-y-4">
-          {items.map((item) => (
-            <div key={item} className="grid grid-cols-[44px_minmax(0,1fr)_64px] gap-2">
-              <Image
-                src="/butter-galychyna.png"
-                alt="Масло солодковершкове Галичина"
-                width={44}
-                height={32}
-                className="mt-1 h-8 w-11 object-contain"
-              />
-              <div className="min-w-0">
-                <p className="text-[10px] leading-[14px] text-[#333]">Масло солодковершкове “Галичина” 82,5%</p>
-                <p className="text-[9px] text-[#9A9A9A]">180 г</p>
-                <div className="mt-1 flex items-center gap-1">
-                  <span className="text-[10px] text-[#777] line-through">124.00 ₴</span>
-                  <span className="rounded bg-[#F89F46] px-1 text-[8px] text-white">-35%</span>
-                </div>
-                <p className="text-[11px] font-semibold text-[#333]">79.99 ₴</p>
-              </div>
-              <div className="flex flex-col items-end justify-between">
-                <button type="button" aria-label="Видалити товар" className="flex size-5 items-center justify-center rounded border border-[#F89F46] text-[10px] text-[#F89F46]">▢</button>
-                <div className="flex items-center gap-2 text-[11px] text-[#777]">
-                  <button type="button" className="flex size-5 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">−</button>
-                  <span>1</span>
-                  <button type="button" className="flex size-5 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">+</button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-auto">
-        <p className="text-right text-[10px] text-[#444]">Сума знижки: <span className="font-semibold text-[#22A06B]">-88,02 ₴</span></p>
-        <p className="mt-1 text-right text-[11px] font-semibold text-[#333]">Загальна сума: 159,98 ₴</p>
-        <button type="button" disabled className="mt-4 h-10 w-full rounded-md border border-[#F8DCC5] text-[11px] font-medium text-[#EFCDB1]">
-          ↥ Синхронізувати з Сільпо
-        </button>
-      </div>
-    </aside>
   );
 }
 
