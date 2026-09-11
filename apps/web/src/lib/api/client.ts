@@ -11,6 +11,7 @@ import type {
   PlanningRequest,
   RecalculateRequest,
   RunSnapshot,
+  SilpoStatus,
   UserContext,
 } from "./types";
 
@@ -107,6 +108,30 @@ export function apiConfirmCart(
 
 export function apiFatSecretStatus(): Promise<FatSecretStatus> {
   return request<FatSecretStatus>("/integrations/fatsecret");
+}
+
+export function apiSilpoStatus(): Promise<SilpoStatus> {
+  return request<SilpoStatus>("/integrations/silpo");
+}
+
+// Starts a provider sign-in. When sign-in is available the API answers with a redirect to
+// the provider, so the page navigates there; otherwise the API's error message is returned.
+export async function startProviderAuth(
+  path: "/auth/silpo/start" | "/auth/fatsecret/start",
+): Promise<string | null> {
+  try {
+    await apiContext();
+    const response = await fetch(`/api${path}`, { credentials: "include", redirect: "manual" });
+    if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
+      // A full navigation: the API route redirects the browser to the provider's sign-in page.
+      window.location.assign(new URL(`/api${path}`, window.location.origin).toString());
+      return null;
+    }
+    const data = await response.json().catch(() => null);
+    return data?.error?.message ?? `Сервіс відповів з помилкою ${response.status}.`;
+  } catch (error) {
+    return error instanceof Error ? error.message : "Не вдалося почати підключення.";
+  }
 }
 
 export function apiPreviewFatSecret(
