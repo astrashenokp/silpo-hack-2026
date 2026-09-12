@@ -66,8 +66,8 @@ expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 |---|---|---|
 | Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, runs 1, 4 and 5 (35 of 35) |
 | Recalculation | working in demo, from the UI too | Fixed in #22; the UI calls it since #27; run 5 |
-| Web UI → Python API | connected (PR #27): plans, recalculation, cart, FatSecret, sign-in routes | Run 5, UI specs against the running API; the chat has no API endpoint |
-| Silpo OAuth, tools, context and product search | live, reported by Arina and Rina on September 11; not re-verified by Polina | `docs/handoffs/arina.md`, `docs/handoffs/rina.md`; Polina's own OAuth attempt on Sep 12 reached the real authorize URL and confirmed the server is reachable, but could not finish sign-in — it needs a phone number and an SMS code sent to a teammate |
+| Web UI → Python API | connected (PR #27, extended in #31): plans, recalculation, cart, FatSecret, sign-in routes, chat (`POST /api/chat`) | Runs 5–7, UI specs against the running API |
+| Silpo OAuth, tools, context and product search | live and independently re-verified by Polina on Sep 12, not only self-reported | Run 9: `claude mcp login silpo` connected a real account; 40 live tools (matches Arina's and Rina's Sep 11 count); all 12 tool names the backend code calls exist verbatim on the live server; real profile, food-restriction, family/pet, cart and product-search responses each matched the exact shape the adapter code expects, including the `displayRatio`-based package-size parsing from Rina's #30. Not exercised: the same login through our own product's `/api/auth/silpo/start`, and the cart-write tool (`silpo_add_or_update_cart_products`) |
 | Silpo cart writes | live service with preview, revalidation, idempotency and read-back; one authorized real-cart check still open | Rina's handoff |
 | Edamam | not verified | Credential-gated (Sofiia) |
 | FatSecret export | demo verified; live saved-meal write reported by Rina on September 11, not re-verified; consumer credentials verified live by Polina on Sep 12 (`request_token` succeeded, two-legged `foods.search` returned real data, `foods.search.v5` is unavailable for this app's scope) | Run 8; the full three-legged write still needs a human to authorize a FatSecret account in a browser |
@@ -79,7 +79,7 @@ expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 - [x] Start Next.js and Python; `/api` forwarding and background plan execution work locally
 - [ ] OAuth redirect/session behavior and CORS on the hosted origin
 - [ ] Acceptance scenarios run, bugs assigned and retested — runs 1–5 recorded; owners to be notified
-- [ ] A real MCP interaction and the Edamam path verified — Silpo MCP OAuth reached the real authorize URL (Sep 12) but could not finish without a teammate completing SMS sign-in
+- [x] A real MCP interaction verified — live Silpo OAuth, 40 tools and real profile/cart/product-search calls, run 9 (Sep 12); Edamam still credential-gated (Sofiia)
 - [ ] FatSecret export acceptance checks on the live account — consumer credentials verified live (run 8); the full user-authorized write still needs a human login
 - [ ] No blocking defects in the demo flow — no blocker or High defect open since #31; only Low/Medium polish items remain
 - [ ] Demo account, cart context and a repeatable starting state

@@ -299,7 +299,41 @@ correctness defects in the API; the contract is just looser than the validation 
   concern, OAuth/tools/cart) remains unverified by Polina — Arina's and Rina's September 11
   reports are still the only live evidence.
 
-Not covered: a signed-in Silpo or FatSecret run from the UI or MCP tooling (both still need a
-human to complete an account login), a chat message with a real Gemini key, and CR-04 (recurring
+## Run 9 — live Silpo MCP, first successful sign-in, September 12, 2026
+
+- **Revision:** `main` @ `15ad9e8`. The team's teammate with SMS access completed the phone-number
+  sign-in in a real browser; Polina drove the verification from there. No account data (phone,
+  address, coordinates, cart contents, account ID) is recorded below or anywhere in this repo —
+  only structural facts already public in Silpo's own catalog or code.
+
+| Check | Result |
+|---|---|
+| Silpo MCP OAuth via Claude Code (`claude mcp login silpo`) | ✅ completed with a real account after the teammate finished the phone/SMS step in her own terminal; `claude mcp get silpo` → Connected |
+| Tool count via MCP Inspector CLI (`silpo` registered in `tests/mcp/servers.json`, OAuth completed a second time through the Inspector's own browser flow) | ✅ 40 tools — matches the count Arina and Rina reported on September 11 |
+| Every Silpo tool name referenced in `mcp/adapters.py` (12 names) exists verbatim in the live list | ✅ all 12 found, no stale or renamed tool names |
+| `silpo_get_my_profile`, `silpo_get_my_food_restrictions`, `silpo_get_my_family`, `silpo_get_my_shopping_cart` | ✅ all four returned real data that the corresponding adapter functions parse correctly: `_normalize_pets` recognized the account's pet through the `slug` field (e.g. `"slug":"dogs"` → `species="dog"`), matching the live shape exactly, not a guess |
+| `silpo_get_shopping_cart_by_id` with the real cart ID | ✅ real cart returned; `branchId` sits nested inside `cart.shipments[0]`, not at the top level — confirmed `_find_value`'s recursive search still locates it, and `deliveryType`/`timeslot` are both present at the top level, so `cart_context_ready` evaluates `true` for this account |
+| `silpo_find_products_batch` with the real branch/delivery/timeslot context, query "сочевиця" | ✅ returned 2 real products (public catalog data: "Сочевиця Huercasa варена", "Сочевиця Екород французька органічна") |
+| The real search response fed through the actual `normalize_product_search()` (not a reasoning-only check — executed against the captured payload) | ✅ both products normalized with correct `contentQuantity`/`contentUnit` (350 g and 400 g) via the `displayRatio`-aware parsing in Rina's PR #30; before checking, Polina misremembered an older version of `_content_amount()` and nearly filed a false defect — the actual current code handles this correctly, caught only by running it against real data instead of trusting memory |
+
+### Tooling notes for future live QA
+
+- `npx.cmd mcp-inspector ...` mangles a `--tool-args-json` payload containing spaces/braces when
+  invoked from Git Bash or PowerShell, because the `.cmd` wrapper adds an extra layer of `cmd.exe`
+  tokenization. Call the real POSIX entry point directly instead —
+  `./node_modules/.bin/mcp-inspector` inside `tests/mcp` (a real shell script, present alongside
+  the `.cmd`/`.ps1` wrappers) — which bash passes the JSON argument to unmodified.
+- `--tool-arg key=value` does not coerce a value into a JSON array even when the tool's schema
+  requires one (confirmed: passing `products=сочевиця` to `silpo_find_products_batch`, whose
+  schema requires `products: string[]`, fails schema validation); use `--tool-args-json` (through
+  the entry point above) whenever an argument is an array.
+- `claude mcp login <name>` needs a real interactive terminal (TTY) to catch the OAuth callback —
+  it cannot run from a non-interactive tool call. The MCP Inspector's own web UI OAuth flow is the
+  practical fallback for a non-interactive session, at the cost of a second sign-in.
+
+Not covered: a live run through our own product's UI/API with a connected Silpo session (only
+the raw MCP tools were exercised here, not `/api/context` → planner → cart end to end), the
+`silpo_add_or_update_cart_products` write path (not attempted — would modify a real cart), a
+FatSecret three-legged write, a chat message with a real Gemini key, and CR-04 (recurring
 purchases still cannot be matched to products by the API — unchanged from run 6).
 
