@@ -325,3 +325,8 @@ export interface ChatReply {
   message: string | null;
   run: RunSnapshot | null;
 }
+
+export interface SupportedLabels {
+  preferences: string[];
+  restrictions: string[];
+}

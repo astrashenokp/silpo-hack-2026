@@ -13,6 +13,7 @@ import type {
   RecalculateRequest,
   RunSnapshot,
   SilpoStatus,
+  SupportedLabels,
   UserContext,
 } from "./types";
 
@@ -61,6 +62,11 @@ async function request<T>(
 
 export function apiHealth(): Promise<Health> {
   return request<Health>("/health");
+}
+
+// The labels the planner can actually enforce; the form offers exactly these.
+export function apiFilters(): Promise<SupportedLabels> {
+  return request<SupportedLabels>("/filters");
 }
 
 export function apiContext(): Promise<UserContext> {

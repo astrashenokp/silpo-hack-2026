@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import ContextSummary from "@/features/planner-input/ContextSummary";
+import { apiFilters } from "@/lib/api/client";
+import type { SupportedLabels } from "@/lib/api/types";
 import {
   ApiClientError,
   createPlan,
@@ -17,6 +19,35 @@ type PlannerFormProps = {
   accountConnected?: boolean;
 };
 
+
+// Ukrainian names for the machine labels the API supports. Anything the server adds later
+// still renders, by its label, instead of disappearing from the form.
+const LABEL_TEXT: Record<string, string> = {
+  vegetarian: "Вегетаріанське",
+  vegan: "Веганське",
+  paleo: "Палео",
+  "high-protein": "Високобілкове",
+  "high-fiber": "Багате на клітковину",
+  "peanut-free": "Без арахісу",
+  "gluten-free": "Без глютену",
+  "dairy-free": "Без молочного",
+  "tree-nut-free": "Без горіхів",
+  "shellfish-free": "Без морепродуктів",
+  "soy-free": "Без сої",
+  "egg-free": "Без яєць",
+  "pork-free": "Без свинини",
+  "fish-free": "Без риби",
+  "red-meat-free": "Без червоного мʼяса",
+};
+
+// Used only when /api/filters cannot be read; matches the contract v0.2 label set.
+const FALLBACK_LABELS: SupportedLabels = {
+  preferences: ["vegetarian", "vegan", "paleo", "high-protein", "high-fiber"],
+  restrictions: [
+    "peanut-free", "gluten-free", "dairy-free", "tree-nut-free", "shellfish-free",
+    "soy-free", "egg-free", "pork-free", "fish-free", "red-meat-free",
+  ],
+};
 
 const MIN_THINKING_MS = 1200;
 
@@ -100,6 +131,9 @@ export default function PlannerForm({
 
   const [useHistory, setUseHistory] = useState(false);
 
+  const [supported, setSupported] =
+    useState<SupportedLabels>({ preferences: [], restrictions: [] });
+
   const [context, setContext] =
     useState<PlanningContext | null>(null);
 
@@ -158,6 +192,23 @@ export default function PlannerForm({
       setIsContextLoading(false);
     }
   }
+
+  // The planner can only enforce the labels the API lists, so the form offers exactly those.
+  useEffect(() => {
+    let cancelled = false;
+
+    apiFilters()
+      .then((labels) => {
+        if (!cancelled) setSupported(labels);
+      })
+      .catch(() => {
+        if (!cancelled) setSupported(FALLBACK_LABELS);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -290,36 +341,6 @@ export default function PlannerForm({
       ? Number(calories)
       : null;
 
-    const restrictionMap: Record<string, string> = {
-      "без арахісу": "peanut-free",
-      арахіс: "peanut-free",
-      "peanut-free": "peanut-free",
-    };
-
-    const preferenceMap: Record<string, string> = {
-      вегетаріанське: "vegetarian",
-      вегетаріанська: "vegetarian",
-      вегетаріанський: "vegetarian",
-      вегетаріанець: "vegetarian",
-      vegetarian: "vegetarian",
-    };
-
-    const normalizedRestrictions = Array.from(
-      new Set(
-        restrictions
-          .map((item) => restrictionMap[item.toLowerCase()] ?? "")
-          .filter(Boolean),
-      ),
-    );
-
-    const normalizedPreferences = Array.from(
-      new Set(
-        preferences
-          .map((item) => preferenceMap[item.toLowerCase()] ?? "")
-          .filter(Boolean),
-      ),
-    );
-
     const normalizedPets: {
       species: "cat" | "dog";
       count: number;
@@ -372,26 +393,6 @@ export default function PlannerForm({
 
     const notesParts: string[] = [];
 
-    const unsupportedPreferences = preferences.filter(
-      (item) => !preferenceMap[item.toLowerCase()],
-    );
-
-    const unsupportedRestrictions = restrictions.filter(
-      (item) => !restrictionMap[item.toLowerCase()],
-    );
-
-    if (unsupportedPreferences.length) {
-      notesParts.push(
-        `Вподобання користувача: ${unsupportedPreferences.join(", ")}`,
-      );
-    }
-
-    if (unsupportedRestrictions.length) {
-      notesParts.push(
-        `Обмеження користувача: ${unsupportedRestrictions.join(", ")}`,
-      );
-    }
-
     if (unsupportedPets.length) {
       notesParts.push(
         `Домашні тварини користувача: ${unsupportedPets
@@ -418,9 +419,9 @@ export default function PlannerForm({
 
       cookingTimeLimit: null,
 
-      preferences: normalizedPreferences,
+      preferences,
 
-      restrictions: normalizedRestrictions,
+      restrictions,
 
       pets: normalizedPets,
 
@@ -919,46 +920,32 @@ export default function PlannerForm({
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-y-4 sm:grid-cols-[300px_300px] sm:gap-x-[52px]">
-        <ChipInput
-          label="Алергени/Заборони"
-          items={restrictions}
-          onAdd={(item) =>
+        <LabelPicker
+          label="Алергени та заборони"
+          hint="Плануємо лише ті обмеження, які сервіс уміє перевіряти."
+          options={supported.restrictions}
+          selected={restrictions}
+          onToggle={(value) =>
             setRestrictions((current) =>
-              current.some(
-                (value) =>
-                  value.toLowerCase() === item.toLowerCase(),
-              )
-                ? current
-                : [...current, item],
+              current.includes(value)
+                ? current.filter((item) => item !== value)
+                : [...current, value],
             )
           }
-          onRemove={(item) =>
-            setRestrictions((current) =>
-              current.filter((value) => value !== item),
-            )
-          }
-          placeholder="Введіть назву продукту"
         />
 
-        <ChipInput
+        <LabelPicker
           label="Вподобання"
-          items={preferences}
-          onAdd={(item) =>
+          hint="Перелік надає сервер, тому кожен вибір доходить до планувальника."
+          options={supported.preferences}
+          selected={preferences}
+          onToggle={(value) =>
             setPreferences((current) =>
-              current.some(
-                (value) =>
-                  value.toLowerCase() === item.toLowerCase(),
-              )
-                ? current
-                : [...current, item],
+              current.includes(value)
+                ? current.filter((item) => item !== value)
+                : [...current, value],
             )
           }
-          onRemove={(item) =>
-            setPreferences((current) =>
-              current.filter((value) => value !== item),
-            )
-          }
-          placeholder="Введіть назву продукту"
         />
       </div>
 
@@ -1313,76 +1300,51 @@ function Counter({
   );
 }
 
-function ChipInput({
+function LabelPicker({
   label,
-  items,
-  onAdd,
-  onRemove,
-  placeholder,
+  hint,
+  options,
+  selected,
+  onToggle,
 }: {
   label: string;
-  items: string[];
-  onAdd: (item: string) => void;
-  onRemove: (item: string) => void;
-  placeholder: string;
+  hint: string;
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
 }) {
-  const [draft, setDraft] = useState("");
-
-  function addDraft() {
-    const item = draft.trim();
-
-    if (!item) {
-      return;
-    }
-
-    onAdd(item);
-    setDraft("");
-  }
-
   return (
     <div className="w-full">
-      <h3 className="mb-2 silpo-field-label">
-        {label}
-      </h3>
+      <h3 className="mb-2 silpo-field-label">{label}</h3>
 
-      {items.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {items.map((item) => (
-            <span
-              key={item}
-              className="inline-flex items-center gap-1 rounded-full bg-[#F2F4F7] px-2.5 py-0.5 text-[12px] text-[#344054]"
-            >
-              {item}
+      {options.length === 0 ? (
+        <p className="text-[12px] text-[#667085]">Перелік завантажується…</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {options.map((value) => {
+            const active = selected.includes(value);
+
+            return (
               <button
+                key={value}
                 type="button"
-                onClick={() => onRemove(item)}
-                aria-label={`Видалити ${item}`}
-                className="text-[#98A2B3] transition hover:text-[#667085] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+                role="checkbox"
+                aria-checked={active}
+                onClick={() => onToggle(value)}
+                className={`rounded-full border px-3 py-1 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] ${
+                  active
+                    ? "border-[#F89F46] bg-[#F89F46] text-white"
+                    : "border-[#D0D5DD] bg-white text-[#475467] hover:border-[#F89F46] hover:text-[#C2661B]"
+                }`}
               >
-                ×
+                {LABEL_TEXT[value] ?? value}
               </button>
-            </span>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <div className="flex h-[38px] items-center gap-2 rounded-lg border border-[#D0D5DD] bg-white px-[14px] shadow-sm focus-within:border-[#F89F46]">
-        <SearchIcon />
-
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              addDraft();
-            }
-          }}
-          placeholder={placeholder}
-          aria-label={label}
-          className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#667085] focus-visible:outline-none"
-        />
-      </div>
+      <p className="pt-2 text-[11px] text-black/50">{hint}</p>
     </div>
   );
 }
