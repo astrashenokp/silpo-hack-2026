@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// User flows of the planner page against the running API. Known defects use test.fail with
-// their ID from docs/qa/bugs.md; remove the marker when the fix lands so the check guards it.
-// Steps inside those checks use short timeouts so a defect fails fast instead of timing out.
+// User flows of the planner page against the running API. Every check here is a real
+// expectation: no test.fail markers remain. A new defect should be reported, and only then
+// marked test.fail with its ID from docs/qa/bugs.md.
+// Short timeouts keep a regression failing fast instead of hitting the global timeout.
 const QUICK = { timeout: 5_000 };
 
 async function openPlanner(page: Page) {
@@ -17,7 +18,14 @@ async function createPlan(page: Page, budget = "1800") {
   await page.getByLabel("Бюджет", { exact: true }).fill(budget);
   await page.getByLabel("Калорії", { exact: true }).fill("2000");
   await page.getByRole("button", { name: "Скласти меню та кошик" }).click();
-  await expect(page.getByRole("heading", { name: "План харчування" }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "План харчування" }).first()).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+async function addToCart(page: Page) {
+  await page.getByRole("button", { name: /Додати все в кошик Сільпо/ }).click(QUICK);
+  return page.getByRole("dialog");
 }
 
 test("an empty budget is rejected inline", async ({ page }) => {
@@ -35,16 +43,42 @@ test("the result is labeled as demo data and fits the screen", async ({ page }) 
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
+test("the result shows the API plan: every day and the chosen products", async ({ page }) => {
+  await openPlanner(page);
+  await page.getByLabel("Бюджет", { exact: true }).fill("1800");
+  await page.getByRole("button", { name: "Збільшити період часу (дні)" }).click();
+  await page.getByRole("button", { name: "Скласти меню та кошик" }).click();
+  await expect(page.getByRole("heading", { name: "План харчування" }).first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("button", { name: "День 1" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "День 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Обрані продукти" })).toBeVisible();
+  await expect(page.getByText(/Demo dry/).first()).toBeVisible();
+});
+
 test("recalculation adds the server's next version of the plan", async ({ page }) => {
   await createPlan(page);
   await page.getByRole("button", { name: /Перерахувати кошик/ }).first().click();
-  await expect(page.getByRole("heading", { name: "План харчування" })).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "План харчування" })).toHaveCount(2, {
+    timeout: 15_000,
+  });
   await expect(page.getByText(/Не вдалося перерахувати кошик/)).toHaveCount(0);
+});
+
+test("a chat message is answered by the agent API", async ({ page }) => {
+  await createPlan(page);
+  await page.getByLabel("Повідомлення до планера").fill("зроби дешевше");
+  await page.getByRole("button", { name: "Надіслати" }).click();
+  await expect(page.getByText("Обробляю запит…")).toHaveCount(0, { timeout: 15_000 });
+  // CI runs without GEMINI_API_KEY, so the agent reports the missing interpreter instead of a plan.
+  await expect(page.getByText(/GEMINI_API_KEY/)).toBeVisible(QUICK);
 });
 
 test("saving a meal to FatSecret previews one personal portion and reports the outcome", async ({ page }) => {
   await createPlan(page);
-  await page.getByRole("button", { name: "Зберегти у FatSecret" }).first().click();
+  // The meal card offers the save as a labelled checkbox, not a plain button.
+  await page.getByRole("checkbox", { name: /Зберегти у FatSecret/ }).first().click();
   await page.getByRole("button", { name: /Збережені у FatSecret/ }).first().click();
   await page.getByRole("main").getByRole("button", { name: /Зберегти у FatSecret/ }).first().click();
   const dialog = page.getByRole("dialog");
@@ -57,46 +91,43 @@ test("saving a meal to FatSecret previews one personal portion and reports the o
 });
 
 test("adding to the Silpo cart shows a preview before anything changes", async ({ page }) => {
-  test.fail(true, "BUG-012: the button fills the cart panel without a preview");
   await createPlan(page);
-  await page.getByRole("button", { name: /Додати все в кошик Сільпо/ }).click(QUICK);
+  const dialog = await addToCart(page);
   await expect(
-    page.getByRole("dialog").getByRole("heading", { name: "Попередній перегляд додавання в кошик" }),
+    dialog.getByRole("heading", { name: "Попередній перегляд додавання в кошик" }),
   ).toBeVisible(QUICK);
 });
 
-test("the Silpo cart can be synced on this screen size", async ({ page }, testInfo) => {
-  test.fail(testInfo.project.name === "mobile", "BUG-015: no cart panel or sync control on narrow screens");
+test("the cart panel and its sync control are reachable on this screen size", async ({ page }) => {
   await createPlan(page);
-  await page.getByRole("button", { name: /Додати все в кошик Сільпо/ }).click(QUICK);
-  await expect(page.getByRole("button", { name: /Синхронізувати з Сільпо/ })).toBeVisible(QUICK);
+  const dialog = await addToCart(page);
+  await dialog.getByRole("button", { name: "Скасувати" }).click();
+  await expect(
+    page.locator("button:visible", { hasText: "Синхронізувати з Сільпо" }),
+  ).toBeVisible(QUICK);
 });
 
-test("the cart preview from the API can be confirmed", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === "mobile", "BUG-015: the sync control is missing on narrow screens");
+test("the cart preview from the API can be confirmed", async ({ page }) => {
   await createPlan(page);
-  await page.getByRole("button", { name: /Додати все в кошик Сільпо/ }).click();
-  await page.getByRole("button", { name: /Синхронізувати з Сільпо/ }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = await addToCart(page);
   await expect(dialog.getByRole("heading", { name: "Попередній перегляд додавання в кошик" })).toBeVisible();
   await dialog.getByRole("button", { name: "Підтвердити додавання" }).click();
   await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
 });
 
 test("an over-budget plan cannot be added to the Silpo cart", async ({ page }) => {
-  test.fail(true, "BUG-016: adding stays enabled when the plan exceeds the budget");
   await createPlan(page, "100");
   await expect(page.getByRole("button", { name: /Додати все в кошик Сільпо/ })).toBeDisabled(QUICK);
+  await expect(page.getByText(/Бюджет перевищено/)).toBeVisible();
 });
 
 test("a guest is not greeted by someone else's name", async ({ page }) => {
-  test.fail(true, "BUG-006: the planner intro always greets \"Катерино\"");
   await openPlanner(page);
   await expect(page.getByText(/Катерин/)).toHaveCount(0);
 });
 
 test("a guest without purchase history gets no invented regular purchases", async ({ page }) => {
-  test.fail(true, "BUG-011: fixed butter and whiskey suggestions are shown to everyone");
   await createPlan(page);
   await expect(page.getByText(/Jameson/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Регулярні покупки" })).toHaveCount(0);
 });
