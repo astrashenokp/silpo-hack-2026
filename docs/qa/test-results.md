@@ -230,6 +230,49 @@ real-cart check) were not repeated by Polina, and the UI does not use these path
 | Chat message ("зроби дешевше") | ✅ reaches `/api/chat`; without `GEMINI_API_KEY` (CI and this run) the reply names the missing key instead of a silent no-op |
 | CI on PR #31 | ✅ all five jobs, on both commits (the connection and the recurring-selection guard) |
 
-Not covered: a signed-in Silpo or FatSecret run from the UI, a chat message with a real Gemini
-key, and CR-04 (recurring purchases still cannot be matched to products by the API).
+## Run 7 — full toolkit sweep after PR #31 merged, September 12, 2026
+
+- **Revision:** `main` @ `100343e` (Ksiusha/Alina/Uliana/Sofiia/Rina's PR #26/#30 plus Polina's
+  #27 and #31, merged). Every QA tool in `docs/qa/tools.md` run once, back to back, against the
+  local stack (`deploy/run-local.ps1`). Demo mode, guest session unless noted.
+
+| Layer | Tool | Result |
+|---|---|---|
+| Backend tests | pytest | ✅ 203 passed (191 + 12 from PR #30's live matching/cart tests) |
+| Generated contracts | `export_contracts.py --check` | ✅ 22 files current |
+| e2e, direct to the API | pytest + httpx, `E2E_BASE_URL=http://127.0.0.1:8000` | ✅ 40 of 40 |
+| e2e, through Next.js | pytest + httpx, `E2E_BASE_URL=http://localhost:3000` | ✅ 40 of 40 |
+| Contract fuzzing | Schemathesis 4.26.1, `--max-examples 50 --continue-on-failure`, 1360 cases generated | ❌ 5 unique failures, reproduced identically on a second run (30-example pass, 760 cases) — BUG-017 (new) and BUG-010 (extended) |
+| Browser flows, desktop + Pixel 7 | Playwright 1.63.0 | ✅ 38 of 38 |
+| Accessibility, WCAG 2.1 AA | axe-core via Playwright | ✅ no new serious/critical rule beyond the known BUG-009 |
+| Performance and best practices, desktop | Lighthouse 13.4.1 | Performance 100, Accessibility 95, Best Practices 100, SEO 100, Agentic Browsing 100 |
+| Performance and best practices, mobile | Lighthouse 13.4.1 `--mobile` | Performance 96, Accessibility 95, Best Practices 100, SEO 100, Agentic Browsing 100 |
+| Lighthouse accessibility detail | `reports/lighthouse/{desktop,mobile}.json` | Only `color-contrast` scores below 1 on both — the same defect as BUG-009, nothing new |
+| Local Playwright MCP | `npm run tools:playwright` | ✅ 24 tools, matching `tests/mcp/README.md` |
+| Local Chrome DevTools MCP | `npm run tools:chrome-devtools` | ✅ 29 tools, matching `tests/mcp/README.md` |
+| `probe_mcp.py` against a live Streamable HTTP server | local Playwright MCP started with `--port 8931` | ❌ then ✅ — `--out` failed because `tests/mcp/reports/` is git-ignored and absent on a fresh checkout; fixed the script to create the directory (Polina-owned file, not a teammate's); rerun listed the same 24 tools and wrote the report |
+| Silpo MCP (live) | MCP Inspector / `probe_mcp.py` | ⏸ not run: needs an authorized Silpo account token, which this session does not have |
+| Frontend lint | `npm run lint` | ✅ 0 errors, 0 warnings |
+| Frontend build | `npm run build` | ✅ |
+
+### BUG-017 (new) — contract fuzzing found a route-shadowing defect
+
+`GET /api/fatsecret/exports/confirm` and `GET /api/fatsecret/exports/preview` answer 404 "Export
+not found" instead of 405 Method Not Allowed, because the parameterized
+`GET /fatsecret/exports/{export_id}` route matches those literal path segments as an ID.
+Verified from Starlette's own routing source that registration order does not explain or fix
+this — see [the bug entry](bugs.md#bug-017--get-on-the-fatsecret-export-actions-is-swallowed-by-get-export_id)
+for the reproduction and a fix hint that does work (constrain the path parameter's shape).
+
+### BUG-010 extended
+
+Three more schema-valid requests that the API correctly rejects on rules the OpenAPI contract
+does not express (an empty restriction label, duplicate recurring IDs, duplicate meal IDs) — see
+[the bug entry](bugs.md#bug-010--contract-details-found-by-schemathesis). None of these are
+correctness defects in the API; the contract is just looser than the validation behind it.
+
+Not covered: a signed-in Silpo or FatSecret run from the UI or MCP tooling (needs the demo
+account's OAuth token, which this session does not have), a chat message with a real Gemini key,
+and CR-04 (recurring purchases still cannot be matched to products by the API — unchanged from
+run 6).
 

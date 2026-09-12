@@ -23,13 +23,14 @@ with the team.
 | BUG-007 | Low | Days counter stops at 7; the contract allows 1–14 | Ksiusha (confirm with Katia) | Open |
 | BUG-008 | Low | `API_BASE_URL` is documented as runtime configuration but only applies at `next build` | Ksiusha | Open |
 | BUG-009 | Medium | Text contrast below WCAG AA on primary buttons, hints and the cart panel | Katia + Ksiusha + Alina | Open |
-| BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow` | Rina | Open |
+| BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow`; three operations also accept schema-valid bodies the API rejects on uniqueness/label rules the schema does not express | Rina | Open; extended in run 7 |
 | BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Fixed in #27 and #31 (Polina); retested ✅ (run 5) |
 | BUG-013 | Medium | Public-deployment hardening: unbounded sessions and runs, no rate limit, cookie without `Secure` | Rina | Open |
 | BUG-014 | Medium | The generated OpenAPI contract is stale after the live cart changes (`export_contracts.py --check` fails) | Rina | Fixed in `5fcd4b4` (Sofiia); retested ✅ (run 5) |
 | BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-017 | Medium | `GET /api/fatsecret/exports/confirm` and `.../preview` are swallowed by the parameterized `GET /api/fatsecret/exports/{export_id}` route and answer 404 instead of 405 | Rina | Found in run 7 (Schemathesis) |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -199,8 +200,23 @@ with the team.
     rebuilds the response without the original headers. 13 operations are affected.
 - **Expected:** the header values as an enum in the OpenAPI contract, and 405 responses that
   keep `Allow`.
-- **Impact:** none on the demo flow; the contract is less precise for the frontend types and
-  for automated checks.
+- **Extended in run 7 (`main` @ `100343e`, Schemathesis 4.26.1, 50 examples per operation,
+  `--continue-on-failure`, 1360 cases generated, 5 unique failures reproduced consistently across
+  two runs; JUnit report `tests/contract/reports/junit-20260912T155003Z.xml`):**
+  - `POST /api/plans` accepts `restrictions: [""]` per the schema (`list[str]`), but the API
+    rejects it with `VALIDATION_ERROR: Unsupported restrictions: `. The label set is a fixed
+    enum in `schemas/__init__.py:44-50`, not expressed in the generated contract.
+  - `POST /api/plans/{runId}/recalculate` accepts duplicate or empty `selectedRecurringIds` per
+    the schema, but the API requires unique, known IDs (`routes/api.py:207-208`) and answers 400.
+  - `POST /api/fatsecret/exports/preview` accepts duplicate `mealIds` per the schema, but the API
+    requires unique IDs from the plan (`fatsecret/export.py:84`) and answers 400.
+  - Two of the "unsupported method" failures this run are BUG-017, not a contract gap:
+    `GET /api/fatsecret/exports/confirm` and `.../preview` should answer 405 and instead reach
+    `GET .../{export_id}`. The other four operations Schemathesis flagged as "repeatedly 404"
+    (`POST /api/cart/preview`, `POST /api/cart/confirm`, `POST /api/fatsecret/exports/confirm`,
+    `GET /api/fatsecret/exports/{export_id}`) are not a defect: a fuzzer without a real
+    `runId`/`previewId` in this session can only ever reach the "not found" branch of those
+    routes.
 
 ## BUG-011 — Invented regular purchases, prices and brand images shown as plan data
 
@@ -334,3 +350,35 @@ with the team.
   opens "Помилка синхронізації кошика Сільпо" with that English message inside the Ukrainian text
   and offers "Повторити синхронізацію", which can only fail again. The code `STALE_PLAN` also
   misnames the reason for the frontend (Rina).
+
+## BUG-017 — `GET` on the FatSecret export actions is swallowed by `GET .../{export_id}`
+
+- **Found in:** run 7, Schemathesis 4.26.1 (`--continue-on-failure`, 1360 cases), reproduced
+  consistently across two runs; JUnit report
+  `tests/contract/reports/junit-20260912T155003Z.xml`.
+- **Where:** `services/api/src/smart_basket/routes/api.py`. Route registration order:
+  `POST /fatsecret/exports/preview` (line 330), `POST /fatsecret/exports/confirm` (line 337),
+  then `GET /fatsecret/exports/{export_id}` (line 345).
+- **Actual:** `GET /api/fatsecret/exports/confirm` and `GET /api/fatsecret/exports/preview` both
+  answer `404 {"code": "NOT_FOUND", "message": "Export not found in this session."}` instead of
+  `405 Method Not Allowed`. Starlette matches routes in registration order; since no `GET` route
+  has the literal path `.../confirm` or `.../preview`, the request falls through to the later
+  `GET /fatsecret/exports/{export_id}` route, which treats "confirm"/"preview" as an `export_id`
+  value and correctly reports it unknown.
+- **Reproduce:**
+  ```
+  curl -X GET -H 'Cookie: smart_basket_demo=<session>' http://127.0.0.1:8000/api/fatsecret/exports/confirm
+  curl -X GET -H 'Cookie: smart_basket_demo=<session>' http://127.0.0.1:8000/api/fatsecret/exports/preview
+  ```
+- **Expected:** `405 Method Not Allowed` with an `Allow` header listing `POST` (RFC 9110), matching
+  BUG-010's existing 405 finding.
+- **Impact:** low on the demo flow — nothing in the app sends `GET` to these paths — but a
+  misdirected or scripted `GET` gets a misleading "not found" instead of "wrong method", and any
+  future path that starts with a real export ID's shape would silently match the wrong handler.
+- **Fix hint:** registration order does not help here — Starlette's router
+  (`starlette/routing.py`, `Router.app`) returns the first route in its list whose path *and*
+  method both match, so a later `GET /{export_id}` still wins over an earlier `POST /confirm`
+  partial match regardless of order. `export_id` values are always shaped
+  `demo-export-<32 hex chars>` (`core.uid("export")`); constrain the path parameter to that
+  pattern (a regex path converter) so literal segments like `confirm`/`preview` fail to match
+  the parameterized route and fall through to the real 405.

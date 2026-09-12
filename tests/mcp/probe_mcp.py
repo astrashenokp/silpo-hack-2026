@@ -70,6 +70,8 @@ def main():
         required = ", ".join(tool["required"]) or "-"
         print(f"  {tool['name']}  required: {required}")
     if args.out:
+        # reports/ is git-ignored, so a fresh checkout has no directory to write into yet.
+        os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as file:
             json.dump(report, file, ensure_ascii=False, indent=2)
     return 0
