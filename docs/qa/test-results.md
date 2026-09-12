@@ -271,8 +271,35 @@ does not express (an empty restriction label, duplicate recurring IDs, duplicate
 [the bug entry](bugs.md#bug-010--contract-details-found-by-schemathesis). None of these are
 correctness defects in the API; the contract is just looser than the validation behind it.
 
-Not covered: a signed-in Silpo or FatSecret run from the UI or MCP tooling (needs the demo
-account's OAuth token, which this session does not have), a chat message with a real Gemini key,
-and CR-04 (recurring purchases still cannot be matched to products by the API — unchanged from
-run 6).
+## Run 8 — live FatSecret consumer credentials, Silpo MCP login attempted, September 12, 2026
+
+- **Revision:** `main` @ `d940596`. The team shared FatSecret REST API OAuth 1.0 consumer
+  credentials and a Silpo login phone number in the team chat; Polina used them directly, kept
+  only in the shell environment for these calls, never written to a repository file or committed.
+
+| Check | Result |
+|---|---|
+| FatSecret `request_token` (`services/api/src/smart_basket/fatsecret/client.py`, step 1 of three-legged OAuth) | ✅ live call to `https://authentication.fatsecret.com/oauth/request_token` succeeded: `oauth_callback_confirmed=true` for `http://localhost:8000/api/auth/fatsecret/callback`. The consumer key and secret are valid and the callback is registered |
+| FatSecret two-legged `foods.search` (no user token) | ✅ live call to `https://platform.fatsecret.com/rest/server.api` returned real data (`food_id 1641`, "Chicken Breast") |
+| FatSecret two-legged `foods.search.v5` | ❌ `{"error":{"code":10,"message":"Unknown method"}}` — this app's FatSecret scope does not include v5/Premier search, two-legged or not |
+| FatSecret two-legged `food_categories.get` | ❌ same `code: 10` |
+| FatSecret full three-legged flow (`saved_meal.create` etc.) | ⏸ not attempted: needs a human to log into an actual FatSecret account and approve the app in a browser; only consumer-level credentials were shared |
+| Silpo MCP OAuth (`claude mcp login silpo`) | ⏸ blocked: produced a real authorization URL at `https://mcp.silpo.ua/authorize`, confirming the server is reachable, but completing it needs a phone-number login with an SMS code that is sent to a teammate's phone/Telegram, not to this session. No browser, phone or Telegram access is available here to finish it |
+
+### What this confirms
+
+- `fatsecret/matching.py`'s fallback from `foods.search.v5` to `foods.search` (`:171-174`) is not
+  dead code: this run reproduces, live, exactly why the fallback exists — the primary method is
+  unavailable for the team's registered app, and the fallback is what actually serves real data.
+- The consumer credentials in `.env.example` (`FATSECRET_CONSUMER_KEY`, `FATSECRET_CONSUMER_SECRET`
+  placeholders) are real and working when filled in; only the callback URL and app-level scope
+  were checked, not a specific user's saved meals.
+- Silpo's MCP OAuth endpoint is live and correctly gated behind account sign-in; this session
+  could not carry a human through the SMS step, so the live Silpo MCP path (BUG-002's original
+  concern, OAuth/tools/cart) remains unverified by Polina — Arina's and Rina's September 11
+  reports are still the only live evidence.
+
+Not covered: a signed-in Silpo or FatSecret run from the UI or MCP tooling (both still need a
+human to complete an account login), a chat message with a real Gemini key, and CR-04 (recurring
+purchases still cannot be matched to products by the API — unchanged from run 6).
 
