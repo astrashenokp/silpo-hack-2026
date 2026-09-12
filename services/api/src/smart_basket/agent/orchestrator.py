@@ -38,6 +38,30 @@ from smart_basket.schemas import (
 
 from .llm import GeminiChatInterpreter
 
+def cart_confirmable(
+    *,
+    data_mode,
+    selected_products,
+    budget_status,
+    unresolved_requirements,
+    context,
+):
+    """One rule for every branch: a complete, in-budget plan on a usable catalog.
+
+    A plan built on the live Silpo catalog is confirmed through the live cart service;
+    a demo plan is confirmed through the demo cart service.
+    """
+    uses_live_catalog = bool(selected_products) and all(
+        item.source == "silpo" for item in selected_products
+    )
+    return (
+        budget_status == "within_budget"
+        and len(unresolved_requirements) == 0
+        and context.cart_context_ready
+        and (uses_live_catalog or data_mode == "demo")
+    )
+
+
 class UlianaPlanner:
     """
     Smart Basket orchestration.
@@ -403,20 +427,12 @@ class UlianaPlanner:
         # STAGE 6 — CAN CART BE CONFIRMED?
         # ====================================================
 
-        can_confirm_cart = (
-            optimization.budget_status
-            == "within_budget"
-
-            and len(
-                optimization
-                .unresolved_requirements
-            )
-            == 0
-
-            and context
-            .cart_context_ready
-
-            and (uses_live_catalog or data_mode == "demo")
+        can_confirm_cart = cart_confirmable(
+            data_mode=data_mode,
+            selected_products=optimization.selected_products,
+            budget_status=optimization.budget_status,
+            unresolved_requirements=optimization.unresolved_requirements,
+            context=context,
         )
 
 
@@ -694,22 +710,12 @@ class UlianaPlanner:
             .get_user_context(session)
         )
 
-        can_confirm_cart = (
-            previous_result.data_mode
-            == "demo"
-
-            and
-
-            budget_status
-            == "within_budget"
-
-            and len(
-                previous_result
-                .unresolved_requirements
-            )
-            == 0
-
-            and context.cart_context_ready
+        can_confirm_cart = cart_confirmable(
+            data_mode=previous_result.data_mode,
+            selected_products=previous_result.selected_products,
+            budget_status=budget_status,
+            unresolved_requirements=previous_result.unresolved_requirements,
+            context=context,
         )
 
         # Temporary result with the NEW budget.
@@ -957,17 +963,12 @@ class UlianaPlanner:
         context,
         recurring_items=None,
     ):
-        can_confirm_cart = (
-            previous_result.data_mode == "demo"
-
-            and optimization.budget_status
-                == "within_budget"
-
-            and len(
-                optimization.unresolved_requirements
-            ) == 0
-
-            and context.cart_context_ready
+        can_confirm_cart = cart_confirmable(
+            data_mode=previous_result.data_mode,
+            selected_products=optimization.selected_products,
+            budget_status=optimization.budget_status,
+            unresolved_requirements=optimization.unresolved_requirements,
+            context=context,
         )
 
         updates = {
@@ -1050,21 +1051,23 @@ class UlianaPlanner:
                     mixed_warning
                 )
 
-        can_confirm_cart = (
-            data_mode == "demo"
+        # Products from the live Silpo catalog keep the plan live, exactly as in run_planner.
+        uses_live_catalog = bool(optimization.selected_products) and all(
+            item.source == "silpo" for item in optimization.selected_products
+        )
+        if uses_live_catalog:
+            data_mode = "live" if meal_source not in {"synthetic", "mixed"} else "mixed"
+            warnings = [
+                warning for warning in warnings
+                if "catalog/cart data remains demo" not in warning
+            ]
 
-            and
-
-            optimization.budget_status
-            == "within_budget"
-
-            and len(
-                optimization
-                .unresolved_requirements
-            )
-            == 0
-
-            and context.cart_context_ready
+        can_confirm_cart = cart_confirmable(
+            data_mode=data_mode,
+            selected_products=optimization.selected_products,
+            budget_status=optimization.budget_status,
+            unresolved_requirements=optimization.unresolved_requirements,
+            context=context,
         )
 
         return previous_result.model_copy(

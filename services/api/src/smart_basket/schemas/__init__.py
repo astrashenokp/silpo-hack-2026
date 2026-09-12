@@ -269,6 +269,23 @@ class RunSnapshot(Model):
     error: Error | None
 
 
+class ChatRequest(Model):
+    run_id: str | None = None
+    version: PositiveInt | None = None
+    message: Annotated[str, Field(min_length=1, max_length=2000)]
+    selected_recurring_ids: list[str] = Field(default_factory=list)
+
+
+class ChatReply(Model):
+    type: Literal[
+        "plan", "explanation", "clarification", "unsupported", "blocked",
+        "meal_replan_required", "no_cost_improvement", "upgrade_not_feasible",
+        "invalid_replan", "chat_error",
+    ]
+    message: str | None
+    run: RunSnapshot | None = None
+
+
 class PlanReference(Model):
     run_id: str
     version: PositiveInt

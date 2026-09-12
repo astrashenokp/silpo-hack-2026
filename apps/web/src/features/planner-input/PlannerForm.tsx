@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
-import { fixturePlanningResult } from "@/lib/api/fixtures";
 import ContextSummary from "@/features/planner-input/ContextSummary";
 import {
+  ApiClientError,
   createPlan,
   getContext,
   getPlan,
@@ -15,7 +14,6 @@ import {
 
 type PlannerFormProps = {
   onPlanReady?: (snapshot: RunSnapshot) => void;
-  demoMode?: boolean;
   accountConnected?: boolean;
 };
 
@@ -88,7 +86,6 @@ function slotLabel(slot: string) {
 
 export default function PlannerForm({
   onPlanReady,
-  demoMode = false,
   accountConnected = true,
 }: PlannerFormProps) {
   const [budget, setBudget] = useState("");
@@ -168,23 +165,6 @@ export default function PlannerForm({
     async function initialLoad() {
       setIsContextLoading(true);
 
-      if (demoMode) {
-        setContext({
-          preferences: [],
-          restrictions: [],
-          pets: [],
-          historyAvailable: accountConnected,
-          cartContextReady: accountConnected,
-          warnings: accountConnected
-            ? ["DEMO: synthetic data; no provider account, cart or Saved Meal is changed."]
-            : ["Гостьовий режим: історія покупок недоступна, але планування працює."],
-        });
-        setSessionExpired(false);
-        setContextError("");
-        setIsContextLoading(false);
-        return;
-      }
-
       try {
         const result = await getContext();
 
@@ -224,7 +204,7 @@ export default function PlannerForm({
     return () => {
       cancelled = true;
     };
-  }, [demoMode, accountConnected]);
+  }, [accountConnected]);
 
   function validateBudget(value: string) {
     if (!value.trim()) {
@@ -455,46 +435,6 @@ export default function PlannerForm({
     try {
       setIsSubmitting(true);
 
-      if (demoMode) {
-        const runId = `demo-run-${Date.now()}`;
-        const queued: RunSnapshot = {
-          runId,
-          status: "queued",
-          stage: "context",
-          events: [],
-          result: null,
-          error: null,
-        };
-        setRunSnapshot(queued);
-
-        await new Promise((resolve) => window.setTimeout(resolve, 550));
-        setRunSnapshot({ ...queued, status: "running", stage: "optimization" });
-        await new Promise((resolve) => window.setTimeout(resolve, 900));
-
-        const basketTotalMinor = fixturePlanningResult.basketTotalMinor;
-        const withinBudget = request.budgetMinor >= basketTotalMinor;
-        const demoResult = {
-          ...fixturePlanningResult,
-          runId,
-          effectiveRequest: request,
-          budgetMinor: request.budgetMinor,
-          budgetRemainingMinor: request.budgetMinor - basketTotalMinor,
-          budgetStatus: withinBudget ? "within_budget" : "over_budget",
-          canConfirmCart: withinBudget,
-        } as unknown as NonNullable<RunSnapshot["result"]>;
-        const completed: RunSnapshot = {
-          runId,
-          status: "completed",
-          stage: "ready",
-          events: [],
-          result: demoResult,
-          error: null,
-        };
-        setRunSnapshot(completed);
-        onPlanReady?.(completed);
-        return;
-      }
-
       const result = await createPlan(request);
 
       console.log("Created plan:", result);
@@ -515,7 +455,9 @@ export default function PlannerForm({
       }
 
       setSubmitError(
-        "Не вдалося сформувати план. Спробуйте ще раз.",
+        error instanceof ApiClientError
+          ? error.message
+          : "Не вдалося сформувати план. Спробуйте ще раз.",
       );
     } finally {
       setIsSubmitting(false);
@@ -859,29 +801,13 @@ export default function PlannerForm({
               {selectedProducts.length > 0 ? (
                 <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
                   {selectedProducts.map((product) => {
-                    const hasButterImage =
-                      product.name.toLowerCase().includes("галич") ||
-                      product.name.toLowerCase().includes("масло");
-
                     return (
                       <div
                         key={`${product.productId}-${product.name}`}
                         className="flex min-w-0 items-start gap-3"
                       >
-                        <div className="flex h-12 w-14 shrink-0 items-center justify-center overflow-hidden rounded bg-white">
-                          {hasButterImage ? (
-                            <Image
-                              src="/butter-galychyna.png"
-                              alt={product.name}
-                              width={56}
-                              height={48}
-                              className="h-full w-full object-contain"
-                            />
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded bg-[#FFF5E4] text-sm font-semibold text-[#9A6A2D]">
-                              {product.name.slice(0, 1).toUpperCase()}
-                            </div>
-                          )}
+                        <div className="flex h-12 w-14 shrink-0 items-center justify-center rounded bg-[#FFF5E4] text-sm font-semibold text-[#9A6A2D]">
+                          {product.name.slice(0, 1).toUpperCase()}
                         </div>
 
                         <div className="min-w-0">

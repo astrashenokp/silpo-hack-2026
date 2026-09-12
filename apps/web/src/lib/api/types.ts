@@ -307,3 +307,21 @@ export interface Health {
   status: string;
   mode: string;
 }
+
+export type ChatReplyType =
+  | "plan"
+  | "explanation"
+  | "clarification"
+  | "unsupported"
+  | "blocked"
+  | "meal_replan_required"
+  | "no_cost_improvement"
+  | "upgrade_not_feasible"
+  | "invalid_replan"
+  | "chat_error";
+
+export interface ChatReply {
+  type: ChatReplyType;
+  message: string | null;
+  run: RunSnapshot | null;
+}
