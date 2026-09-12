@@ -5,20 +5,25 @@ https://ai-factory.silpo.ua/terms, first read September 11, 2026, **re-checked l
 12** (treating today as the deadline day per the user's instruction). Re-check once more before
 actually submitting, in case the site changes again.
 
-## ⚠️ Most urgent open item, found on this re-check
+## Registration — confirmed
 
-**The site now says "Реєстрацію завершено" — registration closed September 1, 2026.** Nothing in
-this repository records that the team's registration was actually completed before that date.
-If it was not, no other item on this list matters: **confirm with the team right now** that a
-registration exists and that whoever owns it can still reach the submission form in their
-personal cabinet. Polina has no access to check this directly.
+The site says "Реєстрацію завершено" (closed September 1, 2026). **The team confirmed on
+September 13 that the registration was completed before that date**, so the submission form is
+reachable. This was the single most urgent open item on this checklist; it is now resolved.
+
+## Deploy URL — live
+
+**https://p01--web--2n7f5yvrbnqy.code.run** — Northflank, set up and verified September 12–13.
+`POST /api/plans` runs a full plan to completion on this exact URL; e2e (40/40) and the full
+Playwright UI suite (38/38) both pass against it. Use this as the "working demo" link and for
+the video's live segments.
 
 ## What the rules require (updated September 12; changes from September 11 in **bold**)
 
 | Item | Requirement (quoted where exact wording matters) |
 |---|---|
 | Deadline | September 14, 2026, 23:59:59 Kyiv time — unchanged. Target an internal deadline of 18:00 |
-| How | "Проєкт подається способом, зазначеним на Сайті шляхом заповнення Реєстраційної форми". **Registration itself closed September 1** — see the urgent item above |
+| How | "Проєкт подається способом, зазначеним на Сайті шляхом заповнення Реєстраційної форми". Registration closed September 1; **the team confirmed it was completed in time** |
 | Video pitch | 3–5 minutes: problem, solution, role of AI and the MCP, value for the guest or business, usage scenario, implementation approach, prototype demonstration. Plan: [demo script](demo-script.md) |
 | Other materials | "відеопітч, презентація, Figma-макет, скриншоти, working demo, no-code/low-code прототип, репозиторій, документація, опис архітектури, бізнес-модель" — **a longer explicit list than the September 11 read; a presentation and a business-model summary are named, not just optional extras** |
 | Silpo MCP | Mandatory: "MCP «Сільпо» — не додаткова опція, а обов'язкова частина кожного проєкту", used "як функціонально значущий компонент". **The front page now also lists "agent capability (context awareness and multi-step action execution)" as a separate evaluated dimension from MCP tool quality** |
@@ -42,12 +47,11 @@ branch name suggests OpenAI Codex — Alina to confirm and add a line here).
 
 | Risk | Why it matters | Tracking |
 |---|---|---|
-| Registration status is unconfirmed in writing | Nothing else matters if the team cannot reach the submission form | **Ask the team now** — see the urgent item above |
 | The live Silpo MCP path is verified independently now (OAuth, 40 tools, real profile/cart/product-search calls, runs 9–11), but only by calling the MCP server's own tools directly — not yet driven through our own product's sign-in button end to end | "Agent capability" and "MCP tool quality" are both now named judging dimensions | A signed-in UI run on the demo account; one authorized real-cart check (Rina, still open per her handoff) |
 | Invented products, prices, cart panel and user name — **fixed in #31, retested (runs 9–11)** | Fabricated results or false information can disqualify the entry | BUG-006, BUG-011 — closed |
 | Brand images from the Jameson website and the "Галичина" butter photo, Wikimedia photos without recorded licenses — **the invented product cards themselves were deleted in #31**; check whether any of these image files/URLs still linger unused | The team must hold rights to every submitted material | List below |
 | The repository is private | If the form asks for code, the organizer needs access | Decide: add the organizer as a collaborator or submit an archive |
-| No public deploy URL exists yet | "Working demo" is listed among the accepted materials, and judges may expect a live link, not only a video | Hosting decision still open per `docs/handoffs/polina.md` |
+| ~~No public deploy URL exists yet~~ — **resolved** | "Working demo" is listed among the accepted materials | Live at https://p01--web--2n7f5yvrbnqy.code.run, verified end to end (run 12) |
 
 ## Third-party objects (draft)
 
@@ -99,8 +103,7 @@ Versions as installed on September 11; lockfiles pin the transitive dependencies
 
 ## Submission day checklist
 
-- [ ] **Confirm the team's registration exists and someone can reach the submission form** — see
-  the urgent item at the top of this file. Nothing below matters until this is confirmed.
+- [x] Registration confirmed by the team (Sep 13).
 - [ ] Presenter and submission-account owner named in `docs/handoffs/polina.md`.
 - [ ] Video 3–5 minutes, playback checked, link opens from a signed-out browser.
 - [ ] Demo link or recording ready; the frozen revision and deploy URL recorded.
