@@ -15,9 +15,10 @@ submission status on September 14.
 - **Main files:** `tests/`, `docs/qa/` (test results, bugs, tools, demo script, submission
   checklist), `deploy/` (runbook, Docker, `run-local.ps1`), `.github/workflows/ci.yml`.
 - **Checks and results:** [test results](../qa/test-results.md).
-- **Known issues:** [bug list](../qa/bugs.md). BUG-001–BUG-004 and BUG-014 are fixed and
-  retested. Open for the video: invented data (BUG-006, BUG-011), adding without a preview
-  (BUG-012), no cart panel below 1280 px (BUG-015) and over-budget adding (BUG-016).
+- **Known issues:** [bug list](../qa/bugs.md). BUG-001–BUG-006, BUG-011, BUG-012, BUG-014,
+  BUG-015 and BUG-016 are fixed and retested. Open, none blocking the demo: days capped at 7
+  (BUG-007), `API_BASE_URL` build-time only (BUG-008), text contrast (BUG-009), contract
+  detail (BUG-010), public-deployment hardening (BUG-013).
 
 ## Launch the local demo today (PowerShell, repository root)
 
@@ -80,7 +81,7 @@ expected 35 passed. Rebuild the frontend after pulling changes to `apps/web`.
 - [ ] Acceptance scenarios run, bugs assigned and retested — runs 1–5 recorded; owners to be notified
 - [ ] A real MCP interaction and the Edamam path verified
 - [ ] FatSecret export acceptance checks on the live account
-- [ ] No blocking defects in the demo flow — no blocker open since #27; High defects BUG-005, BUG-011, BUG-012 and BUG-015 remain
+- [ ] No blocking defects in the demo flow — no blocker or High defect open since #31; only Low/Medium polish items remain
 - [ ] Demo account, cart context and a repeatable starting state
 - [ ] Revision frozen on September 13 with deploy URL, launch and recovery steps
 - [ ] Clearly labeled synthetic backup

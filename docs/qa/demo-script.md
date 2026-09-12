@@ -16,8 +16,8 @@ record a step as live after it has been verified on the frozen revision.
 | 0:30–1:00 | Solution and roles | One page: structured form → agent plan → Silpo basket; Silpo MCP supplies profile, history, catalog and cart; Edamam supplies meals; FatSecret receives saved meals | Architecture slide from `docs/WORKFLOW.md` |
 | 1:00–1:30 | Input | Golden input in the form: 1,800 UAH, 2,000 kcal, 3 people, 4 days, vegetarian, cat, restocking on | ✅ form works (days are capped at 7, BUG-007) |
 | 1:30–2:00 | Agent progress | Completed stages: context → history → meals → matching → optimization → ready | ✅ steps follow the stage of the API run, polled every 2 s (since #27) |
-| 2:00–2:45 | Result | Meals by day with portions and calories, basket with package quantities, budget remaining, warnings with the DEMO label | ⚠️ the plan comes from the Python API, in demo mode with synthetic data; invented products and prices must be gone first (BUG-011) |
-| 2:45–3:30 | Silpo cart | "Add to Silpo cart" → preview of exact changes → "Confirm addition" → verified per-item result | ⚠️ the preview comes from the API and can be confirmed with a per-item receipt (since #27), but "Додати все" still fills the panel without a preview (BUG-012), windows under 1280 px have no cart panel (BUG-015) and an over-budget plan ends in an API error (BUG-016); Rina's live cart service awaits one authorized check |
+| 2:00–2:45 | Result | Meals by day with portions and calories, basket with package quantities, budget remaining, warnings with the DEMO label | ✅ the API plan, entirely; no invented products, prices or images remain (BUG-006, BUG-011 fixed in #31) |
+| 2:45–3:30 | Silpo cart | "Add to Silpo cart" → preview of exact changes → "Confirm addition" → verified per-item result | ✅ adding opens the API preview at once, is reachable at every width, and an over-budget plan is disabled with a reason (BUG-012, BUG-015, BUG-016 fixed in #31); Rina's live cart service still awaits one authorized check |
 | 3:30–3:50 | FatSecret | Save one meal → preview of one personal portion → confirm → saved outcome | ✅ demo flow works in the UI; live account checked by Rina through the API |
 | 3:50–4:15 | Implementation and quality | Next.js → Python API → agent modules → MCP gateway; automated checks (e2e, contract fuzzing, UI, accessibility) | ✅ QA toolkit and results exist |
 | 4:15–4:45 | Value and limits | Measured facts only; what is demo and what is live; next steps | Fill in from the final test run |
@@ -28,8 +28,8 @@ record a step as live after it has been verified on the frozen revision.
   say so. The rules treat fabricated results and false information as grounds for disqualification.
 - Claim Silpo MCP use only for calls that ran live on the recorded revision. The rules require the
   MCP to be a functionally significant part of the project.
-- Do not show the invented cart panel (store address, two butter packs), the "Катерина" greeting or
-  the whiskey suggestion (BUG-006, BUG-011) until they are removed or clearly labeled.
+- The invented cart panel, the "Катерина" greeting and the whiskey suggestion are gone (BUG-006,
+  BUG-011); only say what the API actually returned on the recorded revision.
 - Present Saved Meals as saved recipes for one portion, not as diary entries or food eaten.
 - No time-saving percentages or market claims without measurement.
 
@@ -38,7 +38,7 @@ record a step as live after it has been verified on the frozen revision.
 - [ ] Frozen revision and deploy URL recorded in `docs/handoffs/polina.md`.
 - [ ] `deploy/run-local.ps1 -Test` (or the deployed URL with the same suites) passes.
 - [ ] Demo account signed in, cart context ready, cart emptied of rehearsal items.
-- [ ] Browser: clean profile, 100% zoom, window at least 1280 px wide (narrower windows have no cart panel, BUG-015), notifications off.
+- [ ] Browser: clean profile, 100% zoom, notifications off. The cart is reachable at every width since BUG-015 was fixed, so a narrower window is fine if it helps framing.
 - [ ] No personal data, tokens or account IDs visible; FatSecret account label checked.
 - [ ] Backup: a fully labeled demo-mode take recorded first, in case a live provider fails.
 

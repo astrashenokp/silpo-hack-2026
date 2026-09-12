@@ -18,18 +18,18 @@ with the team.
 | BUG-002 | Blocker | Web UI never calls the Python API: plan, cart and FatSecret are simulated in the browser | Ksiusha + Alina | Fixed in #27 (Polina); retested ✅ (run 5) |
 | BUG-003 | High | "Recalculate basket" always fails with `PLANNER_FAILED` and leaves no confirmable plan | Uliana | Fixed in #22; retested ✅ (run 4) |
 | BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 3 of 10 still fail | Uliana | Fixed in `5fcd4b4` (Sofiia); retested ✅ (run 5) |
-| BUG-005 | High | Unsupported dietary restrictions typed in the form are silently moved into `notes` | Ksiusha | Open; reaches the API since #27 |
-| BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Open |
+| BUG-005 | High | Unsupported dietary restrictions typed in the form are silently moved into `notes` | Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-007 | Low | Days counter stops at 7; the contract allows 1–14 | Ksiusha (confirm with Katia) | Open |
 | BUG-008 | Low | `API_BASE_URL` is documented as runtime configuration but only applies at `next build` | Ksiusha | Open |
 | BUG-009 | Medium | Text contrast below WCAG AA on primary buttons, hints and the cart panel | Katia + Ksiusha + Alina | Open |
 | BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow` | Rina | Open |
-| BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Open |
-| BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Partly fixed in #27: the preview comes from the API and can be confirmed (run 5); "Додати все" still skips the preview |
+| BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Fixed in #27 and #31 (Polina); retested ✅ (run 5) |
 | BUG-013 | Medium | Public-deployment hardening: unbounded sessions and runs, no rate limit, cookie without `Secure` | Rina | Open |
 | BUG-014 | Medium | The generated OpenAPI contract is stale after the live cart changes (`export_contracts.py --check` fails) | Rina | Fixed in `5fcd4b4` (Sofiia); retested ✅ (run 5) |
-| BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Open |
-| BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Open |
+| BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Fixed in #31 (Polina); retested ✅ (run 5) |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -131,7 +131,17 @@ with the team.
 - **Impact:** an allergen the user entered is not enforced although the UI accepted it.
   Live since #27: the form now sends these requests to the API.
 
+- **Retest (run 5, since #31):** fixed. The form's "Алергени та заборони" and "Вподобання"
+  fields now load their choices from `GET /api/filters` and let the user pick only from that list;
+  everything typed reaches `PlanningRequest.restrictions`/`.preferences` instead of free text in
+  `notes`. Confirmed by `tests/ui/specs/a11y.spec.ts` and the UI walk-through in run 5.
+
 ## BUG-006 — Invented, unlabeled data in the UI
+
+- **Retest (run 5, since #31):** fixed. The result screen now renders the API's own meal
+  plan, product list and recurring suggestions instead of the fixed cards; the greeting no
+  longer names anyone, and the cart panel shows the store label only when the API supplies
+  one, with a demo note otherwise. Confirmed by `tests/ui/specs/flows.spec.ts`.
 
 - **Where:** `apps/web/src/app/page.tsx:532-585` (`SetupCartPreview`: two
   "Масло солодковершкове Галичина" items at 124.00/79.99 ₴, a discount total and the store
@@ -194,6 +204,13 @@ with the team.
 
 ## BUG-011 — Invented regular purchases, prices and brand images shown as plan data
 
+- **Retest (run 5, since #31):** fixed. `RecurringSuggestions`, `MealPlan` and
+  `ProposedBasket` render only `result.recurringItems`, `result.mealPlan` and
+  `result.selectedProducts`; the fixed butter and whiskey cards, their images and
+  `apps/web/public/butter-galychyna.png` are deleted. Selecting a recurring item is disabled
+  with a stated reason, because the API cannot match one to a product yet (CR-04); the
+  suggestion itself is real, not invented.
+
 - **Found in:** run 3 UI walk-through (desktop and Pixel 7); confirmed by
   `tests/ui/specs/flows.spec.ts` (`test.fail`).
 - **Where:** `apps/web/src/features/planner-results/PlannerResults.tsx:684`, `:702` and `:714`
@@ -216,6 +233,10 @@ with the team.
   without recorded rights ([submission checklist](submission.md)).
 
 ## BUG-012 — The cart addition cannot be previewed and confirmed
+
+- **Retest (run 5, since #31):** fixed. "Додати все в кошик Сільпо" now opens the API
+  preview immediately; there is no local fill-in step. Confirmed by
+  `tests/ui/specs/flows.spec.ts`.
 
 - **Found in:** run 3 UI walk-through; confirmed by two `test.fail` checks in
   `tests/ui/specs/flows.spec.ts`.
@@ -272,6 +293,11 @@ with the team.
 
 ## BUG-015 — No cart panel below 1280 px
 
+- **Retest (run 5, since #31):** fixed. Below the `xl` breakpoint the same cart panel renders
+  in the page flow instead of the side column, so preview and confirmation are reachable at
+  every width tested (Pixel 7 included). Confirmed by
+  `tests/ui/specs/flows.spec.ts` on both projects.
+
 - **Found in:** run 4, the retest of Alina's shared cart (`1a121e0`); confirmed by
   `tests/ui/specs/flows.spec.ts` (`test.fail` on the mobile project).
 - **Actual:** after "Додати все в кошик Сільпо" the button turns into the disabled
@@ -285,6 +311,10 @@ with the team.
   recording has to use a wide window.
 
 ## BUG-016 — Over-budget plans can go to the cart
+
+- **Retest (run 5, since #31):** fixed. "Додати все в кошик Сільпо" is disabled whenever the
+  API's `canConfirmCart` is false, over budget included, and the existing budget warning
+  explains why. Confirmed by `tests/ui/specs/flows.spec.ts`.
 
 - **Found in:** run 4; confirmed by `tests/ui/specs/flows.spec.ts` (`test.fail`).
 - **Actual:** with a budget of 100 UAH the result says "Бюджет перевищено на 390,00 грн.", yet

@@ -208,5 +208,28 @@ real-cart check) were not repeated by Polina, and the UI does not use these path
 | CI on PR #27 (`afe586e`) | ✅ all five jobs: backend, frontend, e2e, images, UI |
 | CI on `main` after the merge (`cf7ebbf`) | ✅ all five jobs |
 
-Not covered: a signed-in Silpo or FatSecret run from the UI, and the chat, which has no API
-endpoint.
+## Run 6 — full UI-API connection, September 12, 2026
+
+- **Revision:** `feature/connect-ui-to-api` (from `main` @ `cf7ebbf`, PR #31): the result screen
+  renders `MealPlan`, `ProposedBasket`, `BudgetSummary` and `RecurringSuggestions` instead of the
+  fixed cards; a new `POST /api/chat` route; the allergen/preference fields read `GET /api/filters`.
+  Not merged; demo mode, guest session.
+
+| Check | Result |
+|---|---|
+| Backend tests without `GEMINI_API_KEY` | ✅ 191 passed |
+| Generated contracts (`export_contracts.py --check`) | ✅ current |
+| e2e through Next.js | ✅ 40 of 40 (5 new: chat requires a session, rejects an empty message, answers in the contract shape, reports a missing interpreter instead of crashing, a reply without a new plan keeps the current plan confirmable) |
+| UI specs against the running API, desktop and Pixel 7 | ✅ 38 of 38. No `test.fail` markers remain in `flows.spec.ts` |
+| Result screen | ✅ every requested day, the chosen products with source and restriction badges, substitutions, unresolved requirements and the real recurring suggestions from `recurringItems` — no invented butter, whiskey, name or store address (BUG-006, BUG-011 fixed) |
+| Recurring purchases | ⚠️ shown from the API, but selecting one is disabled with a stated reason: the API cannot match a recurring item to a product yet (CR-04, unfixed) |
+| "Додати все в кошик Сільпо" | ✅ opens the API preview immediately, no local fill-in step (BUG-012 fixed) |
+| Cart panel at 768, 1024, 1279, 1280 and 1440 px | ✅ reachable at every width: below `xl` it renders inline instead of in the side column (BUG-015 fixed) |
+| Over-budget plan (budget 100) | ✅ "Додати все" is disabled with the existing budget warning as the reason; no failed sync attempt (BUG-016 fixed) |
+| Allergen/preference fields | ✅ load from `GET /api/filters` and offer only those labels; a selection reaches `restrictions`/`preferences` instead of `notes` (BUG-005 fixed) |
+| Chat message ("зроби дешевше") | ✅ reaches `/api/chat`; without `GEMINI_API_KEY` (CI and this run) the reply names the missing key instead of a silent no-op |
+| CI on PR #31 | ✅ all five jobs, on both commits (the connection and the recurring-selection guard) |
+
+Not covered: a signed-in Silpo or FatSecret run from the UI, a chat message with a real Gemini
+key, and CR-04 (recurring purchases still cannot be matched to products by the API).
+
