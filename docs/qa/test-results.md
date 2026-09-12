@@ -431,3 +431,49 @@ Not covered: a signed-in Silpo or FatSecret OAuth round trip through this exact 
 (the API's callback URLs point here, but were not clicked through live on this deployment), the
 `silpo_add_or_update_cart_products` write path, a chat message with a real Gemini key, and CR-04.
 
+## Run 13 — overnight browser-agent pass against the live deploy, September 13, 2026
+
+- **Revision at the time of the pass:** `main` @ `3db77d2` (after PRs #29 and #37). Driven by
+  Claude's browser extension against `https://p01--web--2n7f5yvrbnqy.code.run`, 10 checks, guest
+  mode only (the real teammate's Silpo account was deliberately not touched).
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Tab title + demo-mode indicator | ✅ "Smart Basket AI", "ДЕМО / СИНТЕТИКА" visible |
+| 2 | Guest entry, no invented name | ✅ generic greeting, no name shown |
+| 3 | Planner form: golden input (1800 UAH, 4 days, 3 people, 2000 kcal, vegetarian, 1 cat) | ✅ submits; "analyze purchase history" checkbox correctly disabled for a guest (no history) |
+| 4 | Plan + cart render from the live API | ✅ real meals, real demo products, real budget math — see BUG-018 below for the one misleading number |
+| 5 | No invented brands/names | ✅ none found |
+| 6 | Chat ("бюджет 1500") | ❌ see BUG-019 — expected fallback message, not a crash |
+| 7 | "Add to Silpo cart" opens an accurate preview immediately | ✅ |
+| 8 | "Connect FatSecret" reaches real `fatsecret.com` OAuth | ✅, backed out without logging in |
+| 9 | Over-budget plan (50 UAH) blocks cart confirmation with a stated reason | ✅ |
+| 10 | Console/network clean during a plan run | ✅ no 4xx/5xx, no console errors |
+
+### Two findings, one real and fixed, one already known
+
+- **BUG-018 (new, fixed on this run):** the per-day calorie number was an average across that
+  day's meals under a label that reads as a daily total, so ~620 next to a 2000 kcal/day target
+  looked like the planner was badly broken. It wasn't — the real daily total is ~1,860, within 7%
+  of the target. Fixed in `apps/web/src/features/planner-results/components/MealPlan.tsx` (Polina's
+  own file): now sums the day's meals and shows the requested target alongside it. Retested: `tsc`
+  clean, `next build` clean, e2e 40/40, Playwright UI 24/24 (desktop + mobile) against a fresh
+  local build with the fix.
+- **BUG-019 (not new, confirmed live):** chat needs `GEMINI_API_KEY`, which has never been supplied
+  to Polina — CI, every local run, and now the hosted deploy all lack it. The reply naming the
+  missing key is the designed fallback (already covered in run 5), not a defect; the open item is
+  the missing credential itself, blocked on Uliana.
+- **Not a bug:** no cat food appeared in the cart. `request.pets` is only read by
+  `analyze_recurring` (`agent/orchestrator.py:253-261`), which only runs when "include recurring"
+  is on *and* there is purchase history — neither applies to a guest with no history. Pets do not
+  feed the initial meal-plan cart at all (by design — `catalog/matching.py:43`, "does not invent
+  pet-food demand"); this only becomes reachable through CR-04's still-open recurring-purchase
+  path, and is expected to stay empty for any guest walkthrough in the demo.
+
+### Conclusion
+
+One genuine (if minor) UI clarity bug found and fixed; the other two flagged items are confirmed
+correct, already-known behavior, not new defects. Nothing here blocks the demo happening in guest
+mode with the DEMO label visible. Chat over the live deploy remains unusable until a real Gemini
+key arrives — do not script it into the recorded video unless one arrives first.
+

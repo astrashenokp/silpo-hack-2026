@@ -123,10 +123,11 @@ export function MealPlan({
   const [day, setDay] = useState<number>(days[0]?.[0] ?? 1);
   const meals = days.find(([d]) => d === day)?.[1] ?? [];
 
-  const kcalAverages = days.map(([d, list]) => {
+  const calorieTarget = result.effectiveRequest.caloriesPerPersonPerDay;
+  const kcalTotals = days.map(([d, list]) => {
     const values = list.map((m) => m.kcalPerServing).filter((v): v is number => v !== null);
-    const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
-    return { day: d, avg };
+    const total = values.length === list.length && values.length ? values.reduce((a, b) => a + b, 0) : null;
+    return { day: d, total };
   });
 
   return (
@@ -163,11 +164,14 @@ export function MealPlan({
         ))}
       </div>
 
-      {kcalAverages.length > 1 && (
+      {kcalTotals.length > 1 && (
         <p className="mt-3 text-xs text-muted">
-          Середня калорійність на день:{" "}
-          {kcalAverages
-            .map(({ day: d, avg }) => `День ${d}: ${avg === null ? "невідомо" : formatNumber(Math.round(avg))} ккал`)
+          Калорійність на день (сума прийомів їжі на людину){calorieTarget ? `, ціль ${formatNumber(calorieTarget)} ккал` : ""}:{" "}
+          {kcalTotals
+            .map(
+              ({ day: d, total }) =>
+                `День ${d}: ${total === null ? "невідомо" : formatNumber(Math.round(total))} ккал`,
+            )
             .join(" · ")}
         </p>
       )}

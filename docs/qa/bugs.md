@@ -31,6 +31,8 @@ with the team.
 | BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-017 | Medium | `GET /api/fatsecret/exports/confirm` and `.../preview` are swallowed by the parameterized `GET /api/fatsecret/exports/{export_id}` route and answer 404 instead of 405 | Rina | Found in run 7 (Schemathesis) |
+| BUG-018 | Low | The per-day calorie figure was labeled "average per day" but was an average across that day's meals (e.g. shows ~620 next to a 2000 kcal/day target, reading as a huge shortfall that isn't real) | Polina (own file, `apps/web/src/features/planner-results/components/MealPlan.tsx`) | Fixed on `feature/polina-qa-run13`; retested ✅ (run 13, e2e 40/40, UI 24/24) |
+| BUG-019 | Low | The hosted API has no real `GEMINI_API_KEY`, so chat on the live deploy always answers "Чат недоступний: ... GEMINI_API_KEY" instead of doing anything — this is the documented fallback behavior working correctly, not a crash, but chat cannot be demoed live without a real key | Uliana (owns the chat module and any Gemini key); Polina to add it as a Northflank runtime variable once supplied | Open — blocked on a real key |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -382,3 +384,52 @@ with the team.
   `demo-export-<32 hex chars>` (`core.uid("export")`); constrain the path parameter to that
   pattern (a regex path converter) so literal segments like `confirm`/`preview` fail to match
   the parameterized route and fall through to the real 405.
+
+## BUG-018 — Per-day calorie stat read as a huge shortfall that wasn't real
+
+- **Found in:** run 13, an overnight QA pass driven by a browser agent (Claude in Chrome)
+  against the live deploy with the golden input (1800 UAH, 4 days, 3 people, 2000 kcal/person/day,
+  vegetarian, one cat).
+- **Where:** `apps/web/src/features/planner-results/components/MealPlan.tsx:126-172` (Polina's
+  own file, rewritten in #31).
+- **Actual:** the label said "Середня калорійність на день" ("average calorie content per day")
+  followed by one number per day, but the number was the *average of that day's individual
+  meals' kcal-per-serving* (e.g. `(420 + 680 + 760) / 3 = 620`), not the day's total. Next to a
+  2000 kcal/person/day target, "620" reads as a planner that is wildly off, when the real daily
+  total (420 + 680 + 760 = 1860) is within 7% of the target.
+- **Impact:** Medium-looking false alarm — nothing was actually wrong with the plan's calories,
+  but the mislabeled stat could make a working planner look broken during QA or, worse, during
+  the recorded demo or to a judge reading a screenshot.
+- **Fix (this branch):** sum the day's meals instead of averaging them, only when every meal in
+  that day has a known `kcalPerServing` (a partial sum would understate the day and reintroduce
+  the same confusion); label it "Калорійність на день (сума прийомів їжі на людину)" and append
+  the requested target from `effectiveRequest.caloriesPerPersonPerDay` when set, so the number on
+  screen is directly comparable to the number the user typed in.
+- **Retest:** `tsc --noEmit` clean; `next build` clean; e2e 40/40; Playwright UI 24/24 (desktop +
+  mobile), all against a locally rebuilt stack with this change.
+- **Not fixed (separate, pre-existing, documented limitation):** Sofiia's synthetic fallback meals
+  use fixed kcal-per-serving values and do not run the ILP optimization that would actually target
+  `caloriesPerPersonPerDay` (`services/api/src/smart_basket/meals/synthetic.py:611`, comment:
+  "synthetic fallback does not run ILP optimization"). That is why the daily total lands near
+  ~1,860 regardless of the requested figure rather than exactly matching it — expected for the
+  synthetic/demo data path, not something Polina's fix touches or should touch.
+
+## BUG-019 — No real `GEMINI_API_KEY` on the live deploy
+
+- **Found in:** run 13, same overnight pass. Sending a chat message ("бюджет 1500") on
+  `https://p01--web--2n7f5yvrbnqy.code.run` replied "Чат недоступний: на сервері не налаштований
+  ключ Gemini (GEMINI_API_KEY)." and did not change the plan.
+- **This is not a new defect.** `services/api/src/smart_basket/agent/llm.py:17-22` raises exactly
+  this when no key is present, and returning that message instead of crashing or silently no-oping
+  is the intended, already-tested fallback (`docs/qa/test-results.md` run 5: "without
+  `GEMINI_API_KEY` ... the reply names the missing key instead of a silent no-op";
+  `docs/qa/submission.md`: "not exercised with a real API key in QA"). CI and every local run to
+  date also has no key.
+- **Impact:** chat cannot be shown working live in the recorded demo or in front of a judge,
+  since no real Gemini key has ever been supplied to Polina to deploy.
+- **Fix:** needs Uliana (chat module owner) to supply a real `GEMINI_API_KEY` (or confirm none is
+  available for the submission). Once supplied, Polina adds it as a Northflank **runtime
+  variable** on the `api` service (a redeploy is enough for a runtime variable — no rebuild
+  needed, unlike `API_BASE_URL`) and retests `/api/chat` against the live URL.
+- **Until then:** do not claim live chat in the video; either skip that segment or record it
+  once against a key if one arrives before the deadline.
