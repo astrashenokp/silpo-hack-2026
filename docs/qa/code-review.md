@@ -48,6 +48,25 @@ risk.
 | CR-24 | Low | Hygiene | Stray script, an unpinned SDK, stale comments, global caches, dead branches | Uliana, Rina, various | Code |
 | CR-25 | Low | Deployment | Both images run as root; the web image ships development dependencies | Polina | Code |
 
+## Fixed after this review
+
+[PR #31](https://github.com/astrashenokp/silpo-hack-2026/pull/31) ("connect the whole UI to the
+Python API") closes the following, verified by the backend, e2e and UI suites on that branch:
+
+| ID | What changed |
+|---|---|
+| CR-05 | `POST /api/chat` exposes the agent, `replan_meal_plan` is wired into the planner, and the chat box sends messages to it |
+| CR-06 | The result screen renders the API plan through `MealPlan`, `ProposedBasket`, `BudgetSummary` and `RecurringSuggestions`; the invented cards, prices, images, name and store address are deleted |
+| CR-07 | The cart panel mirrors the plan version that was added instead of offering edits the API ignores |
+| CR-08 | A failed receipt now clears the preview, so the retry creates a new one |
+| CR-11 | One `cart_confirmable` rule in all four orchestrator branches; a replanned live plan keeps its live data mode |
+| CR-21 | The form shows the server's validation message |
+| CR-22 | The fixture paths, `lib/api/fixtures.ts` and the brand image are removed |
+| CR-20 (partly) | The interface maps API error codes to Ukrainian text; the API still answers several cart refusals with one `STALE_PLAN` code |
+| CR-04 (guarded) | Selecting a recurring purchase still breaks recalculation in the API, so the interface shows the suggestions and disables the choice with that reason |
+
+Everything else below is still open.
+
 ## High
 
 ### CR-01 — Failed Silpo cart reads return an empty cart
