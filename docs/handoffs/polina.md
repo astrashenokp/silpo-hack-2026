@@ -1,12 +1,14 @@
-# Handoff: Polina — final integration, QA and release (draft)
+# Handoff: Polina — final integration, QA and release
 
-Working document. Final values are filled in by September 13; the recording and
-submission status on September 14.
-
-- **Delivery date:** in progress. Early intake September 11; release target September 13;
-  recording and submission September 14.
+- **Deploy URL:** https://p01--web--2n7f5yvrbnqy.code.run — Northflank Cloud, Europe-West
+  (London). Set up by Polina, live-verified end to end September 12–13: `POST /api/plans` runs a
+  full plan to `completed` with real meals and products; e2e 40/40 and the full Playwright UI
+  suite 38/38 both pass against this exact public URL, not just locally.
+- **Frozen revision:** `main` @ `9dd5f2d`, deployed and confirmed running. CI green (5/5).
+- **Delivery date:** hosting decided and live September 12–13 (treated as the deadline day);
+  recording and submission still ahead.
 - **PR / commit:** intake (#18), QA toolkit (#19), round 2 (#23), whole-project code review
-  (#29), UI fully connected to the API (#27, #31), QA runs 5–11 (#28, #32, #33, #34; run 11 not yet in a PR).
+  (#29), UI fully connected to the API (#27, #31), QA runs 5–12 (#28, #32, #33, #34, #36).
 - **Receiving teammates:** the whole team.
 - **Completed so far:** runs 1–11 (setup, backend and frontend checks, HTTP scenarios, UI
   walk-through, load and security review, full toolkit sweeps, live-credential verification, a
@@ -60,8 +62,15 @@ expected 40 passed. Rebuild the frontend after pulling changes to `apps/web`.
   the plan again; reconnect FatSecret.
 - Every POST fails with 403 `ORIGIN_NOT_ALLOWED`: open the origin listed in
   `SMART_BASKET_CORS_ORIGINS` (locally `http://localhost:3000`).
-- API address changed: rebuild the frontend; `API_BASE_URL` is baked in at build time.
-- Hosting: see [deployment runbook](../../deploy/README.md).
+- API address changed: rebuild the frontend; `API_BASE_URL` is baked in at build time. On
+  Northflank this means triggering a real **Rebuild** of the `web` service, not just a redeploy —
+  a redeploy reuses the old image and keeps the stale address (hit this exact issue setting up
+  the live deploy; `getaddrinfo ENOTFOUND api` in the runtime logs is the symptom).
+- Hosting: see [deployment runbook](../../deploy/README.md). Live now on Northflank — see the
+  deploy URL above. If the API service restarts and its origin/callback env vars are ever lost,
+  every POST fails with 403 until `SMART_BASKET_CORS_ORIGINS`, `SMART_BASKET_FRONTEND_URL`,
+  `SILPO_OAUTH_CALLBACK_URL` and `FATSECRET_OAUTH_CALLBACK_URL` are restored to the `web`
+  service's exact public URL.
 
 ## Live versus mock, as verified by Polina
 
@@ -80,13 +89,13 @@ expected 40 passed. Rebuild the frontend after pulling changes to `apps/web`.
 - [x] Reproduce setup from the delivered revision — the documented install works since #20; reproduced again on every run through run 11, including inside the Docker rehearsal
 - [x] Connect frontend, HTTP API, agent and provider adapters — fully connected in #27/#31; the live Silpo *adapter* code itself is verified against real data (run 9), but not yet driven through our own app's sign-in button
 - [x] Start Next.js and Python; `/api` forwarding and background plan execution work locally
-- [ ] OAuth redirect/session behavior and CORS on the hosted origin — **no public host is chosen yet**, so a real hosted origin cannot be checked; the CORS/origin rule itself is now verified with real evidence in a real Docker deployment (run 11): a mismatched `PUBLIC_WEB_ORIGIN` reproduced a genuine 403 `ORIGIN_NOT_ALLOWED` on every POST, and correcting it fixed all 38 UI checks
-- [x] Acceptance scenarios run, bugs assigned and retested — runs 1–11 recorded; every author-owned bug found has a named owner in `docs/qa/bugs.md`
+- [x] OAuth redirect/session behavior and CORS on the hosted origin — **live on Northflank now**: `POST /api/plans` reaches `completed` on the real public URL with the correct origin, and e2e (40/40) plus the full UI suite (38/38) both pass against it, not only locally. Silpo/FatSecret OAuth callbacks are pointed at this origin in the API's env vars but not yet clicked through live on this exact deploy
+- [x] Acceptance scenarios run, bugs assigned and retested — runs 1–12 recorded; every author-owned bug found has a named owner in `docs/qa/bugs.md`
 - [x] A real MCP interaction verified — live Silpo OAuth, 40 tools and real profile/cart/product-search calls, runs 9–10; Edamam still credential-gated (Sofiia)
-- [ ] FatSecret export acceptance checks on the live account — consumer credentials verified live (run 8); the full user-authorized write still needs a human login
+- [ ] FatSecret export acceptance checks on the live account — consumer credentials verified live (run 8) and now configured on the hosted API too; the full user-authorized write still needs a human login
 - [x] No blocking defects in the demo flow — no blocker or High defect open since #31 in Polina-tested paths; CR-04 is the one open High finding, deliberately left to its owners
 - [ ] Demo account, cart context and a repeatable starting state — a live Silpo account is now available (used in runs 9–10) but its cart is a real teammate's cart, not a rehearsal-safe demo one; need a dedicated demo account or an agreed reset step before recording
-- [ ] Revision frozen on September 13 with deploy URL, launch and recovery steps — **not yet frozen**; no deploy URL exists because no host is chosen
+- [x] Revision frozen with deploy URL, launch and recovery steps — `main` @ `9dd5f2d`, live at the deploy URL above, launch/recovery documented
 - [x] Clearly labeled synthetic backup — `DemoBadge`, `X-Data-Mode`, the DEMO warning text; verified in every UI run
 - [x] Current submission rules: links, video access, duration and format — read September 11, [submission checklist](../qa/submission.md); re-check before the 14th, since the portal FAQ did not load on the 11th
 
@@ -101,9 +110,9 @@ demo mode with the DEMO label visible, never presented as a live run.
 
 | Item | Owner | Status |
 |---|---|---|
-| Hosting option | Polina, needs team sign-off | **Still pending** — see the three options in the deployment runbook. Needs a VM/PaaS account and budget owner this session has no access to; cannot be completed by Polina alone |
-| Deploy URL | Polina | — (blocked on the hosting decision above) |
-| Frozen revision | Polina | Target September 13; `main` is currently `3007f6b` with CI green (5/5) and every QA suite passing |
+| Hosting option | Polina | **Done** — Northflank Cloud, two services (`api`, `web`) built from `deploy/api.Dockerfile` and `deploy/web.Dockerfile` |
+| Deploy URL | Polina | https://p01--web--2n7f5yvrbnqy.code.run — live-verified (e2e 40/40, UI 38/38) |
+| Frozen revision | Polina | `main` @ `9dd5f2d`, deployed, CI green (5/5) |
 | Presenter | Team | — |
 | Submission-account owner | Team | — |
 | Portal requirements | Polina | Read on September 11: [submission checklist](../qa/submission.md); re-check on the 12th and 14th |

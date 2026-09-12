@@ -393,7 +393,41 @@ not just "builds in CI" — verified images, health checks, `/api` forwarding, t
 and the full UI suite are all now real, run evidence. What is still missing is a chosen public
 host: nothing in this repository can supply that on its own.
 
-Not covered (unchanged from run 9): a live run through our own product's UI/API with a connected
-Silpo session, the `silpo_add_or_update_cart_products` write path, a FatSecret three-legged
-write, a chat message with a real Gemini key, and CR-04.
+## Run 12 — first live public deployment, September 12–13, 2026
+
+- **Revision:** `main` @ `9dd5f2d`. The user set up Northflank Cloud (Europe-West) with two
+  services built from the existing `deploy/api.Dockerfile` and `deploy/web.Dockerfile`; Polina
+  guided the setup and independently verified the result once both services were configured.
+
+| Check | Result |
+|---|---|
+| `api` service health (`/api/health` direct) | ✅ `{"status":"ok","mode":"demo"}` |
+| `web` service health, through Next.js forwarding | ✅ same, once `API_BASE_URL` was correctly baked into the `web` build |
+| `POST /api/context` on the live origin | ✅ issues a session cookie |
+| `POST /api/plans` on the live origin, with the browser's real `Origin` header | ✅ `202 Accepted`, then polled to `completed` with a real 3-meal plan, matched products and `budgetStatus: within_budget` |
+| e2e suite against the live public URL | ✅ 40 of 40 |
+| Playwright UI suite against the live public URL, desktop + Pixel 7 | ✅ 38 of 38 |
+
+### One real defect hit and fixed during setup
+
+`API_BASE_URL` is a **build-time** argument (`deploy/web.Dockerfile`). The `web` service's first
+build ran before the argument was set, so the running container kept the Dockerfile's fallback
+default (`http://api:8000`, the docker-compose-only hostname) and every server-side `/api/*`
+request failed with `getaddrinfo ENOTFOUND api` in the runtime logs — the readiness probe never
+passed and Northflank served 503 to every visitor. A plain redeploy did not fix it, because
+redeploying reuses the existing image; only an explicit **Rebuild** re-executes the Dockerfile
+with the current build argument. Confirmed via runtime logs before and after: same error on the
+first two deploys, gone after the rebuild. Documented in `docs/handoffs/polina.md`'s recovery
+section for whoever restarts this deployment later.
+
+### Conclusion
+
+The hosting item on the release checklist is done, not just decided: the app is live, the exact
+production URL is proven to run the real pipeline end to end, and both automated suites pass
+against it. This closes the last checklist item that depended on infrastructure access outside
+this session's reach.
+
+Not covered: a signed-in Silpo or FatSecret OAuth round trip through this exact hosted origin
+(the API's callback URLs point here, but were not clicked through live on this deployment), the
+`silpo_add_or_update_cart_products` write path, a chat message with a real Gemini key, and CR-04.
 
