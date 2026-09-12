@@ -1,9 +1,16 @@
 # Deployment runbook (draft)
 
-Owner: Polina. Status on September 11: **draft**. No host is chosen yet, the images were
-not built on the intake machine (Docker daemon unavailable) and the API image cannot build
-until BUG-001 is fixed. CI builds both images on every pull request
-(`.github/workflows/ci.yml`, job "Deployment images build").
+Owner: Polina. Status on September 12: the local Docker rehearsal below now passes end to end —
+both images build, the API container reports healthy, `/api` forwarding works through the web
+container, the full e2e suite (40 of 40) and the full Playwright UI suite (38 of 38, desktop and
+Pixel 7) both pass against the running compose stack (BUG-001 was fixed in #20). One rehearsal
+note: `PUBLIC_WEB_ORIGIN` must match the exact origin the browser uses, port included, or every
+POST silently answers 403 `ORIGIN_NOT_ALLOWED` — hit this locally only because another,
+unrelated project already held port 3000 on the test machine; the documented default setup
+(`http://localhost:3000`) needs no such override. **No host is chosen yet**: that decision needs
+a VM/PaaS account and a budget owner, which is outside what this repository or Polina alone can
+supply. CI also builds both images on every pull request (`.github/workflows/ci.yml`, job
+"Deployment images build").
 
 ## Topology
 

@@ -365,6 +365,34 @@ BUG-008, BUG-009, BUG-010, BUG-013 and BUG-017 — all Low/Medium, none blocking
 purchases) remains the one unresolved High-severity code-review finding, deliberately left to
 Rina/Vika/Uliana per the user's "don't fix teammates' code" rule.
 
+## Run 11 — first real Docker Compose rehearsal, September 12, 2026
+
+- **Revision:** `main` @ `3007f6b`. `deploy/README.md` had said since September 11 that the
+  images were never actually built or run locally (Docker daemon unavailable at intake). Started
+  Docker Desktop and ran the deployment topology for real for the first time.
+
+| Check | Result |
+|---|---|
+| `docker compose -f deploy/docker-compose.yml up --build` | ✅ both images build; `smart-basket-api-1` reports `healthy`; `smart-basket-web-1` starts and depends on that health check, exactly as the compose file specifies |
+| `GET /api/health` through the web container's `/api` forwarding | ✅ `{"status":"ok","mode":"demo"}` |
+| e2e suite against the running containers | ✅ 40 of 40 |
+| Playwright UI suite against the running containers, desktop + Pixel 7 | ✅ 38 of 38, after one rehearsal-only fix below |
+| CORS/origin enforcement, verified with a real reproduction | ✅ confirmed both directions: with `PUBLIC_WEB_ORIGIN` left at its default (`http://localhost:3000`) while the browser used a different port, the API logged a real `403 Forbidden` on every `POST /api/plans` (`ORIGIN_NOT_ALLOWED`, matching `deploy/README.md` rule 2 exactly); setting `PUBLIC_WEB_ORIGIN` to match the browser's actual origin fixed every UI check with no other change |
+
+The port mismatch itself was local noise, not a product issue: an unrelated 8-week-old Docker
+container from a different project already held `0.0.0.0:3000` on the test machine, so this
+rehearsal published the web container on `3001` instead via a local, uncommitted compose
+override and set `PUBLIC_WEB_ORIGIN` to match. The documented default setup needs no such
+override. Every container was torn down after the check (`docker compose down`); nothing was
+left running.
+
+### Conclusion
+
+The deployment topology in `deploy/docker-compose.yml` and the two Dockerfiles genuinely work,
+not just "builds in CI" — verified images, health checks, `/api` forwarding, the full e2e suite
+and the full UI suite are all now real, run evidence. What is still missing is a chosen public
+host: nothing in this repository can supply that on its own.
+
 Not covered (unchanged from run 9): a live run through our own product's UI/API with a connected
 Silpo session, the `silpo_add_or_update_cart_products` write path, a FatSecret three-legged
 write, a chat message with a real Gemini key, and CR-04.
