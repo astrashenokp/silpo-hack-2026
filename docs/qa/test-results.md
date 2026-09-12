@@ -331,9 +331,41 @@ correctness defects in the API; the contract is just looser than the validation 
   it cannot run from a non-interactive tool call. The MCP Inspector's own web UI OAuth flow is the
   practical fallback for a non-interactive session, at the cost of a second sign-in.
 
-Not covered: a live run through our own product's UI/API with a connected Silpo session (only
-the raw MCP tools were exercised here, not `/api/context` → planner → cart end to end), the
-`silpo_add_or_update_cart_products` write path (not attempted — would modify a real cart), a
-FatSecret three-legged write, a chat message with a real Gemini key, and CR-04 (recurring
-purchases still cannot be matched to products by the API — unchanged from run 6).
+## Run 10 — consolidated final sweep, every tool in one pass, September 12, 2026
+
+- **Revision:** `main` @ `3ada901`, after PRs #26/#30 (live Silpo matching/cart), #27 and #31 (UI
+  connected to the API) and #28/#32/#33 (QA docs) were all merged. Every one of the 8 QA tools
+  the user asked about (Playwright, axe-core, Lighthouse, Schemathesis, MCP Inspector, the Python
+  MCP SDK, Playwright MCP, Chrome DevTools MCP) run once more, back to back, on the exact revision
+  the team will submit. `github-mcp-server` remains intentionally excluded (the user's decision on
+  September 11).
+
+| Tool | Result |
+|---|---|
+| Backend tests (pytest) | ✅ 203 passed |
+| Generated contracts (`export_contracts.py --check`) | ✅ 22 files current |
+| e2e, direct to the API | ✅ 40 of 40 |
+| e2e, through Next.js | ✅ 40 of 40 |
+| Schemathesis 4.26.1, 50 examples/operation, `--continue-on-failure`, 1358 cases | ❌ the same 5 unique failures as run 7, third consecutive identical result — BUG-017 and the BUG-010 extension are stable, not flaky |
+| Playwright UI, desktop + Pixel 7 | ✅ 38 of 38 |
+| axe-core (WCAG 2.1 AA) | ✅ clean beyond the known BUG-009 |
+| Lighthouse desktop | Performance 100, Accessibility 95, Best Practices 100, SEO 100, Agentic Browsing 100 |
+| Lighthouse mobile | Performance 95, Accessibility 95, Best Practices 100, SEO 100, Agentic Browsing 100 (performance varies ±1 run to run, normal for Lighthouse) |
+| Local Playwright MCP (`tools:playwright`) | ✅ 24 tools |
+| Local Chrome DevTools MCP (`tools:chrome-devtools`) | ✅ 29 tools |
+| Silpo MCP, still authenticated from run 9 | ✅ `claude mcp get silpo` → Connected; Inspector CLI listed 40 tools again and a live `silpo_get_my_food_restrictions` call succeeded without a new sign-in — the OS-keychain-stored OAuth token survived across processes and time |
+| Frontend lint | ✅ 0 errors, 0 warnings |
+| Frontend build | ✅ |
+
+### Conclusion
+
+All 8 tools the user asked to use are genuinely wired into this repository and were exercised
+together in one pass, not just installed. The only defects any of them still report are BUG-007,
+BUG-008, BUG-009, BUG-010, BUG-013 and BUG-017 — all Low/Medium, none blocking. CR-04 (recurring
+purchases) remains the one unresolved High-severity code-review finding, deliberately left to
+Rina/Vika/Uliana per the user's "don't fix teammates' code" rule.
+
+Not covered (unchanged from run 9): a live run through our own product's UI/API with a connected
+Silpo session, the `silpo_add_or_update_cart_products` write path, a FatSecret three-legged
+write, a chat message with a real Gemini key, and CR-04.
 
