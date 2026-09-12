@@ -15,6 +15,7 @@ from smart_basket.core import ApiError
 from smart_basket.demo import DemoCatalog
 from smart_basket.agent import UlianaPlanner
 from smart_basket.fatsecret.export import FatSecretExportService
+from smart_basket.meals import replan_meal_plan
 from smart_basket.fatsecret.auth import FatSecretOAuthManager
 from smart_basket.routes.api import router
 from smart_basket.routes.auth import router as silpo_auth_router
@@ -32,7 +33,12 @@ def create_app(*, planner=None, catalog=None, silpo_oauth=None, fatsecret_oauth=
     app.state.sessions = {}
     app.state.sessions_lock = RLock()
     app.state.catalog = catalog if catalog is not None else SessionCatalog(DemoCatalog())
-    app.state.planner = planner if planner is not None else UlianaPlanner(app.state.catalog)
+    # Sofiia's meal replanner is what lets chat intents rebuild a plan instead of
+    # answering "meal replanning required".
+    app.state.planner = (
+        planner if planner is not None
+        else UlianaPlanner(app.state.catalog, meal_replanner=replan_meal_plan)
+    )
     app.state.cart_service = DemoCartService(app.state.catalog)
     app.state.live_cart_service = LiveCartService()
     app.state.silpo_oauth = silpo_oauth if silpo_oauth is not None else SilpoOAuthManager()

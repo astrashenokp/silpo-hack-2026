@@ -170,6 +170,9 @@ class LiveCartService:
             connected = owner.silpo_connected
             cart_id = owner.silpo_cart_id
             branch_id = owner.silpo_branch_id
+            delivery_type = owner.silpo_delivery_type
+            timeslot = owner.silpo_timeslot
+            schemas = dict(owner.silpo_tool_schemas)
             metadata = dict(owner.silpo_product_write_metadata)
         if not connected:
             raise ApiError("AUTH_REQUIRED", "Connect the Silpo account before cart preview.", 401)
@@ -197,7 +200,14 @@ class LiveCartService:
                             f"Provider write coordinates expired for {selected.name}; search again.",
                         )
                     raw_details = await get_product_details(
-                        mcp_session, selected.product_id, branch_id
+                        mcp_session,
+                        selected.product_id,
+                        branch_id,
+                        slug=coordinates.get("slug"),
+                        cart_id=cart_id,
+                        delivery_type=delivery_type,
+                        timeslot=timeslot,
+                        input_schema=schemas.get("silpo_get_product_details"),
                     )
                     details = normalize_product_search(raw_details, selected.name).products
                     current = next(

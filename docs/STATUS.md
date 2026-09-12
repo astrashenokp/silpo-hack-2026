@@ -7,8 +7,8 @@ Initial statuses mean “not reported”, not that nobody has started. Each team
 | Katia | Not reported | — | Draft Figma 6th, final 7th | — |
 | Ksiusha | Not reported | — | Input flow on mocks 7th | — |
 | Alina | Not reported | — | Result flow on mocks 7th | — |
-| Arina | Silpo OAuth/read path verified; September 11 | [Handoff](handoffs/arina.md), local implementation | Support the final authorized real-cart acceptance check | OAuth, tools/list, context, product search and the provider write boundary are connected. |
-| Rina | Live Silpo catalog/cart flow implemented; September 11 | [Handoff](handoffs/rina.md), local implementation | Retry the authorized live cart check when provider inventory search recovers | Preview, revalidation, schema-driven write, idempotency and read-back are automated; live search currently returns empty arrays, so no safe confirmation is available. |
+| Arina | Silpo OAuth/read path verified; September 12 | [Handoff](handoffs/arina.md), local implementation | Support Polina's final integration QA | OAuth, tools/list, context, product search and provider write coordinates were verified; Rina completed the authorized cart acceptance check. |
+| Rina | Live Silpo catalog/cart flow verified; September 12 | [Handoff](handoffs/rina.md), local implementation | Hand the verified flow to Polina for final integration QA | Live search, package normalization, preview, revalidation, schema-driven write, idempotency and read-back are verified; an authorized test added three reviewed products while preserving existing cart contents. |
 | Uliana | Not reported | — | Mock agent pipeline 7th | — |
 | Sofiia | Ready to connect on synthetic meals; September 10 | [Handoff](handoffs/sofiia.md), local implementation | Live Edamam account/field verification next | Needs Edamam credentials/account limits and export permissions; independent synthetic module is complete and tested. |
 | Vika | Not reported | — | Algorithm fixtures 7th | — |

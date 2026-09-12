@@ -1,6 +1,7 @@
 import type {
   CartPreview,
   CartReceipt,
+  ChatReply,
   ErrorBody,
   ExportAccepted,
   FatSecretExport,
@@ -12,6 +13,7 @@ import type {
   RecalculateRequest,
   RunSnapshot,
   SilpoStatus,
+  SupportedLabels,
   UserContext,
 } from "./types";
 
@@ -62,6 +64,11 @@ export function apiHealth(): Promise<Health> {
   return request<Health>("/health");
 }
 
+// The labels the planner can actually enforce; the form offers exactly these.
+export function apiFilters(): Promise<SupportedLabels> {
+  return request<SupportedLabels>("/filters");
+}
+
 export function apiContext(): Promise<UserContext> {
   return request<UserContext>("/context");
 }
@@ -83,6 +90,23 @@ export async function apiRecalculate(
 ): Promise<RunSnapshot> {
   return request<RunSnapshot>(`/plans/${encodeURIComponent(runId)}/recalculate`, {
     body,
+  });
+}
+
+// One natural-language change to the current plan. The API answers with a new plan version
+// (type "plan") or with a reply explaining why nothing changed.
+export function apiChat(
+  message: string,
+  plan?: { runId: string; version: number } | null,
+  selectedRecurringIds: string[] = [],
+): Promise<ChatReply> {
+  return request<ChatReply>("/chat", {
+    body: {
+      message,
+      runId: plan?.runId ?? null,
+      version: plan?.version ?? null,
+      selectedRecurringIds,
+    },
   });
 }
 

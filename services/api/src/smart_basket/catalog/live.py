@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
@@ -13,6 +14,7 @@ from smart_basket.mcp.adapters import (
     get_product_details as get_silpo_product_details,
     get_purchase_history,
     get_user_context,
+    product_content_amount,
     product_write_metadata,
     search_products,
 )
@@ -21,6 +23,7 @@ from smart_basket.schemas import ProductCandidate
 
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 def _flatten_strings(value: Any) -> list[str]:
@@ -47,6 +50,70 @@ def _named_values(payload: Any, names: set[str]) -> list[Any]:
     return values
 
 
+def _attribute_values(payload: Any, names: set[str]) -> list[Any]:
+    """Read values from provider attribute records such as {name: Склад, value: ...}."""
+    values: list[Any] = []
+    if isinstance(payload, dict):
+        label = next((payload.get(key) for key in (
+            "name", "title", "label", "key", "code",
+            "propertyName", "attributeName", "displayName",
+        ) if payload.get(key) is not None), None)
+        normalized = (
+            str(label).replace("_", "").replace("-", "").replace(" ", "").casefold()
+            if label is not None else ""
+        )
+        if normalized in names:
+            value = next((payload.get(key) for key in (
+                "value", "values", "text", "content", "description",
+                "propertyValue", "attributeValue",
+            ) if payload.get(key) is not None), None)
+            if value is not None:
+                values.append(value)
+        for child in payload.values():
+            values.extend(_attribute_values(child, names))
+    elif isinstance(payload, list):
+        for value in payload:
+            values.extend(_attribute_values(value, names))
+    return values
+
+
+def _field_paths(payload: Any, prefix: str = "", depth: int = 0) -> list[str]:
+    """Return bounded provider field paths without logging any field values."""
+    if depth > 5:
+        return []
+    paths: list[str] = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            paths.append(path)
+            paths.extend(_field_paths(value, path, depth + 1))
+    elif isinstance(payload, list) and payload:
+        path = f"{prefix}[]" if prefix else "[]"
+        paths.append(path)
+        paths.extend(_field_paths(payload[0], path, depth + 1))
+    return list(dict.fromkeys(paths))[:80]
+
+
+def _package_signals(payload: Any) -> dict[str, Any]:
+    """Extract non-sensitive catalog values relevant to unit conversion."""
+    product = payload.get("product") if isinstance(payload, dict) else None
+    if not isinstance(product, dict):
+        return {}
+
+    signals = {
+        key: product.get(key)
+        for key in ("weighted", "step", "ratio", "displayRatio")
+        if product.get(key) is not None
+    }
+    attributes = product.get("attributes")
+    if isinstance(attributes, dict):
+        for key, value in attributes.items():
+            normalized = str(key).replace(" ", "").casefold()
+            if normalized in {"розмір/об'єм", "розмір/об’єм", "вага", "об'єм", "об’єм"}:
+                signals[f"attributes.{key}"] = value
+    return signals
+
+
 def restriction_check_from_details(payload: Any, restrictions: list[str]) -> str:
     """Verify restrictions from explicit provider labels or a non-empty composition."""
     if not restrictions:
@@ -61,10 +128,16 @@ def restriction_check_from_details(payload: Any, restrictions: list[str]) -> str
         for label in _flatten_strings(value)
         if label.strip()
     }
+    composition_names = {
+        "ingredients", "ingredientlist", "composition", "components",
+        "productcomposition", "compositiontext", "ingredientstext",
+        "ingredientsdescription", "склад", "складпродукту",
+    }
     composition_values = _named_values(
         payload,
-        {"ingredients", "ingredientlist", "composition", "components", "склад"},
+        composition_names,
     )
+    composition_values.extend(_attribute_values(payload, composition_names))
     composition = " ".join(
         _flatten_strings(composition_values)
     ).casefold()
@@ -110,6 +183,7 @@ class SessionCatalog:
         self.demo = demo or DemoCatalog()
         self._candidates: dict[tuple[str, str], ProductCandidate] = {}
         self._details: dict[tuple[str, str], Any] = {}
+        self._reported_unknown_details: set[tuple[str, str]] = set()
 
     QUERY_ALIASES = {
         "oats": ("вівсяні пластівці", "вівсянка", "oats"),
@@ -169,11 +243,41 @@ class SessionCatalog:
                 for candidate in result.products[:2]:
                     found.setdefault(candidate.id, candidate)
             reviewed = list(found.values())[:6]
+            enriched: list[ProductCandidate] = []
             for candidate in reviewed:
+                with owner.lock:
+                    coordinates = dict(
+                        owner.silpo_product_write_metadata.get(candidate.id, {})
+                    )
                 details = await get_silpo_product_details(
-                    mcp_session, candidate.id, owner.silpo_branch_id
+                    mcp_session,
+                    candidate.id,
+                    owner.silpo_branch_id,
+                    slug=coordinates.get("slug"),
+                    cart_id=owner.silpo_cart_id,
+                    delivery_type=owner.silpo_delivery_type,
+                    timeslot=owner.silpo_timeslot,
+                    input_schema=owner.silpo_tool_schemas.get(
+                        "silpo_get_product_details"
+                    ),
                 )
                 self._details[(owner.id, candidate.id)] = details
+                content_quantity, content_unit = product_content_amount(
+                    details, candidate.id
+                )
+                if content_quantity is not None:
+                    candidate = candidate.model_copy(update={
+                        "content_quantity": content_quantity,
+                        "content_unit": content_unit,
+                    })
+                else:
+                    logger.warning(
+                        "Silpo product %s has no normalized package contents; "
+                        "package signals: %s",
+                        candidate.id,
+                        _package_signals(details) or "none",
+                    )
+                enriched.append(candidate)
                 metadata = product_write_metadata(details)
                 if metadata:
                     with owner.lock:
@@ -184,8 +288,8 @@ class SessionCatalog:
                                 **coordinates,
                             }
         candidates = []
-        for candidate in reviewed:
-            normalized = candidate.model_copy(update={"restriction_check": "pass"})
+        for candidate in enriched:
+            normalized = candidate.model_copy(update={"restriction_check": "unknown"})
             self._candidates[(owner.id, normalized.id)] = normalized.model_copy(deep=True)
             candidates.append(normalized)
         return candidates
@@ -208,11 +312,23 @@ class SessionCatalog:
             return "pass"
         if product.source == "synthetic":
             return self.demo.check_restrictions(product, restrictions)
-        details = next(
+        owner_id, details = next(
             (
-                payload for (owner_id, product_id), payload in self._details.items()
+                (owner_id, payload)
+                for (owner_id, product_id), payload in self._details.items()
                 if product_id == product.id
             ),
-            None,
+            ("unknown", None),
         )
-        return restriction_check_from_details(details, restrictions)
+        result = restriction_check_from_details(details, restrictions)
+        detail_key = (owner_id, product.id)
+        if result == "unknown" and detail_key not in self._reported_unknown_details:
+            self._reported_unknown_details.add(detail_key)
+            fields = ", ".join(_field_paths(details)) or "none"
+            logger.warning(
+                "Silpo product details for %s contain no recognized dietary evidence; "
+                "available field paths: %s",
+                product.id,
+                fields,
+            )
+        return result

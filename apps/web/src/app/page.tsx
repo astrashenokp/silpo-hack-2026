@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PlannerForm from "@/features/planner-input/PlannerForm";
 import type { RunSnapshot as PlannerRunSnapshot } from "@/lib/api/planner";
 import {
   PlannerResults,
+  type ConversationItem,
   type SavedMeal,
-  type SourceMode,
 } from "@/features/planner-results/PlannerResults";
 import { CartPanel, type CartPanelItem } from "@/features/planner-results/components/CartPanel";
 import {
@@ -20,9 +20,10 @@ import {
   FatSecretPreviewModal,
 } from "@/features/planner-results/components/FatSecretFlow";
 import {
+  ApiError,
+  apiChat,
   apiConfirmCart,
   apiConfirmFatSecret,
-  apiCreatePlan,
   apiFatSecretStatus,
   apiPreviewCart,
   apiPreviewFatSecret,
@@ -32,121 +33,93 @@ import {
   pollExport,
   pollRun,
   startProviderAuth,
-  type DemoScenario,
 } from "@/lib/api/client";
-import {
-  derivedEmptyHistoryResult,
-  derivedIncompleteResult,
-  derivedOverBudgetResult,
-  derivedRunningSnapshot,
-  derivedWithRecurringResult,
-  fixtureCartPartial,
-  fixtureCartPreview,
-  fixtureFatSecretPreview,
-  fixturePlanningRequest,
-  fixturePlanningResult,
-  fixtureRunFailed,
-} from "@/lib/api/fixtures";
+import { formatUah } from "@/lib/format";
 import type {
   CartPreview,
   CartReceipt,
-  DataMode,
+  ChatReply,
   FatSecretExport,
   FatSecretPreview,
   PlanningResult,
   ProductSelection,
-  RunSnapshot,
 } from "@/lib/api/types";
-
-type DemoScenarioKey =
-  | "ready"
-  | "running"
-  | "failed"
-  | "empty-history"
-  | "over-budget"
-  | "incomplete"
-  | "recurring";
-
-function buildDemo(key: DemoScenarioKey): {
-  snapshot: RunSnapshot;
-  result: PlanningResult | null;
-} {
-  const base = fixturePlanningResult;
-  switch (key) {
-    case "running":
-      return { snapshot: derivedRunningSnapshot(), result: null };
-    case "failed":
-      return { snapshot: fixtureRunFailed, result: null };
-    case "empty-history":
-      return {
-        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
-        result: derivedEmptyHistoryResult(base),
-      };
-    case "over-budget":
-      return {
-        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
-        result: derivedOverBudgetResult(base),
-      };
-    case "incomplete":
-      return {
-        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
-        result: derivedIncompleteResult(base),
-      };
-    case "recurring":
-      return {
-        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
-        result: derivedWithRecurringResult(base),
-      };
-    default:
-      return {
-        snapshot: { ...derivedRunningSnapshot(), status: "completed" as const, stage: "ready" as const },
-        result: base,
-      };
-  }
-}
-
-interface View {
-  snapshot: RunSnapshot | null;
-  result: PlanningResult | null;
-}
 
 interface ChatEntry {
   id: number;
   title: string;
-  mode: SourceMode;
-  scenario: DemoScenarioKey;
-  view: View | null;
-  sentMessages: string[];
+  items: ConversationItem[];
+  // Latest plan version of this chat; the cart and chat requests refer to it.
+  plan: PlanningResult | null;
   screen: "home" | "planner";
 }
 
-function chatViewKey(chat: ChatEntry): string {
-  const runId = chat.view?.result?.runId ?? chat.view?.snapshot?.runId ?? "empty";
-  return `${chat.mode}:${runId}:${chat.view?.result?.version ?? 0}`;
+// The API answers in English with a machine-readable code; the interface speaks Ukrainian.
+const ERROR_TEXT: Record<string, string> = {
+  AUTH_REQUIRED: "Сесію втрачено. Перезавантажте сторінку або підключіть акаунт Сільпо ще раз.",
+  STALE_PLAN: "Пропозиція вже неактуальна: змінилися ціни, склад кошика або план. Перерахуйте кошик.",
+  DEMO_ONLY: "Цей план демонстраційний, тому у справжній кошик його додати не можна.",
+  CART_CONTEXT_REQUIRED: "У вашому акаунті Сільпо немає активного кошика з магазином і способом отримання.",
+  IDEMPOTENCY_CONFLICT: "Цей ключ підтвердження вже використано для іншого перегляду.",
+  CONFIRMATION_IN_PROGRESS: "Це підтвердження вже виконується. Зачекайте кілька секунд.",
+  RATE_LIMITED: "Сільпо тимчасово обмежив кількість запитів. Спробуйте за хвилину.",
+  UPSTREAM_UNAVAILABLE: "Сервіс Сільпо тимчасово недоступний.",
+  VALIDATION_ERROR: "Сервер відхилив запит: перевірте параметри плану.",
+  UNRESOLVED_FOODS: "Не всі інгредієнти зіставлені з продуктами FatSecret.",
+  STALE_ACCOUNT: "Підключення FatSecret змінилося. Створіть новий перегляд.",
+  EXPORT_PERMISSION_REQUIRED: "Збереження страв Edamam у FatSecret вимкнене до підтвердження прав на дані.",
+  NOT_FOUND: "Ці дані більше недоступні в поточній сесії.",
+  PLANNER_FAILED: "Планувальник не зміг скласти план. Спробуйте ще раз.",
+  CHAT_FAILED: "Не вдалося обробити повідомлення. Спробуйте ще раз.",
+};
+
+function describeError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) return ERROR_TEXT[error.code] ?? error.message;
+  return error instanceof Error ? error.message : fallback;
+}
+
+function chatReplyText(reply: ChatReply, plan: PlanningResult | null): string {
+  switch (reply.type) {
+    case "explanation":
+      return plan
+        ? `Кошик коштує ${formatUah(plan.basketTotalMinor)} з ліміту ${formatUah(plan.budgetMinor)}. ` +
+            (plan.budgetRemainingMinor < 0
+              ? `Перевищення: ${formatUah(Math.abs(plan.budgetRemainingMinor))}.`
+              : `Залишок: ${formatUah(plan.budgetRemainingMinor)}.`)
+        : "Спочатку створіть план, і я поясню його склад.";
+    case "clarification":
+      return "Уточніть запит: спершу створіть план або вкажіть суму бюджету в гривнях.";
+    case "meal_replan_required":
+      return "Для цієї зміни потрібно перескласти меню. Спробуйте ще раз або змініть параметри у формі.";
+    case "no_cost_improvement":
+      return "Дешевшого варіанта з цими обмеженнями знайти не вдалося.";
+    case "upgrade_not_feasible":
+      return "Покращений план не вміщається у ваш бюджет.";
+    case "invalid_replan":
+      return "Не вдалося замінити цей інгредієнт у меню.";
+    case "blocked":
+      return "Ця дія зараз недоступна для поточного плану.";
+    case "chat_error":
+      return "Чат недоступний: на сервері не налаштований ключ Gemini (GEMINI_API_KEY).";
+    default:
+      return "Я не зрозуміла запит. Спробуйте: «зроби дешевше», «заміни рис», «бюджет 1500».";
+  }
 }
 
 export default function Home() {
   const [chats, setChats] = useState<ChatEntry[]>(() => [
-    {
-      id: 1,
-      title: "Привіт",
-      mode: "live",
-      scenario: "ready",
-      view: null,
-      sentMessages: [],
-      screen: "home",
-    },
+    { id: 1, title: "Новий чат", items: [], plan: null, screen: "home" },
   ]);
   const [activeChatId, setActiveChatId] = useState(1);
   const [nextChatId, setNextChatId] = useState(2);
-  const [apiScenario] = useState<DemoScenario>("success");
   const [chatText, setChatText] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
   const [enteredApp, setEnteredApp] = useState(false);
   const [accountConnected, setAccountConnected] = useState(false);
   const [fatSecretConnected, setFatSecretConnected] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
-  const [cartProductIds, setCartProductIds] = useState<string[] | null>(null);
-  const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
+  // The cart mirrors one plan version: the API previews and confirms exactly its products.
+  const [cartPlan, setCartPlan] = useState<PlanningResult | null>(null);
   const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
   const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
   const [cartBusy, setCartBusy] = useState(false);
@@ -159,9 +132,8 @@ export default function Home() {
   const [fsKey, setFsKey] = useState<string | null>(null);
   const [fsMessage, setFsMessage] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  // Plan version whose products were last added to the shared cart; the API previews that plan.
-  const [cartPlan, setCartPlan] = useState<PlanningResult | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const itemSequence = useRef(0);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0 });
@@ -188,74 +160,53 @@ export default function Home() {
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
 
-  const productsById = useMemo(() => {
-    const map = new Map<string, { product: ProductSelection; dataMode: DataMode }>();
-    for (const chat of chats) {
-      const result = chat.view?.result;
-      if (!result) continue;
-      for (const product of result.selectedProducts) {
-        if (!map.has(product.productId)) {
-          map.set(product.productId, { product, dataMode: result.dataMode });
-        }
-      }
-    }
-    return map;
-  }, [chats]);
-
-  const cartItems: CartPanelItem[] = (cartProductIds ?? [])
-    .map((productId) => productsById.get(productId))
-    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-    .map(({ product }) => ({
-      productId: product.productId,
-      name: product.name,
-      quantity: product.quantity,
-      cartQuantity: cartQuantities[product.productId] ?? product.quantity,
-      sellingUnit: product.sellingUnit,
-      unitPriceMinor: product.unitPriceMinor,
-      lineTotalMinor: product.lineTotalMinor,
-      source: product.source,
-      added: true,
-    }));
-  const visibleCartCount = cartItems.reduce((sum, item) => sum + item.cartQuantity, 0);
-  const visibleCartTotalMinor = cartItems.reduce(
-    (sum, item) => sum + item.unitPriceMinor * item.cartQuantity,
-    0,
-  );
-
-  const sourceChat =
-    chats.find((chat) =>
-      (chat.view?.result?.selectedProducts ?? []).some((product) =>
-        (cartProductIds ?? []).includes(product.productId),
-      ),
-    ) ?? activeChat;
-  const sourceResult = sourceChat?.view?.result ?? null;
+  const cartItems: CartPanelItem[] = (cartPlan?.selectedProducts ?? []).map((product) => ({
+    productId: product.productId,
+    name: product.name,
+    quantity: product.quantity,
+    sellingUnit: product.sellingUnit,
+    unitPriceMinor: product.unitPriceMinor,
+    lineTotalMinor: product.lineTotalMinor,
+    source: product.source,
+  }));
 
   const patchChat = useCallback((id: number, patch: Partial<ChatEntry>) => {
+    setChats((current) => current.map((chat) => (chat.id === id ? { ...chat, ...patch } : chat)));
+  }, []);
+
+  const appendItems = useCallback((id: number, items: ConversationItem[]) => {
     setChats((current) =>
-      current.map((chat) => (chat.id === id ? { ...chat, ...patch } : chat)),
+      current.map((chat) => (chat.id === id ? { ...chat, items: [...chat.items, ...items] } : chat)),
     );
   }, []);
 
-  const patchActiveChat = useCallback(
-    (patch: Partial<ChatEntry>) => {
-      patchChat(activeChatId, patch);
-    },
-    [activeChatId, patchChat],
-  );
+  const updateItem = useCallback((id: number, itemId: string, patch: Partial<ConversationItem>) => {
+    setChats((current) =>
+      current.map((chat) =>
+        chat.id === id
+          ? {
+              ...chat,
+              items: chat.items.map((item) =>
+                item.id === itemId ? ({ ...item, ...patch } as ConversationItem) : item,
+              ),
+            }
+          : chat,
+      ),
+    );
+  }, []);
+
+  function nextItemId(prefix: string) {
+    itemSequence.current += 1;
+    return `${prefix}-${itemSequence.current}`;
+  }
 
   function newChat() {
     const id = nextChatId;
     setNextChatId(id + 1);
-    const entry: ChatEntry = {
-      id,
-      title: id === 1 ? "Привіт" : `Новий чат ${id}`,
-      mode: "live",
-      scenario: "ready",
-      view: null,
-      sentMessages: [],
-      screen: "home",
-    };
-    setChats((current) => [...current, entry]);
+    setChats((current) => [
+      ...current,
+      { id, title: `Новий чат ${id}`, items: [], plan: null, screen: "home" },
+    ]);
     setActiveChatId(id);
     setActiveTab("chats");
     setChatText("");
@@ -263,11 +214,10 @@ export default function Home() {
 
   function startPlanning() {
     const initialMessage = chatText.trim() || "Почати планування";
-    patchActiveChat({
+    patchChat(activeChatId, {
       screen: "planner",
-      view: null,
-      mode: "live",
-      sentMessages: [initialMessage],
+      items: [{ id: nextItemId("user"), kind: "user", text: initialMessage }],
+      plan: null,
       title: initialMessage,
     });
     setChatText("");
@@ -284,16 +234,7 @@ export default function Home() {
     if (remaining.length === 0) {
       const fallbackId = nextChatId;
       setNextChatId(fallbackId + 1);
-      const fallback: ChatEntry = {
-        id: fallbackId,
-        title: `Новий чат ${fallbackId}`,
-        mode: "live",
-        scenario: "ready",
-        view: null,
-        sentMessages: [],
-        screen: "home",
-      };
-      setChats([fallback]);
+      setChats([{ id: fallbackId, title: "Новий чат", items: [], plan: null, screen: "home" }]);
       setActiveChatId(fallbackId);
       setActiveTab("chats");
       setChatText("");
@@ -306,168 +247,62 @@ export default function Home() {
     }
   }
 
-  function selectDemo(key: DemoScenarioKey) {
-    patchActiveChat({ scenario: key, mode: "fixtures", view: buildDemo(key), sentMessages: [] });
-  }
-
-  async function openFatSecretPreview() {
-    if (savedMeals.length === 0) return;
-    setFsExport(null);
-    setFsMessage(null);
-    const planned = savedMeals.filter((meal) => meal.runId && meal.version);
-    if (planned.length === 0) {
-      setFsKey(null);
-      setFsPreview(buildFatSecretPreview(savedMeals));
-      return;
-    }
-    // One preview covers one plan version; meals saved from other plans wait for a later export.
-    const { runId, version } = planned[0];
-    const mealIds = planned
-      .filter((meal) => meal.runId === runId && meal.version === version)
-      .map((meal) => meal.id);
-    if (mealIds.length < savedMeals.length) {
-      setFsMessage("Страви з інших планів збережіть окремим експортом.");
-    }
-    setFsBusy(true);
-    try {
-      const preview = await apiPreviewFatSecret(runId as string, version as number, mealIds);
-      setFsKey(newIdempotencyKey());
-      setFsPreview(preview);
-    } catch (error) {
-      setFsMessage(error instanceof Error ? error.message : "Не вдалося підготувати збереження у FatSecret.");
-    } finally {
-      setFsBusy(false);
-    }
-  }
-
-  async function confirmFatSecret() {
-    if (!fsPreview) return;
-    setFsBusy(true);
-    try {
-      if (!fsKey) {
-        await new Promise((resolve) => window.setTimeout(resolve, 700));
-        setFsExport(buildFatSecretExport(savedMeals));
-      } else {
-        // Retrying with the same key reuses the operation, so a meal is never saved twice.
-        const accepted = await apiConfirmFatSecret(fsPreview.previewId, fsKey);
-        setFsExport(await pollExport(accepted.exportId, 1000));
-      }
-    } catch (error) {
-      setFsMessage(error instanceof Error ? error.message : "Не вдалося зберегти страви у FatSecret.");
-    } finally {
-      setFsPreview(null);
-      setFsBusy(false);
-    }
-  }
-
-  function sendChat() {
-    const text = chatText.trim();
-    if (activeChat && text) {
-      patchActiveChat({ sentMessages: [...activeChat.sentMessages, text] });
-    }
-    setChatText("");
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-    });
-  }
-
   function handlePlanReady(snapshot: PlannerRunSnapshot) {
-    patchActiveChat({
-      view: {
-        snapshot: snapshot as unknown as RunSnapshot,
-        result: (snapshot.result as unknown as PlanningResult | null) ?? null,
-      },
-    });
-  }
-
-  function incrementCartItem(productId: string) {
-    const base = productsById.get(productId)?.product.quantity ?? 1;
-    setCartQuantities((current) => ({
-      ...current,
-      [productId]: (current[productId] ?? base) + 1,
-    }));
-  }
-
-  function decrementCartItem(productId: string) {
-    const base = productsById.get(productId)?.product.quantity ?? 1;
-    setCartQuantities((current) => ({
-      ...current,
-      [productId]: Math.max(1, (current[productId] ?? base) - 1),
-    }));
-  }
-
-  function removeCartItem(productId: string) {
-    setCartQuantities((current) => {
-      const next = { ...current };
-      delete next[productId];
-      return next;
-    });
-    setCartProductIds((current) => (current ?? []).filter((id) => id !== productId));
-  }
-
-  function addPlansToCart(products: ProductSelection[], plan: PlanningResult) {
-    setCartPlan(plan);
-    setCartProductIds((current) => {
-      const merged = current ? [...current] : [];
-      for (const product of products) {
-        if (!merged.includes(product.productId)) merged.push(product.productId);
-      }
-      return merged;
-    });
-    setCartQuantities((current) => {
-      const next = { ...current };
-      for (const product of products) {
-        next[product.productId] = (next[product.productId] ?? 0) + product.quantity;
-      }
-      return next;
-    });
-  }
-
-  async function handleAddAll() {
-    const plan = cartPlan ?? sourceResult;
+    const plan = snapshot.result as unknown as PlanningResult | null;
     if (!plan) return;
+    const chat = chats.find((entry) => entry.id === activeChatId);
+    const request = chat?.items.find((item) => item.kind === "user");
+    appendItems(activeChatId, [
+      {
+        id: nextItemId("plan"),
+        kind: "plan",
+        request: request?.kind === "user" ? request.text : "Скласти меню та кошик",
+        status: "ready",
+        result: plan,
+        added: false,
+      },
+    ]);
+    patchChat(activeChatId, { plan });
+  }
+
+  async function requestPreview(plan: PlanningResult) {
     setCartBusy(true);
     try {
-      // The API previews the plan version that was added last; demo chats keep the local fixture.
-      const preview =
-        sourceChat.mode === "fixtures"
-          ? fixtureCartPreview
-          : await apiPreviewCart(plan.runId, plan.version);
+      const preview = await apiPreviewCart(plan.runId, plan.version);
       setCartKey(newIdempotencyKey());
       setCartReceipt(null);
       setCartPreview(preview);
     } catch (error) {
-      setSyncError(
-        error instanceof Error
-          ? `Не вдалося сформувати попередній перегляд кошика: ${error.message}`
-          : "Не вдалося сформувати попередній перегляд кошика.",
-      );
+      setSyncError(describeError(error, "Не вдалося сформувати попередній перегляд кошика."));
     } finally {
       setCartBusy(false);
     }
   }
 
+  // Adding never changes anything by itself: the preview of the exact changes opens at once.
+  function addPlanToCart(products: ProductSelection[], plan: PlanningResult, itemId: string) {
+    updateItem(activeChatId, itemId, { added: true } as Partial<ConversationItem>);
+    setCartPlan(plan);
+    setCartReceipt(null);
+    void requestPreview(plan);
+  }
+
   async function handleConfirmCart() {
     if (!cartPreview || !cartKey) return;
-    const key = cartKey;
     setCartBusy(true);
     try {
-      const receipt =
-        sourceChat.mode === "fixtures"
-          ? fixtureCartPartial
-          : await apiConfirmCart(cartPreview.previewId, key);
+      const receipt = await apiConfirmCart(cartPreview.previewId, cartKey);
       if (receipt.status === "failed") {
-        // Keep cartPreview + key: retry is a re-send of the same preview with
-        // the same idempotency key, so it cannot double-add.
-        setSyncError("Сталася помилка під час передачі списку товарів у ваш акаунт.");
+        // A stored receipt is final for this preview, so a retry needs a fresh preview.
+        setCartPreview(null);
+        setCartKey(null);
+        setSyncError("Сільпо не додав товари. Створіть новий перегляд і спробуйте ще раз.");
         return;
       }
       setCartPreview(null);
       setCartReceipt(receipt);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Сталася помилка під час синхронізації кошика.";
-      setSyncError(message);
+      setSyncError(describeError(error, "Сталася помилка під час синхронізації кошика."));
     } finally {
       setCartBusy(false);
     }
@@ -475,19 +310,132 @@ export default function Home() {
 
   function handleRetrySync() {
     setSyncError(null);
-    void (cartPreview ? handleConfirmCart() : handleAddAll());
+    if (cartPreview && cartKey) {
+      void handleConfirmCart();
+      return;
+    }
+    if (cartPlan) void requestPreview(cartPlan);
+  }
+
+  function clearCart() {
+    setCartPlan(null);
+    setCartPreview(null);
+    setCartReceipt(null);
+    setCartKey(null);
   }
 
   async function recalculatePlan(plan: PlanningResult, selectedRecurringIds: string[]) {
-    const queued = await apiRecalculate(plan.runId, { version: plan.version, selectedRecurringIds });
-    const final = await pollRun(queued.runId, 1000);
-    if (final.status !== "completed" || !final.result) {
-      throw new Error(final.error?.message ?? "Сервер не повернув перерахований план.");
+    const chatId = activeChatId;
+    const itemId = nextItemId("recalc");
+    appendItems(chatId, [
+      {
+        id: itemId,
+        kind: "plan",
+        request: "Перерахуйте кошик",
+        status: "thinking",
+        result: null,
+        added: false,
+      },
+    ]);
+    try {
+      const queued = await apiRecalculate(plan.runId, { version: plan.version, selectedRecurringIds });
+      const final = await pollRun(queued.runId, 1000);
+      if (final.status !== "completed" || !final.result) {
+        throw new Error(final.error?.message ?? "Сервер не повернув перерахований план.");
+      }
+      const next = final.result;
+      updateItem(chatId, itemId, { status: "ready", result: next } as Partial<ConversationItem>);
+      patchChat(chatId, { plan: next });
+      // The server supersedes the old version, so a cart built from it follows the new one.
+      setCartPlan((current) => (current?.runId === plan.runId ? next : current));
+    } catch (error) {
+      updateItem(chatId, itemId, {
+        status: "failed",
+        error: describeError(error, "Не вдалося перерахувати кошик."),
+      } as Partial<ConversationItem>);
     }
-    // The server supersedes the old version, so a cart built from it follows the new one.
-    const next = final.result;
-    setCartPlan((current) => (current?.runId === plan.runId ? next : current));
-    return next;
+  }
+
+  // The chat goes to the agent: it either returns a new plan version or explains why not.
+  async function sendChat() {
+    const text = chatText.trim();
+    if (!text || chatBusy) return;
+    const chat = activeChat;
+    if (!chat) return;
+    setChatText("");
+    setChatBusy(true);
+    const pendingId = nextItemId("agent");
+    appendItems(chat.id, [
+      { id: nextItemId("user"), kind: "user", text },
+      { id: pendingId, kind: "agent", text: "Обробляю запит…" },
+    ]);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    });
+    try {
+      const reply = await apiChat(text, chat.plan);
+      const plan = reply.run?.result ?? null;
+      if (reply.type === "plan" && plan) {
+        updateItem(chat.id, pendingId, {
+          kind: "plan",
+          request: text,
+          status: "ready",
+          result: plan,
+          added: false,
+        } as unknown as Partial<ConversationItem>);
+        patchChat(chat.id, { plan });
+        setCartPlan((current) => (current?.runId === chat.plan?.runId ? plan : current));
+      } else {
+        updateItem(chat.id, pendingId, {
+          text: chatReplyText(reply, chat.plan),
+        } as Partial<ConversationItem>);
+      }
+    } catch (error) {
+      updateItem(chat.id, pendingId, {
+        text: describeError(error, "Не вдалося обробити повідомлення."),
+      } as Partial<ConversationItem>);
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  async function openFatSecretPreview() {
+    if (savedMeals.length === 0) return;
+    setFsExport(null);
+    setFsMessage(null);
+    // One preview covers one plan version; meals saved from other plans wait for a later export.
+    const { runId, version } = savedMeals[0];
+    const mealIds = savedMeals
+      .filter((meal) => meal.runId === runId && meal.version === version)
+      .map((meal) => meal.id);
+    if (mealIds.length < savedMeals.length) {
+      setFsMessage("Страви з інших планів збережіть окремим експортом.");
+    }
+    setFsBusy(true);
+    try {
+      const preview = await apiPreviewFatSecret(runId, version, mealIds);
+      setFsKey(newIdempotencyKey());
+      setFsPreview(preview);
+    } catch (error) {
+      setFsMessage(describeError(error, "Не вдалося підготувати збереження у FatSecret."));
+    } finally {
+      setFsBusy(false);
+    }
+  }
+
+  async function confirmFatSecret() {
+    if (!fsPreview || !fsKey) return;
+    setFsBusy(true);
+    try {
+      // Retrying with the same key reuses the operation, so a meal is never saved twice.
+      const accepted = await apiConfirmFatSecret(fsPreview.previewId, fsKey);
+      setFsExport(await pollExport(accepted.exportId, 1000));
+    } catch (error) {
+      setFsMessage(describeError(error, "Не вдалося зберегти страви у FatSecret."));
+    } finally {
+      setFsPreview(null);
+      setFsBusy(false);
+    }
   }
 
   async function connectProvider(path: "/auth/silpo/start" | "/auth/fatsecret/start") {
@@ -495,43 +443,21 @@ export default function Home() {
     setAuthError(await startProviderAuth(path));
   }
 
-  const runPlan = useCallback(
-    async (chatId: number) => {
-      try {
-        const created = await apiCreatePlan(fixturePlanningRequest, apiScenario);
-        const final = await pollRun(created.runId, 1500, (s) =>
-          patchChat(chatId, { view: { snapshot: s, result: s.result } }),
-        );
-        patchChat(chatId, { view: { snapshot: final, result: final.result } });
-      } catch (error) {
-        patchChat(chatId, { view: { snapshot: liveErrorSnapshot(error), result: null } });
-      }
-    },
-    [apiScenario, patchChat],
-  );
+  const dataMode = activeChat?.plan?.dataMode ?? (accountConnected ? "mixed" : "demo");
+  const plannerScreen = enteredApp && activeTab === "chats" && activeChat?.screen === "planner";
 
-  const renderResults = (chat: ChatEntry) => (
-    <PlannerResults
-      snapshot={chat.view?.snapshot}
-      result={chat.view?.result ?? null}
-      recalcBusy={false}
-      paramsForm={!chat.view ? (
-        <PlannerForm
-          onPlanReady={handlePlanReady}
-          accountConnected={accountConnected}
-        />
-      ) : undefined}
-      sentMessages={chat.sentMessages}
-      savedMeals={savedMeals}
-      onSavedMealsChange={setSavedMeals}
-      onAddToCart={addPlansToCart}
-      onRecalculate={chat.mode === "live" ? recalculatePlan : undefined}
-      onRetryPlan={() => {
-        if (chat.id === activeChatId) {
-          if (chat.mode === "live") runPlan(chat.id);
-          else selectDemo("running");
-        }
-      }}
+  const cartPanel = (variant: "sidebar" | "inline") => (
+    <CartPanel
+      variant={variant}
+      items={cartItems}
+      totalMinor={cartPlan?.basketTotalMinor ?? 0}
+      discountMinor={cartPlan?.savingsMinor ?? null}
+      storeLabel={accountConnected ? null : "Демо-кошик: справжній акаунт Сільпо не змінюється"}
+      onSync={() => cartPlan && void requestPreview(cartPlan)}
+      onClear={clearCart}
+      syncDisabled={!cartPlan || cartItems.length === 0}
+      syncBusy={cartBusy}
+      mode={cartPlan?.dataMode ?? dataMode}
     />
   );
 
@@ -560,9 +486,7 @@ export default function Home() {
           >
             <BookmarkIcon />
           </button>
-          <DemoBadge
-            mode={activeChat?.view?.result?.dataMode ?? (accountConnected ? "mixed" : "demo")}
-          />
+          <DemoBadge mode={dataMode} />
         </div>
       </header>
 
@@ -577,11 +501,10 @@ export default function Home() {
               <span className="text-xl font-light">+</span>
               Новий чат
             </button>
-
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col px-6 pb-2">
-            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-[#8E8E93]">
+            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
               Чати
             </p>
             <div className="mt-2 flex flex-col gap-0.5">
@@ -599,7 +522,7 @@ export default function Home() {
                       onClick={() => selectChat(chat.id)}
                       className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left"
                     >
-                      <ChatIcon className={active ? "text-[#F89F46]" : "text-[#8E8E93]"} />
+                      <ChatIcon className={active ? "text-[#F89F46]" : "text-[#6B7280]"} />
                       <span
                         className={`truncate text-[14px] ${
                           active ? "font-medium text-[#886432]" : "text-[#2c2c2c]"
@@ -612,7 +535,7 @@ export default function Home() {
                       type="button"
                       onClick={() => deleteChat(chat.id)}
                       aria-label={`Видалити ${chat.title}`}
-                      className="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-[#8E8E93] opacity-0 transition-opacity hover:bg-[#FFE4D1] hover:text-[#D92D20] focus:opacity-100 group-hover:opacity-100"
+                      className="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-[#6B7280] opacity-0 transition-opacity hover:bg-[#FFE4D1] hover:text-[#D92D20] focus:opacity-100 group-hover:opacity-100"
                     >
                       <span className="pointer-events-none select-none text-sm leading-none">⌫</span>
                     </button>
@@ -643,14 +566,9 @@ export default function Home() {
 
             <div className="flex h-16 items-center gap-2 px-8">
               <div className="h-8 w-8 shrink-0 rounded-full bg-[#BABABA]" />
-              <span className="flex-1 text-[14px]">{accountConnected ? "Катерина" : "Гість"}</span>
-              <button
-                type="button"
-                aria-label="Меню профілю"
-                className="text-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-              >
-                ⋮
-              </button>
+              <span className="flex-1 text-[14px]">
+                {accountConnected ? "Акаунт Сільпо підключено" : "Гість"}
+              </span>
             </div>
           </div>
         </aside>
@@ -659,18 +577,16 @@ export default function Home() {
           <div
             ref={scrollRef}
             className={
-              !enteredApp ||
-              (activeTab === "chats" && activeChat?.screen === "home")
+              !enteredApp || (activeTab === "chats" && activeChat?.screen === "home")
                 ? "h-[calc(100dvh-64px)] overflow-hidden"
                 : "h-[calc(100dvh-64px)] overflow-y-auto px-4 pb-28 pt-3 sm:px-6 md:px-8 lg:px-8"
             }
           >
             <div
               className={
-                !enteredApp ||
-                (activeTab === "chats" && activeChat?.screen === "home")
+                !enteredApp || (activeTab === "chats" && activeChat?.screen === "home")
                   ? "h-full w-full"
-                  : `mx-auto w-full max-w-[1500px] ${activeTab === "chats" && activeChat?.screen === "planner" ? "xl:pr-[350px]" : ""}`
+                  : `mx-auto w-full max-w-[1500px] ${plannerScreen ? "xl:pr-[350px]" : ""}`
               }
             >
               {!enteredApp ? (
@@ -696,7 +612,6 @@ export default function Home() {
                 />
               ) : activeChat?.screen === "home" ? (
                 <WelcomeScreen
-                  accountConnected={accountConnected}
                   fatSecretConnected={fatSecretConnected}
                   value={chatText}
                   onChange={setChatText}
@@ -708,59 +623,63 @@ export default function Home() {
               ) : (
                 chats.map((chat) => (
                   <div
-                    key={`${chat.id}:${chat.id === activeChatId ? "active" : "idle"}:${chatViewKey(chat)}`}
+                    key={chat.id}
                     className={chat.id === activeChatId ? "" : "hidden"}
                   >
-                    {renderResults(chat)}
+                    <PlannerResults
+                      items={chat.items}
+                      cartBusy={cartBusy}
+                      paramsForm={
+                        chat.plan ? undefined : (
+                          <PlannerForm onPlanReady={handlePlanReady} accountConnected={accountConnected} />
+                        )
+                      }
+                      savedMeals={savedMeals}
+                      onSavedMealsChange={setSavedMeals}
+                      onAddToCart={addPlanToCart}
+                      onRecalculate={(plan, ids) => void recalculatePlan(plan, ids)}
+                    />
                   </div>
                 ))
               )}
 
-              {enteredApp &&
-                activeTab === "chats" &&
-                activeChat?.screen === "planner" &&
-                cartReceipt && (
-                  <div className="mt-5 max-w-[820px]">
-                    <CartReceiptView receipt={cartReceipt} />
-                  </div>
-                )}
+              {plannerScreen && (
+                <>
+                  {/* Narrow screens have no side panel, so the cart lives in the page flow. */}
+                  <div className="mt-6 xl:hidden">{cartPanel("inline")}</div>
+
+                  {cartReceipt && (
+                    <div className="mt-5 max-w-[820px]">
+                      <CartReceiptView receipt={cartReceipt} />
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
-          {enteredApp && activeTab === "chats" && activeChat?.screen === "planner" && (
+          {plannerScreen && (
             <div className="fixed bottom-0 right-0 left-0 z-20 border-t border-[#E6E6E6] bg-white/95 px-4 py-3 backdrop-blur lg:left-[272px] xl:right-[350px]">
               <form
                 className="mx-auto flex h-11 w-full max-w-[760px] items-center gap-2 rounded-full border border-[#E6E6E6] bg-white p-1"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  sendChat();
+                  void sendChat();
                 }}
               >
-                <button
-                  type="button"
-                  aria-label="Додати"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] text-xl text-[#F89F46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-                >
-                  +
-                </button>
                 <input
                   value={chatText}
                   onChange={(event) => setChatText(event.target.value)}
-                  className="min-w-0 flex-1 bg-transparent px-1 text-[14px] outline-none placeholder:text-[#BABABA]"
-                  placeholder="Опишіть, що ви хочете приготувати або спланувати..."
-                  aria-label="Повідомлення"
+                  className="min-w-0 flex-1 bg-transparent px-4 text-[14px] outline-none placeholder:text-[#8A8F98]"
+                  placeholder="Напишіть зміну: «зроби дешевше», «заміни рис», «бюджет 1500»"
+                  aria-label="Повідомлення до планера"
+                  disabled={chatBusy}
                 />
-                <button
-                  type="button"
-                  aria-label="Голосове введення"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[rgba(248,159,70,0.2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
-                >
-                  <MicIcon />
-                </button>
                 <button
                   type="submit"
                   aria-label="Надіслати"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+                  disabled={chatBusy}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xl text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2 disabled:opacity-60"
                 >
                   <ArrowUpIcon />
                 </button>
@@ -770,23 +689,10 @@ export default function Home() {
         </main>
       </div>
 
-      {enteredApp && activeTab === "chats" && activeChat?.screen === "planner" && (
+      {plannerScreen && (
         <>
           <div className="fixed bottom-28 right-8 top-24 z-30 hidden w-[300px] overflow-hidden xl:block">
-            <CartPanel
-              items={cartItems}
-              itemCount={visibleCartCount}
-              totalMinor={visibleCartTotalMinor}
-              discountMinor={sourceResult?.savingsMinor ?? null}
-              storeLabel="просп. Бандери, 23 (Самовивіз)"
-              onSync={handleAddAll}
-              onIncrement={incrementCartItem}
-              onDecrement={decrementCartItem}
-              onRemove={removeCartItem}
-              syncDisabled={!sourceResult || cartItems.length === 0}
-              syncBusy={cartBusy}
-              mode={sourceResult?.dataMode ?? "mixed"}
-            />
+            {cartPanel("sidebar")}
           </div>
 
           {cartPreview && (
@@ -823,9 +729,7 @@ function AccountGate({
     <section className="flex h-full w-full items-center justify-center overflow-hidden bg-[#FBC890] p-4 sm:p-6">
       <div className="flex aspect-square w-[min(72vw,calc(100dvh-112px),650px)] max-w-[650px] items-center justify-center rounded-full bg-[#FFF8EC] p-8 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]">
         <div className="max-w-[460px]">
-          <h1 className="silpo-page-title">
-            Підключіть ваш акаунт Сільпо
-          </h1>
+          <h1 className="silpo-page-title">Підключіть ваш акаунт Сільпо</h1>
           <p className="mx-auto mt-6 max-w-[430px] silpo-page-subtitle">
             Автономний AI-планер використовує «Власний Рахунок», щоб автоматично враховувати
             ваші знижки, історію чеків та улюблені товари.
@@ -841,12 +745,12 @@ function AccountGate({
             <button
               type="button"
               onClick={onGuest}
-              className="h-12 rounded-lg bg-[#F5E6D2] px-5 font-medium text-[#8B7357] transition hover:bg-[#EEDCC5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
+              className="h-12 rounded-lg bg-[#F5E6D2] px-5 font-medium text-[#7A6148] transition hover:bg-[#EEDCC5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
             >
               Продовжити як гість (без історії)
             </button>
           </div>
-          <p className="mt-5 text-xs leading-5 text-[#8B7357]">
+          <p className="mt-5 text-xs leading-5 text-[#7A6148]">
             Підключення відкриває вхід у Сільпо. Без нього планер працює на демо-даних і не
             змінює ваш кошик.
           </p>
@@ -862,7 +766,6 @@ function AccountGate({
 }
 
 function WelcomeScreen({
-  accountConnected,
   fatSecretConnected,
   value,
   onChange,
@@ -871,7 +774,6 @@ function WelcomeScreen({
   onQuickPrompt,
   connectError,
 }: {
-  accountConnected: boolean;
   fatSecretConnected: boolean;
   value: string;
   onChange: (value: string) => void;
@@ -894,9 +796,7 @@ function WelcomeScreen({
         <div className="w-full max-w-[540px]">
           <h1 className="silpo-page-title">Сільпо AI помічник</h1>
           <p className="mx-auto mt-5 max-w-[430px] silpo-page-subtitle">
-            {accountConnected
-              ? "Вітаю, Катерино. Чим я можу допомогти вам сьогодні?"
-              : "Вітаю! Чим я можу допомогти вам сьогодні?"}
+            Вітаю! Чим я можу допомогти вам сьогодні?
           </p>
 
           <form
@@ -906,18 +806,18 @@ function WelcomeScreen({
               onStartPlanning();
             }}
           >
-            <span className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-[#FFF0E1] text-xl text-[#F89F46]">+</span>
             <input
               value={value}
               onChange={(event) => onChange(event.target.value)}
-              className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none placeholder:text-[#B8B8B8]"
+              className="min-w-0 flex-1 bg-transparent px-4 text-sm outline-none placeholder:text-[#8A8F98]"
               placeholder="Опишіть, що ви хочете приготувати або спланувати..."
               aria-label="Запит до помічника"
             />
-            <button type="button" aria-label="Голосове введення" className="flex size-9 items-center justify-center rounded-full bg-[#FFF0E1] text-[#F89F46]">
-              <MicIcon />
-            </button>
-            <button type="submit" aria-label="Надіслати" className="ml-1 flex size-9 items-center justify-center rounded-full bg-[#F89F46] text-white">
+            <button
+              type="submit"
+              aria-label="Надіслати"
+              className="ml-1 flex size-9 items-center justify-center rounded-full bg-[#F89F46] text-white"
+            >
               <ArrowUpIcon />
             </button>
           </form>
@@ -933,7 +833,7 @@ function WelcomeScreen({
             <button
               type="button"
               onClick={onConnectFatSecret}
-              className="rounded-lg border border-[#F89F46] bg-white px-6 py-3 text-[14px] font-semibold text-[#F89F46] transition hover:bg-[#FFF8F1]"
+              className="rounded-lg border border-[#F89F46] bg-white px-6 py-3 text-[14px] font-semibold text-[#C2661B] transition hover:bg-[#FFF8F1]"
             >
               {fatSecretConnected ? "FatSecret підключено ✓" : "Підключити FatSecret  🔗"}
             </button>
@@ -962,27 +862,98 @@ function WelcomeScreen({
   );
 }
 
+function SavedMealsTab({
+  meals,
+  onRemove,
+  onExport,
+  exportBusy,
+  exportResult,
+  message,
+  onBack,
+}: {
+  meals: SavedMeal[];
+  onRemove: (id: string) => void;
+  onExport: () => void;
+  exportBusy: boolean;
+  exportResult: FatSecretExport | null;
+  message?: string | null;
+  onBack: () => void;
+}) {
+  return (
+    <div className="pt-2 lg:pt-6">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[18px] font-semibold text-[#886432]">Збережені у FatSecret</h2>
+          <p className="mt-1 text-sm text-[#5B6472]">
+            Страви, які ви позначили у плані харчування. Збереження створює Saved Meal на одну
+            особисту порцію — це не щоденниковий запис.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button type="button" onClick={onExport} disabled={meals.length === 0 || exportBusy} loading={exportBusy}>
+            Зберегти у FatSecret
+          </Button>
+          <Button type="button" variant="outline" onClick={onBack}>
+            ← До чатів
+          </Button>
+        </div>
+      </div>
+
+      {meals.length === 0 ? (
+        <div className="rounded-2xl border border-[#E6E6E6] bg-white p-10 text-center text-[#5B6472]">
+          Ще нічого не збережено. Позначте страву в плані харчування, і вона зʼявиться тут.
+        </div>
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-2">
+          {meals.map((meal, index) => (
+            <li
+              key={meal.id}
+              className="flex items-start justify-between gap-3 rounded-2xl border border-[#E6E6E6] bg-white p-4"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xs font-bold text-white">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{meal.title}</p>
+                  <p className="mt-0.5 text-xs text-[#6B7280]">Saved Meal у FatSecret</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemove(meal.id)}
+                aria-label={`Прибрати ${meal.title}`}
+                title="Прибрати зі збережених"
+                className="shrink-0 text-[#C2661B] transition-transform hover:scale-110"
+              >
+                <span className="pointer-events-none select-none text-xl leading-none">✕</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {message && (
+        <p role="status" className="mt-4 rounded-lg bg-warn-bg p-3 text-sm text-warn-text">
+          {message}
+        </p>
+      )}
+
+      {exportResult && (
+        <div className="mt-4">
+          <FatSecretOutcomeView exportResult={exportResult} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AgentLogo({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" className={className}>
-      <path
-        d="M8.2 29.6L16.2 16.1"
-        stroke="currentColor"
-        strokeWidth="5.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M19.1 7.4L30.8 27.5"
-        stroke="currentColor"
-        strokeWidth="6.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M18.2 31.3L31.9 29.7"
-        stroke="currentColor"
-        strokeWidth="6.2"
-        strokeLinecap="round"
-      />
+      <path d="M8.2 29.6L16.2 16.1" stroke="currentColor" strokeWidth="5.8" strokeLinecap="round" />
+      <path d="M19.1 7.4L30.8 27.5" stroke="currentColor" strokeWidth="6.8" strokeLinecap="round" />
+      <path d="M18.2 31.3L31.9 29.7" stroke="currentColor" strokeWidth="6.2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -1017,21 +988,6 @@ function BookmarkIcon({ className = "" }: { className?: string }) {
   );
 }
 
-function MicIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M6 11C6 14.3 8.7 17 12 17C15.3 17 18 14.3 18 11"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-      <path d="M12 17V21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function ArrowUpIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1043,162 +999,5 @@ function ArrowUpIcon() {
         strokeLinejoin="round"
       />
     </svg>
-  );
-}
-
-function liveErrorSnapshot(error: unknown): RunSnapshot {
-  const message = error instanceof Error ? error.message : "Невідома помилка";
-  return {
-    runId: "live-error",
-    status: "failed",
-    stage: "context",
-    events: [],
-    result: null,
-    error: { code: "CLIENT_ERROR", message, retryable: true },
-  };
-}
-
-function buildFatSecretPreview(meals: SavedMeal[]): FatSecretPreview {
-  const base = fixtureFatSecretPreview;
-  const fallbackItem = {
-    ingredientId: "demo-ingredient",
-    foodId: "demo-food",
-    servingId: "demo-serving",
-    matchedName: "Demo food",
-    numberOfUnits: 1,
-    sourceQuantity: 100,
-    sourceUnit: "g" as const,
-  };
-  return {
-    ...base,
-    previewId: `demo-export-preview-${meals.length}`,
-    runId: "demo-run-hybrid",
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    meals: meals.map((meal, index) => {
-      const template = base.meals[index % Math.max(base.meals.length, 1)];
-      return {
-        mealId: meal.id,
-        title: meal.title,
-        sourceKcalPerServing: template?.sourceKcalPerServing ?? null,
-        fatsecretKcalPerServing: template?.fatsecretKcalPerServing ?? null,
-        items: template?.items[0] ? [template.items[0]] : [fallbackItem],
-        unresolved: [],
-      };
-    }),
-  };
-}
-
-function buildFatSecretExport(meals: SavedMeal[]): FatSecretExport {
-  const partialDemo = meals.length > 2;
-  return {
-    exportId: "demo-export-op-1",
-    status: partialDemo ? "partial" : "success",
-    meals: meals.map((meal, index) => ({
-      mealId: meal.id,
-      status: partialDemo && index === 0 ? "failed" : "saved",
-      savedMealId: partialDemo && index === 0 ? null : `saved-${meal.id}`,
-      message:
-        partialDemo && index === 0
-          ? "DEMO: інгредієнт не зіставлено — не збережено."
-          : "Додано й прочитано назад (demo).",
-    })),
-    error: null,
-    warnings: [
-      "DEMO: синтетичні дані; у вашому FatSecret-акаунті нічого не створено.",
-      "Повторне збереження того самого набору повторює ту саму операцію без дублікатів.",
-    ],
-  };
-}
-
-function SavedMealsTab({
-  meals,
-  onRemove,
-  onExport,
-  exportBusy,
-  exportResult,
-  message,
-  onBack,
-}: {
-  meals: SavedMeal[];
-  onRemove: (id: string) => void;
-  onExport: () => void;
-  exportBusy: boolean;
-  exportResult: FatSecretExport | null;
-  message?: string | null;
-  onBack: () => void;
-}) {
-  return (
-    <div className="pt-2 lg:pt-6">
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-[18px] font-semibold text-[#886432]">Збережені у FatSecret</h2>
-          <p className="mt-1 text-sm text-[#667085]">
-            Страви, які ви зберегли у FatSecret як Saved Meals. Натисніть сердечко біля страви в
-            плані харчування, щоб додати її сюди, потім збережіть у свій акаунт.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            onClick={onExport}
-            disabled={meals.length === 0 || exportBusy}
-            loading={exportBusy}
-          >
-            <span className="text-lg leading-none">♥</span>
-            Зберегти у FatSecret
-          </Button>
-          <Button type="button" variant="outline" onClick={onBack}>
-            ← До чатів
-          </Button>
-        </div>
-      </div>
-
-      {meals.length === 0 ? (
-        <div className="rounded-2xl border border-[#E6E6E6] bg-white p-10 text-center text-[#667085]">
-          Ще нічого не збережено. Збережіть страву сердечком у плані харчування, і вона зʼявиться
-          тут.
-        </div>
-      ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {meals.map((meal, index) => (
-            <li
-              key={meal.id}
-              className="flex items-start justify-between gap-3 rounded-2xl border border-[#E6E6E6] bg-white p-4"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#F89F46] text-xs font-bold text-white">
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{meal.title}</p>
-                  <p className="mt-0.5 text-xs text-[#8E8E93]">Saved Meal у FatSecret</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemove(meal.id)}
-                aria-label={`Прибрати ${meal.title}`}
-                title="Прибрати зі збережених"
-                className="shrink-0 text-[#F89F46] transition-transform hover:scale-110"
-              >
-                <span className="pointer-events-none select-none text-xl leading-none">♥</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {message && (
-        <p role="status" className="mt-4 rounded-lg bg-warn-bg p-3 text-sm text-warn-text">
-          {message}
-        </p>
-      )}
-
-      {exportResult && (
-        <div className="mt-4">
-          <FatSecretOutcomeView exportResult={exportResult} />
-        </div>
-      )}
-    </div>
   );
 }

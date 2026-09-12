@@ -150,6 +150,7 @@ Rina owns these Python routes except auth, which Arina implements in the same Py
 | `POST /api/plans` | `PlanningRequest` | 202 with initial `RunSnapshot` |
 | `GET /api/plans/:runId` | Session-scoped run ID | 200 `RunSnapshot`; poll approximately every 2 seconds until terminal state |
 | `POST /api/plans/:runId/recalculate` | `{ version, selectedRecurringIds }` | 202 new `RunSnapshot`; original confirmed request remains unchanged, costs are recomputed server-side |
+| `POST /api/chat` | `{ message, runId, version, selectedRecurringIds }` | 200 `ChatReply`: `type: "plan"` carries a new `RunSnapshot` with the next version and supersedes the previous one; any other type explains why nothing changed and leaves the current plan confirmable |
 | `POST /api/cart/preview` | `{ runId, version }` | 200 `CartPreview` or 409 if proposal is stale/needs revision |
 | `POST /api/cart/confirm` | `{ previewId, idempotencyKey }` | 200 `CartReceipt` with outcome; 409 if re-review is needed |
 

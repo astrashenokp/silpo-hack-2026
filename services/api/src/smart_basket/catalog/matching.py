@@ -58,6 +58,8 @@ def find_product_candidates(ingredients, selected_recurring, context: MatchingCo
                     candidate.restriction_check = (context.check_restrictions(candidate, requirement.restrictions)
                         if context.check_restrictions else "unknown")
                     candidate = ProductCandidate.model_validate(candidate.model_dump())
+                else:
+                    candidate.restriction_check = "pass"
                 candidate.requirement_ids = [requirement.id]
                 if candidate.id in merged:
                     checks = {merged[candidate.id].restriction_check, candidate.restriction_check}
@@ -67,12 +69,37 @@ def find_product_candidates(ingredients, selected_recurring, context: MatchingCo
                 merged[candidate.id] = candidate
     unresolved = []
     for requirement in ingredients:
-        safe = any(requirement.id in c.requirement_ids and c.available and c.restriction_check == "pass"
-                   and c.content_quantity is not None and c.content_unit == requirement.unit
-                   for c in merged.values())
-        if not safe:
-            unresolved.append(UnresolvedRequirement(requirement_id=requirement.id,
-                reason="No available verified match with compatible package contents."))
+        linked = [c for c in merged.values() if requirement.id in c.requirement_ids]
+        available = [c for c in linked if c.available]
+        verified = [c for c in available if c.restriction_check == "pass"]
+        compatible = [
+            c for c in verified
+            if c.content_quantity is not None and c.content_unit == requirement.unit
+        ]
+        if compatible:
+            continue
+        if not linked:
+            reason = "No catalog candidates were found."
+        elif not available:
+            reason = "Catalog candidates were found, but none are currently available."
+        elif not verified:
+            failed = sum(c.restriction_check == "fail" for c in available)
+            unknown = sum(c.restriction_check == "unknown" for c in available)
+            reason = (
+                "No candidate passed dietary verification "
+                f"({failed} failed, {unknown} lacked provider evidence)."
+            )
+        else:
+            missing = sum(c.content_quantity is None for c in verified)
+            incompatible = len(verified) - missing
+            reason = (
+                f"Verified candidates lack compatible {requirement.unit} package contents "
+                f"({missing} missing, {incompatible} incompatible)."
+            )
+        unresolved.append(UnresolvedRequirement(
+            requirement_id=requirement.id,
+            reason=reason,
+        ))
     return CandidateResult(candidates=list(merged.values()), unresolved_requirements=unresolved)
 
 

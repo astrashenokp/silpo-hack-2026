@@ -8,10 +8,10 @@ from smart_basket.mcp.adapters import get_user_context, search_products
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.meals import supported_labels
 from smart_basket.schemas import (
-    CartPreview, CartReceipt, Confirmation, ExportAccepted, FatSecretExport,
-    FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health, PlanReference,
-    PlanningRequest, PlanningResult, ProductSearchResponse, ProgressEvent, RecalculateRequest,
-    RunSnapshot, SupportedLabels, UserContext,
+    CartPreview, CartReceipt, ChatReply, ChatRequest, Confirmation, ExportAccepted,
+    FatSecretExport, FatSecretPreview, FatSecretPreviewRequest, FatSecretStatus, Health,
+    PlanReference, PlanningRequest, PlanningResult, ProductSearchResponse, ProgressEvent,
+    RecalculateRequest, RunSnapshot, SupportedLabels, UserContext,
 )
 
 router = APIRouter(prefix="/api")
@@ -43,6 +43,22 @@ def scenario(value: str, allowed: set[str]):
     return value
 
 
+def check_result(result, expected_request=None):
+    """Reject a planner result that contradicts the confirmed request or its own totals."""
+    if result.data_mode not in {"live", "demo", "mixed"}:
+        raise ValueError("Planner returned an unsupported data mode.")
+    if expected_request is not None and result.effective_request != expected_request:
+        raise ValueError("Planner must retain the confirmed request.")
+    if result.basket_total_minor != sum(p.line_total_minor for p in result.selected_products):
+        raise ValueError("Planner returned inconsistent totals.")
+    if any(p.line_total_minor != line_total(p.quantity, p.unit_price_minor) for p in result.selected_products):
+        raise ValueError("Planner returned inconsistent line totals.")
+    effective = result.effective_request
+    if (result.budget_minor != effective.budget_minor or
+            result.budget_remaining_minor != effective.budget_minor - result.basket_total_minor):
+        raise ValueError("Planner returned inconsistent budget fields.")
+
+
 def work(
     app, owner, run_id, request, previous=None, selected_ids=None, fail=False,
     supersedes_run_id=None,
@@ -67,15 +83,7 @@ def work(
         result = PlanningResult.model_validate(result).model_copy(deep=True)
         result.run_id = run_id
         result.version = previous.version + 1 if previous else 1
-        if result.data_mode not in {"live", "demo", "mixed"} or result.effective_request != request:
-            raise ValueError("Planner must retain the confirmed request and return a supported data mode.")
-        if result.basket_total_minor != sum(p.line_total_minor for p in result.selected_products):
-            raise ValueError("Planner returned inconsistent totals.")
-        if any(p.line_total_minor != line_total(p.quantity, p.unit_price_minor) for p in result.selected_products):
-            raise ValueError("Planner returned inconsistent line totals.")
-        if (result.budget_minor != request.budget_minor or
-                result.budget_remaining_minor != request.budget_minor - result.basket_total_minor):
-            raise ValueError("Planner returned inconsistent budget fields.")
+        check_result(result, request)
         with owner.lock:
             owner.runs[run_id].result = result
             owner.runs[run_id].status = "completed"
@@ -210,6 +218,69 @@ def recalculate(run_id: str, body: RecalculateRequest, tasks: BackgroundTasks,
                              previous=previous, selected_ids=body.selected_recurring_ids,
                              supersedes_run_id=run_id)
         return initial
+
+
+CHAT_REPLY_TYPES = {
+    "plan", "explanation", "clarification", "unsupported", "blocked",
+    "meal_replan_required", "no_cost_improvement", "upgrade_not_feasible",
+    "invalid_replan", "chat_error",
+}
+
+
+@router.post("/chat", response_model=ChatReply)
+def chat(body: ChatRequest, request: Request, owner: SessionDependency):
+    """Run one natural-language change against an existing plan, or create one."""
+    previous = None
+    if body.run_id is not None:
+        with owner.lock:
+            previous = owner.get_plan(body.run_id, body.version or 1).model_copy(deep=True)
+    events: list[ProgressEvent] = []
+
+    def emit_progress(stage, message):
+        events.append(ProgressEvent(stage=stage, message=message, at=now()))
+
+    try:
+        outcome = request.app.state.planner.handle_chat_message(
+            message=body.message,
+            previous_result=previous,
+            session=owner,
+            emit_progress=emit_progress,
+            current_request=previous.effective_request if previous is not None else None,
+            selected_recurring_ids=body.selected_recurring_ids or None,
+        )
+    except ApiError:
+        raise
+    except Exception as exc:
+        raise ApiError("CHAT_FAILED", "Chat request could not be completed.", 502, True) from exc
+
+    if not isinstance(outcome, PlanningResult):
+        reply_type = outcome.get("type") if isinstance(outcome, dict) else None
+        return ChatReply(
+            type=reply_type if reply_type in CHAT_REPLY_TYPES else "unsupported",
+            message=outcome.get("message") if isinstance(outcome, dict) else None,
+            run=None,
+        )
+
+    run_id = uid("run")
+    try:
+        result = PlanningResult.model_validate(outcome).model_copy(deep=True)
+        result.run_id = run_id
+        result.version = previous.version + 1 if previous is not None else 1
+        check_result(result)
+    except Exception as exc:
+        raise ApiError("PLANNER_FAILED", "Planner could not produce a valid result.", 502, True) from exc
+
+    snapshot = RunSnapshot(
+        run_id=run_id, status="completed", stage="ready",
+        events=[*events, ProgressEvent(stage="ready", message="Chat planning result is ready.", at=now())],
+        result=result, error=None,
+    )
+    with owner.lock:
+        owner.runs[run_id] = snapshot.model_copy(deep=True)
+        # The previous version is replaced, exactly like a recalculation.
+        if body.run_id is not None:
+            owner.superseded.add(body.run_id)
+    return ChatReply(type="plan", message="Plan updated.", run=snapshot)
 
 
 @router.post("/cart/preview", response_model=CartPreview)
