@@ -9,6 +9,7 @@ from smart_basket.mcp.adapters import (
     get_user_context,
     get_user_profile,
     normalize_product_search,
+    product_details_call,
     product_search_call,
     product_write_metadata,
     search_products,
@@ -30,6 +31,48 @@ def test_product_write_metadata_retains_only_server_write_coordinates():
             "branchId": "branch-1",
         }
     }
+
+
+def test_product_write_metadata_retains_details_slug():
+    assert product_write_metadata({"products": [{
+        "id": "rice-1",
+        "slug": "krupa-rysova-1kg",
+    }]}) == {
+        "rice-1": {
+            "productId": "rice-1",
+            "slug": "krupa-rysova-1kg",
+        }
+    }
+
+
+def test_product_details_call_uses_live_schema_and_cart_context():
+    schema = {
+        "type": "object",
+        "properties": {
+            "slug": {"type": "string"},
+            "branchId": {"type": "string"},
+            "deliveryType": {"type": "string"},
+            "timeslotStart": {"type": "string"},
+            "timeslotEnd": {"type": "string"},
+        },
+        "required": [
+            "slug", "branchId", "deliveryType", "timeslotStart", "timeslotEnd",
+        ],
+    }
+    assert product_details_call(
+        "rice-1",
+        "branch-1",
+        slug="krupa-rysova-1kg",
+        delivery_type="SelfPickup",
+        timeslot={"start": "start", "end": "end"},
+        input_schema=schema,
+    ) == ("silpo_get_product_details", {
+        "slug": "krupa-rysova-1kg",
+        "branchId": "branch-1",
+        "deliveryType": "SelfPickup",
+        "timeslotStart": "start",
+        "timeslotEnd": "end",
+    })
 
 
 def test_cart_write_call_follows_live_tool_schema():
@@ -270,6 +313,45 @@ def test_product_search_reads_explicit_package_weight_from_provider_name():
 
     assert result.products[0].content_quantity == 1000
     assert result.products[0].content_unit == "g"
+
+
+def test_product_details_reads_nested_net_weight():
+    from smart_basket.mcp.adapters import product_content_amount
+
+    assert product_content_amount({"data": {"product": {
+        "id": "rice-1",
+        "netWeight": 800,
+        "weightUnit": "г",
+    }}}, "rice-1") == (800.0, "g")
+
+
+def test_product_details_reads_nested_package_label():
+    from smart_basket.mcp.adapters import product_content_amount
+
+    assert product_content_amount({"product": {
+        "productId": "oats-1",
+        "packaging": "Пачка 0,5 кг",
+    }}, "oats-1") == (500.0, "g")
+
+
+def test_product_details_reads_silpo_display_ratio():
+    from smart_basket.mcp.adapters import product_content_amount
+
+    assert product_content_amount({"product": {
+        "id": "rice-1",
+        "ratio": "шт",
+        "displayRatio": "0,5кг",
+    }}, "rice-1") == (500.0, "g")
+
+
+def test_product_details_reads_silpo_multipack_display_ratio():
+    from smart_basket.mcp.adapters import product_content_amount
+
+    assert product_content_amount({"product": {
+        "id": "oats-1",
+        "ratio": "шт",
+        "displayRatio": "5*80г",
+    }}, "oats-1") == (400.0, "g")
 
 
 @pytest.mark.asyncio

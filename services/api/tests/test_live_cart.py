@@ -5,6 +5,8 @@ import pytest
 from conftest import create_plan
 from smart_basket.catalog.live import (
     SessionCatalog,
+    _field_paths,
+    _package_signals,
     _run_async,
     restriction_check_from_details,
 )
@@ -37,9 +39,35 @@ def test_cart_snapshot_tracks_unpriced_lines_for_stale_detection():
     assert snapshot_total(snapshot) == 200
 
 
+def test_detail_field_paths_do_not_include_values():
+    paths = _field_paths({"product": {
+        "attributes": [{"name": "Склад", "value": "секретне значення"}],
+    }})
+    assert "product.attributes[].value" in paths
+    assert all("секретне значення" not in path for path in paths)
+
+
+def test_package_signals_extract_catalog_quantity_fields():
+    assert _package_signals({"product": {
+        "weighted": False,
+        "step": 1,
+        "ratio": 0.5,
+        "displayRatio": "500 г",
+        "attributes": {"Розмір/об'єм": "0,5 кг", "Продавець": "Silpo"},
+    }}) == {
+        "weighted": False,
+        "step": 1,
+        "ratio": 0.5,
+        "displayRatio": "500 г",
+        "attributes.Розмір/об'єм": "0,5 кг",
+    }
+
+
 @pytest.mark.parametrize(("payload", "expected"), [
     ({"healthLabels": ["FISH_FREE", "RED_MEAT_FREE"]}, "pass"),
     ({"composition": "рисова крупа, вода, сіль"}, "pass"),
+    ({"characteristics": [{"name": "Склад", "value": "рисова крупа"}]}, "pass"),
+    ({"attributes": [{"propertyName": "Склад продукту", "propertyValue": "рис, тунець"}]}, "fail"),
     ({"ingredients": "рис, тунець, сіль"}, "fail"),
     ({"description": "звичайний рис"}, "unknown"),
     ({}, "unknown"),
@@ -68,7 +96,7 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
         product = ProductCandidate(
             id=f"product-{len(queries)}", name=query, requirement_ids=[],
             price_minor=100, selling_unit="package", quantity_step=1.0,
-            content_quantity=500.0, content_unit="g", available=True,
+            content_quantity=None, content_unit=None, available=True,
             restriction_check="unknown", regular_price_minor=None,
             source="silpo", checked_at="2026-09-11T00:00:00+00:00",
         )
@@ -76,14 +104,19 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
             "productId": product.id,
             "companyId": "company-from-search",
             "branchId": branch_id,
+            "slug": f"slug-{len(queries)}",
         }
         return ProductSearchResponse(query=query, products=[product], warnings=[])
 
-    async def fake_details(_session, product_id, branch_id):
+    async def fake_details(_session, product_id, branch_id, **kwargs):
         assert branch_id == "branch-1"
+        assert kwargs["slug"].startswith("slug-")
+        assert kwargs["delivery_type"] is None
+        assert kwargs["input_schema"] is None
         return {
             "productId": product_id,
             "branchId": branch_id,
+            "packageSize": "500 г",
             "composition": "рисова крупа",
         }
 
@@ -94,7 +127,9 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
 
     assert queries == ["крупа рисова", "рис", "rice"]
     assert len(products) == 3
-    assert all(product.restriction_check == "pass" for product in products)
+    assert all(product.restriction_check == "unknown" for product in products)
+    assert all(product.content_quantity == 500 for product in products)
+    assert all(product.content_unit == "g" for product in products)
     assert all(
         metadata["companyId"] == "company-from-search"
         for metadata in owner.silpo_product_write_metadata.values()
@@ -164,7 +199,7 @@ async def test_live_cart_preview_confirm_readback_and_idempotency(
             } for selected in plan.selected_products)
         return {"shoppingCartId": "cart-1", "products": items}
 
-    async def fake_details(_session, product_id, branch_id):
+    async def fake_details(_session, product_id, branch_id, **_kwargs):
         selected = next(item for item in plan.selected_products if item.product_id == product_id)
         assert branch_id == "branch-1"
         return {"product": {
@@ -234,7 +269,7 @@ async def test_live_cart_uncertain_write_uses_readback(
         } for item in plan.selected_products]
         return {"shoppingCartId": "cart-1", "products": products}
 
-    async def fake_details(_session, product_id, _branch_id):
+    async def fake_details(_session, product_id, _branch_id, **_kwargs):
         selected = next(item for item in plan.selected_products if item.product_id == product_id)
         return {"product": {
             "productId": selected.product_id,
