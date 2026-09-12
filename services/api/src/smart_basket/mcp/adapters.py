@@ -170,18 +170,40 @@ def _availability(product: Mapping[str, Any]) -> bool | None:
 
 
 def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | None]:
-    value = product.get("contentQuantity")
-    unit = product.get("contentUnit") or product.get("packageUnit")
-    package = product.get("packageSize")
-    if value is None and isinstance(package, dict):
-        value = package.get("value", package.get("quantity"))
+    value = next((product[key] for key in (
+        "contentQuantity", "netWeight", "weight", "volume",
+    ) if product.get(key) is not None), None)
+    unit = next((product[key] for key in (
+        "contentUnit", "packageUnit", "weightUnit", "volumeUnit",
+    ) if product.get(key) is not None), None)
+    package = next((product[key] for key in (
+        "packageSize", "package", "packaging", "weightText", "displayRatio",
+    ) if product.get(key) is not None), None)
+    if isinstance(package, dict):
+        if value is None:
+            value = package.get("value", package.get("quantity"))
         unit = unit or package.get("unit")
     if value is None and isinstance(package, (int, float, Decimal)) and not isinstance(package, bool):
         value = package
-    if value is None and isinstance(package, str):
-        match = re.search(r"(\d+(?:[.,]\d+)?)\s*(кг|kg|г|g|мл|ml|л|l|шт|piece)", package.lower())
-        if match:
-            value = match.group(1).replace(",", ".")
+    if isinstance(package, str):
+        multipack = re.search(
+            r"(\d+(?:[.,]\d+)?)\s*[*xх×]\s*(\d+(?:[.,]\d+)?)\s*"
+            r"(кг|kg|г|g|мл|ml|л|l|шт|piece)",
+            package.lower(),
+        )
+        match = re.search(
+            r"(\d+(?:[.,]\d+)?)\s*(кг|kg|г|g|мл|ml|л|l|шт|piece)",
+            package.lower(),
+        )
+        if multipack:
+            if value is None:
+                count = Decimal(multipack.group(1).replace(",", "."))
+                item_amount = Decimal(multipack.group(2).replace(",", "."))
+                value = count * item_amount
+            unit = unit or multipack.group(3)
+        elif match:
+            if value is None:
+                value = match.group(1).replace(",", ".")
             unit = unit or match.group(2)
     if value is None:
         label = product.get("title") or product.get("name")
@@ -210,6 +232,40 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
     if not amount.is_finite() or amount <= 0:
         return None, None
     return float(amount), mapped[0]
+
+
+def product_content_amount(
+    payload: Any,
+    product_id: str | None = None,
+) -> tuple[float | None, str | None]:
+    """Read package contents from a possibly nested product-details payload.
+
+    Details responses are commonly wrapped in ``product``/``data`` objects, so
+    applying ``_content_amount`` only to the response root silently loses useful
+    package data. Prefer an object matching the requested product ID, then fall
+    back to any nested object that contains an explicit, parseable amount.
+    """
+    matches: list[Mapping[str, Any]] = []
+    fallbacks: list[Mapping[str, Any]] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, Mapping):
+            amount = _content_amount(value)
+            if amount[0] is not None:
+                raw_id = value.get("productId", value.get("id"))
+                if product_id is not None and raw_id is not None and str(raw_id) == product_id:
+                    matches.append(value)
+                else:
+                    fallbacks.append(value)
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(payload)
+    source = matches[0] if matches else fallbacks[0] if fallbacks else None
+    return _content_amount(source) if source is not None else (None, None)
 
 
 def normalize_product_search(payload: Any, query: str) -> ProductSearchResponse:
@@ -320,7 +376,7 @@ def normalize_product_search(payload: Any, query: str) -> ProductSearchResponse:
 
 
 def product_write_metadata(payload: Any) -> dict[str, dict[str, str]]:
-    """Keep provider write coordinates server-side, keyed by public product ID."""
+    """Keep provider-only product coordinates server-side, keyed by public ID."""
     found: dict[str, dict[str, str]] = {}
 
     def collect(value: Any) -> None:
@@ -328,13 +384,17 @@ def product_write_metadata(payload: Any) -> dict[str, dict[str, str]]:
             product_id = _find_value(value, "productId", "id")
             company_id = _find_value(value, "companyId")
             branch_id = _find_value(value, "branchId")
-            if product_id is not None and (company_id is not None or branch_id is not None):
+            slug = _find_value(value, "slug")
+            if product_id is not None and any(
+                item is not None for item in (company_id, branch_id, slug)
+            ):
                 found[str(product_id)] = {
                     key: str(item)
                     for key, item in {
                         "productId": product_id,
                         "companyId": company_id,
                         "branchId": branch_id,
+                        "slug": slug,
                     }.items()
                     if item is not None
                 }
@@ -662,6 +722,54 @@ def product_search_call(
     return tool_name, arguments
 
 
+def product_details_call(
+    product_id: str,
+    branch_id: str,
+    *,
+    slug: str | None = None,
+    cart_id: str | None = None,
+    delivery_type: str | None = None,
+    timeslot: Any = None,
+    input_schema: Mapping[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Build product-details arguments from the authenticated tools/list schema."""
+    tool_name = "silpo_get_product_details"
+    if not input_schema:
+        return tool_name, {"productId": product_id, "branchId": branch_id}
+
+    properties = _schema_properties(input_schema, tool_name)
+    normalized = _normalized_property_names(properties)
+    values = {
+        "productid": product_id,
+        "id": product_id,
+        "slug": slug,
+        "branchid": branch_id,
+        "shoppingcartid": cart_id,
+        "cartid": cart_id,
+        "deliverytype": delivery_type,
+        "timeslotstart": _find_value(timeslot, "start"),
+        "timeslotend": _find_value(timeslot, "end"),
+    }
+    arguments = {
+        normalized[name]: value
+        for name, value in values.items()
+        if value is not None and name in normalized
+    }
+    missing = [
+        key for key in input_schema.get("required", [])
+        if key not in arguments
+        and not (
+            isinstance(properties.get(key), dict)
+            and "default" in properties[key]
+        )
+    ]
+    if missing:
+        raise McpReadError(
+            f"{tool_name} requires unavailable context: {', '.join(missing)}."
+        )
+    return tool_name, arguments
+
+
 @with_retries(max_attempts=3)
 async def search_products(
     session,
@@ -800,10 +908,28 @@ async def get_food_restrictions(session) -> Any:
         return _handle_adapter_exception(e, [], "дієтичних обмежень")
 
 @with_retries(max_attempts=3)
-async def get_product_details(session, product_id: str, branch_id: str) -> Dict[str, Any]:
+async def get_product_details(
+    session,
+    product_id: str,
+    branch_id: str,
+    *,
+    slug: str | None = None,
+    cart_id: str | None = None,
+    delivery_type: str | None = None,
+    timeslot: Any = None,
+    input_schema: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
     try:
-        args = {"productId": product_id, "branchId": branch_id}
-        result = await session.call_tool("silpo_get_product_details", arguments=args)
+        tool_name, args = product_details_call(
+            product_id,
+            branch_id,
+            slug=slug,
+            cart_id=cart_id,
+            delivery_type=delivery_type,
+            timeslot=timeslot,
+            input_schema=input_schema,
+        )
+        result = await session.call_tool(tool_name, arguments=args)
         payload = _decode_tool_payload(result, {})
         return payload if isinstance(payload, dict) else {}
     except Exception as e:
