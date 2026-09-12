@@ -1,33 +1,53 @@
 # Submission checklist
 
 Owner: Polina. Sources: the official page https://ai-factory.silpo.ua/ and the rules at
-https://ai-factory.silpo.ua/terms, read on September 11, 2026. The FAQ answers did not load;
-re-check both pages on September 12 and again before submitting.
+https://ai-factory.silpo.ua/terms, first read September 11, 2026, **re-checked live September
+12** (treating today as the deadline day per the user's instruction). Re-check once more before
+actually submitting, in case the site changes again.
 
-## What the rules require
+## ⚠️ Most urgent open item, found on this re-check
+
+**The site now says "Реєстрацію завершено" — registration closed September 1, 2026.** Nothing in
+this repository records that the team's registration was actually completed before that date.
+If it was not, no other item on this list matters: **confirm with the team right now** that a
+registration exists and that whoever owns it can still reach the submission form in their
+personal cabinet. Polina has no access to check this directly.
+
+## What the rules require (updated September 12; changes from September 11 in **bold**)
 
 | Item | Requirement (quoted where exact wording matters) |
 |---|---|
-| Deadline | September 14, 2026, 23:59 Kyiv time. The main page: "Останній день, коли можна залити відеопітч та демку — 14 вересня 23:59:59". Target an internal deadline of 18:00 |
-| How | "Проєкт подається способом, зазначеним на Сайті шляхом заповнення Реєстраційної форми"; the entry counts once the organizer has the form and access to the materials |
+| Deadline | September 14, 2026, 23:59:59 Kyiv time — unchanged. Target an internal deadline of 18:00 |
+| How | "Проєкт подається способом, зазначеним на Сайті шляхом заповнення Реєстраційної форми". **Registration itself closed September 1** — see the urgent item above |
 | Video pitch | 3–5 minutes: problem, solution, role of AI and the MCP, value for the guest or business, usage scenario, implementation approach, prototype demonstration. Plan: [demo script](demo-script.md) |
-| Other materials | Optional: working demo, repository, documentation, architecture, screenshots, presentation |
-| Silpo MCP | Must be a "функціонально значущий компонент"; the main page: "MCP «Сільпо» — не додаткова опція, а обов'язкова частина кожного проєкту" |
-| Judging | Value for the guest or business; quality of MCP use; agent behavior; integration realism; prototype and demo quality; validation and scaling. No weights are published |
+| Other materials | "відеопітч, презентація, Figma-макет, скриншоти, working demo, no-code/low-code прототип, репозиторій, документація, опис архітектури, бізнес-модель" — **a longer explicit list than the September 11 read; a presentation and a business-model summary are named, not just optional extras** |
+| Silpo MCP | Mandatory: "MCP «Сільпо» — не додаткова опція, а обов'язкова частина кожного проєкту", used "як функціонально значущий компонент". **The front page now also lists "agent capability (context awareness and multi-step action execution)" as a separate evaluated dimension from MCP tool quality** |
+| Judging | **Now published with weights**: Інноваційність 25%, Реалістичність реалізації 20%, Вплив на Гостя/бізнес 25%, Якість презентації 15%, Технічна складова 15% |
 | Access | Keep the organizer's access to the materials during the hackathon and for 90 days after the results |
 | Third-party objects | List every third-party component with its licensor, license terms and restrictions (draft below) |
-| Generative AI | Disclose substantial generative-AI use and the human creative contribution (draft below) |
-| Disqualification | Includes false information, fabricated results, plagiarism and infringing third-party rights |
+| Generative AI | Disclose substantial generative-AI use and the human creative contribution. **New clause: also confirm the AI service's own terms permit this submission/demonstration/use** — checked below |
+| Disqualification | False information, fabricated results, plagiarism, infringing third-party rights, malicious code, or a serious reputational/security risk |
 | After submission | Evaluation September 15–28; final September 30. Contact: mcp@silpo.club |
 
-## Risks against these rules (September 11)
+### AI-service terms check (new requirement, done September 12)
+
+Anthropic's usage policy (`https://www.anthropic.com/legal/aup`, checked live) does not restrict
+using Claude to build a project submitted to a competition, publicly demonstrated, or shared with
+an organizer — no clause prohibits hackathon or competition use. It asks for disclosure and
+attribution of AI-assisted work, which the generative-AI disclosure below already provides.
+Confirm the same for any other AI service a teammate used (the `codex/alina-planner-results`
+branch name suggests OpenAI Codex — Alina to confirm and add a line here).
+
+## Risks against these rules (updated September 12)
 
 | Risk | Why it matters | Tracking |
 |---|---|---|
-| Since #27 the UI calls the API, but the live Silpo MCP path (OAuth, 40 tools, context, search and a reviewed cart write, reported by Arina and Rina on September 11) has not been run end to end from the UI | The MCP must be functionally significant, and "MCP quality" is a judging criterion | A signed-in UI run on the demo account (Polina); one authorized real-cart check (Rina) |
-| Invented products, prices, cart panel and user name look like real results | Fabricated results or false information can disqualify the entry | BUG-006, BUG-011 |
-| Brand images from the Jameson website and the "Галичина" butter photo, Wikimedia photos without recorded licenses | The team must hold rights to every submitted material | BUG-011; list below |
+| Registration status is unconfirmed in writing | Nothing else matters if the team cannot reach the submission form | **Ask the team now** — see the urgent item above |
+| The live Silpo MCP path is verified independently now (OAuth, 40 tools, real profile/cart/product-search calls, runs 9–11), but only by calling the MCP server's own tools directly — not yet driven through our own product's sign-in button end to end | "Agent capability" and "MCP tool quality" are both now named judging dimensions | A signed-in UI run on the demo account; one authorized real-cart check (Rina, still open per her handoff) |
+| Invented products, prices, cart panel and user name — **fixed in #31, retested (runs 9–11)** | Fabricated results or false information can disqualify the entry | BUG-006, BUG-011 — closed |
+| Brand images from the Jameson website and the "Галичина" butter photo, Wikimedia photos without recorded licenses — **the invented product cards themselves were deleted in #31**; check whether any of these image files/URLs still linger unused | The team must hold rights to every submitted material | List below |
 | The repository is private | If the form asks for code, the organizer needs access | Decide: add the organizer as a collaborator or submit an archive |
+| No public deploy URL exists yet | "Working demo" is listed among the accepted materials, and judges may expect a live link, not only a video | Hosting decision still open per `docs/handoffs/polina.md` |
 
 ## Third-party objects (draft)
 
@@ -56,14 +76,14 @@ Versions as installed on September 11; lockfiles pin the transitive dependencies
 
 | External service or asset | Terms | Status |
 |---|---|---|
-| Silpo MCP (`https://mcp.silpo.ua/mcp`) | Hackathon rules | Adapters in the backend; live use not yet verified end to end |
+| Silpo MCP (`https://mcp.silpo.ua/mcp`) | Hackathon rules | **Live and independently verified by Polina (runs 9–11): real OAuth, 40 tools, real profile/cart/product-search calls all matched the adapter code.** Not yet driven through our own product's sign-in button end to end |
 | Edamam Meal Planner API | Edamam terms: attribution, limited caching | Adapter only; demo uses original synthetic meals |
-| FatSecret Platform API | FatSecret terms | One live Saved Meal verified by Rina through the API |
-| Google Gemini API | Google terms | Used by the chat intent module; not reachable over HTTP yet |
-| `apps/web/public/butter-galychyna.png` | Unknown; brand product photo | Confirm the source and rights or replace |
-| Jameson image loaded from `ik.imagekit.io/.../jamesonwhiskey/...` | Unknown; brand asset from a third-party site | Remove (BUG-011) |
-| Oats, rice and lentil photos loaded from Wikimedia Commons | License per file, usually with attribution | Record author and license or replace |
-| `apps/web/public/*.svg` (file, globe, next, vercel, window) | create-next-app template, MIT | Remove if unused |
+| FatSecret Platform API | FatSecret terms | Rina verified one live Saved Meal write; **Polina independently verified the consumer credentials live (run 8): `request_token` succeeded, two-legged `foods.search` returned real data** |
+| Google Gemini API | Google terms | **Used by the chat intent module, now reachable over HTTP via `POST /api/chat` since #31**; not exercised with a real API key in QA (CI/local runs had none) |
+| `apps/web/public/butter-galychyna.png` | Unknown; brand product photo | **Deleted in #31, verified gone from every tracked source file on September 12** |
+| Jameson image loaded from `ik.imagekit.io/.../jamesonwhiskey/...` | Unknown; brand asset from a third-party site | **Removed in #31 (BUG-011), verified gone September 12** |
+| Oats, rice and lentil photos loaded from Wikimedia Commons | License per file, usually with attribution | **Also removed in #31 along with the fixture module that referenced them** |
+| `apps/web/public/*.svg` (file, globe, next, vercel, window) | create-next-app template, MIT | **Confirmed unused in `apps/web/src` on September 12** — a quick cleanup for Ksiusha/Alina, not risky to submit as-is either way |
 | Figma design | Team-owned (Katia) | — |
 
 ## Generative-AI disclosure (draft, each author confirms her part)
@@ -79,6 +99,8 @@ Versions as installed on September 11; lockfiles pin the transitive dependencies
 
 ## Submission day checklist
 
+- [ ] **Confirm the team's registration exists and someone can reach the submission form** — see
+  the urgent item at the top of this file. Nothing below matters until this is confirmed.
 - [ ] Presenter and submission-account owner named in `docs/handoffs/polina.md`.
 - [ ] Video 3–5 minutes, playback checked, link opens from a signed-out browser.
 - [ ] Demo link or recording ready; the frozen revision and deploy URL recorded.
