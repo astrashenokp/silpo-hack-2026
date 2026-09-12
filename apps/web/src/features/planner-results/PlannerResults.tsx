@@ -10,6 +10,11 @@ import { RecurringSuggestions } from "./components/RecurringSuggestions";
 import { WarningsList } from "./components/states";
 import { AgentAvatar, Spinner } from "./components/ui";
 
+// The planner reports recurring suggestions, but matching them to products is not implemented
+// in the API yet (docs/qa/code-review.md, CR-04), so the choice is shown and not offered.
+const RECURRING_NOT_MATCHABLE =
+  "Підбір товарів для регулярних покупок ще не реалізований в API, тому вибір поки недоступний.";
+
 export interface SavedMeal {
   id: string;
   title: string;
@@ -200,6 +205,7 @@ function PlanView({
         selectedIds={recurringSelectedIds}
         onChange={onToggleRecurring}
         dirty={dirty}
+        disabledReason={RECURRING_NOT_MATCHABLE}
       />
 
       <MealPlan result={result} exportedMealIds={savedMealIds} onExportChange={onToggleSavedMeal} />

@@ -9,11 +9,14 @@ export function RecurringSuggestions({
   selectedIds,
   onChange,
   dirty,
+  disabledReason,
 }: {
   items: RecurringSuggestion[];
   selectedIds: string[];
   onChange: (id: string, selected: boolean) => void;
   dirty: boolean;
+  // Set while the API cannot match these products yet, so the choice is shown but not offered.
+  disabledReason?: string;
 }) {
   if (items.length === 0) return null;
 
@@ -54,8 +57,10 @@ export function RecurringSuggestions({
                 type="button"
                 role="checkbox"
                 aria-checked={selected}
+                disabled={Boolean(disabledReason)}
+                title={disabledReason}
                 onClick={() => onChange(item.id, !selected)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                   selected
                     ? "border-brand bg-brand text-white"
                     : "border-line bg-white text-muted hover:border-brand hover:text-brand"
@@ -69,7 +74,7 @@ export function RecurringSuggestions({
         })}
       </ul>
       <p className="mt-3 text-xs text-muted">
-        Зміна вибору деактивує попереднє підтвердження кошика до завершення перерахунку.
+        {disabledReason ?? "Зміна вибору деактивує попереднє підтвердження кошика до завершення перерахунку."}
       </p>
     </Section>
   );
