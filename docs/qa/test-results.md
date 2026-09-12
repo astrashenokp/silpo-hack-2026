@@ -185,3 +185,94 @@ the recording plan: [demo script](demo-script.md).
 The live Silpo checks that Arina and Rina reported on September 11 (OAuth, 40 tools, ready cart
 context, live product search, a reviewed cart write with read-back awaiting one authorized
 real-cart check) were not repeated by Polina, and the UI does not use these paths yet (BUG-002).
+
+## Run 5 — UI connected to the API, September 11, 2026
+
+- **Revision:** `afe586e`, that is PR #27 (the web UI connected to the Python API) with `main` @
+  `acac9d3` (Uliana's #26) merged in; merged into `main` as `cf7ebbf`. Demo mode, guest session;
+  the frontend was rebuilt.
+
+| Check | Result |
+|---|---|
+| Documented backend tests without `GEMINI_API_KEY` | ✅ 191 passed — BUG-004 fixed |
+| Generated contracts (`export_contracts.py --check`) | ✅ 22 files current — BUG-014 fixed |
+| e2e through Next.js | ✅ 35 of 35 |
+| UI specs against the running API, desktop and Pixel 7 | ✅ 33 passed, 1 skipped (cart confirmation on mobile, BUG-015); the 9 expected failures reproduce BUG-006, BUG-011, BUG-012 (adding without a preview), BUG-015 (mobile) and BUG-016 |
+| Plan from the form | ✅ `POST /api/plans`, then polling; the result shows the API's `dataMode` — BUG-002 fixed |
+| "↻ Перерахувати кошик" | ✅ the server's next version appears as a second plan |
+| Cart preview and confirmation | ✅ the preview comes from `/api/cart/preview`, and "Підтвердити додавання" ends in "Результат синхронізації". "Додати все" still skips the preview — BUG-012 partly fixed |
+| FatSecret save | ✅ preview of one personal portion, confirmation and export outcome through the API |
+| Silpo and FatSecret connect buttons | ✅ with the provider responses mocked: Silpo goes through `/api/auth/silpo/start` and back to the app with the status read; a FatSecret start error is explained on the page. Real sign-in not run: it needs the demo accounts |
+| Over-budget plan (budget 100) | ❌ "Бюджет перевищено на 110,00 грн.", yet "Додати все" stays enabled. "Синхронізувати з Сільпо" gets 409 `STALE_PLAN` from `/api/cart/preview`, and the page shows "Помилка синхронізації кошика Сільпо" with the API's English message and a retry that cannot succeed — BUG-016 |
+| Result screen of that plan | ⚠️ the cart panel lists the API's three demo products (210,00 грн), but ingredient rows keep the invented butter and whiskey prices and images (BUG-011) and the panel the invented store address (BUG-006) |
+| CI on PR #27 (`afe586e`) | ✅ all five jobs: backend, frontend, e2e, images, UI |
+| CI on `main` after the merge (`cf7ebbf`) | ✅ all five jobs |
+
+## Run 6 — full UI-API connection, September 12, 2026
+
+- **Revision:** `feature/connect-ui-to-api` (from `main` @ `cf7ebbf`, PR #31): the result screen
+  renders `MealPlan`, `ProposedBasket`, `BudgetSummary` and `RecurringSuggestions` instead of the
+  fixed cards; a new `POST /api/chat` route; the allergen/preference fields read `GET /api/filters`.
+  Not merged; demo mode, guest session.
+
+| Check | Result |
+|---|---|
+| Backend tests without `GEMINI_API_KEY` | ✅ 191 passed |
+| Generated contracts (`export_contracts.py --check`) | ✅ current |
+| e2e through Next.js | ✅ 40 of 40 (5 new: chat requires a session, rejects an empty message, answers in the contract shape, reports a missing interpreter instead of crashing, a reply without a new plan keeps the current plan confirmable) |
+| UI specs against the running API, desktop and Pixel 7 | ✅ 38 of 38. No `test.fail` markers remain in `flows.spec.ts` |
+| Result screen | ✅ every requested day, the chosen products with source and restriction badges, substitutions, unresolved requirements and the real recurring suggestions from `recurringItems` — no invented butter, whiskey, name or store address (BUG-006, BUG-011 fixed) |
+| Recurring purchases | ⚠️ shown from the API, but selecting one is disabled with a stated reason: the API cannot match a recurring item to a product yet (CR-04, unfixed) |
+| "Додати все в кошик Сільпо" | ✅ opens the API preview immediately, no local fill-in step (BUG-012 fixed) |
+| Cart panel at 768, 1024, 1279, 1280 and 1440 px | ✅ reachable at every width: below `xl` it renders inline instead of in the side column (BUG-015 fixed) |
+| Over-budget plan (budget 100) | ✅ "Додати все" is disabled with the existing budget warning as the reason; no failed sync attempt (BUG-016 fixed) |
+| Allergen/preference fields | ✅ load from `GET /api/filters` and offer only those labels; a selection reaches `restrictions`/`preferences` instead of `notes` (BUG-005 fixed) |
+| Chat message ("зроби дешевше") | ✅ reaches `/api/chat`; without `GEMINI_API_KEY` (CI and this run) the reply names the missing key instead of a silent no-op |
+| CI on PR #31 | ✅ all five jobs, on both commits (the connection and the recurring-selection guard) |
+
+## Run 7 — full toolkit sweep after PR #31 merged, September 12, 2026
+
+- **Revision:** `main` @ `100343e` (Ksiusha/Alina/Uliana/Sofiia/Rina's PR #26/#30 plus Polina's
+  #27 and #31, merged). Every QA tool in `docs/qa/tools.md` run once, back to back, against the
+  local stack (`deploy/run-local.ps1`). Demo mode, guest session unless noted.
+
+| Layer | Tool | Result |
+|---|---|---|
+| Backend tests | pytest | ✅ 203 passed (191 + 12 from PR #30's live matching/cart tests) |
+| Generated contracts | `export_contracts.py --check` | ✅ 22 files current |
+| e2e, direct to the API | pytest + httpx, `E2E_BASE_URL=http://127.0.0.1:8000` | ✅ 40 of 40 |
+| e2e, through Next.js | pytest + httpx, `E2E_BASE_URL=http://localhost:3000` | ✅ 40 of 40 |
+| Contract fuzzing | Schemathesis 4.26.1, `--max-examples 50 --continue-on-failure`, 1360 cases generated | ❌ 5 unique failures, reproduced identically on a second run (30-example pass, 760 cases) — BUG-017 (new) and BUG-010 (extended) |
+| Browser flows, desktop + Pixel 7 | Playwright 1.63.0 | ✅ 38 of 38 |
+| Accessibility, WCAG 2.1 AA | axe-core via Playwright | ✅ no new serious/critical rule beyond the known BUG-009 |
+| Performance and best practices, desktop | Lighthouse 13.4.1 | Performance 100, Accessibility 95, Best Practices 100, SEO 100, Agentic Browsing 100 |
+| Performance and best practices, mobile | Lighthouse 13.4.1 `--mobile` | Performance 96, Accessibility 95, Best Practices 100, SEO 100, Agentic Browsing 100 |
+| Lighthouse accessibility detail | `reports/lighthouse/{desktop,mobile}.json` | Only `color-contrast` scores below 1 on both — the same defect as BUG-009, nothing new |
+| Local Playwright MCP | `npm run tools:playwright` | ✅ 24 tools, matching `tests/mcp/README.md` |
+| Local Chrome DevTools MCP | `npm run tools:chrome-devtools` | ✅ 29 tools, matching `tests/mcp/README.md` |
+| `probe_mcp.py` against a live Streamable HTTP server | local Playwright MCP started with `--port 8931` | ❌ then ✅ — `--out` failed because `tests/mcp/reports/` is git-ignored and absent on a fresh checkout; fixed the script to create the directory (Polina-owned file, not a teammate's); rerun listed the same 24 tools and wrote the report |
+| Silpo MCP (live) | MCP Inspector / `probe_mcp.py` | ⏸ not run: needs an authorized Silpo account token, which this session does not have |
+| Frontend lint | `npm run lint` | ✅ 0 errors, 0 warnings |
+| Frontend build | `npm run build` | ✅ |
+
+### BUG-017 (new) — contract fuzzing found a route-shadowing defect
+
+`GET /api/fatsecret/exports/confirm` and `GET /api/fatsecret/exports/preview` answer 404 "Export
+not found" instead of 405 Method Not Allowed, because the parameterized
+`GET /fatsecret/exports/{export_id}` route matches those literal path segments as an ID.
+Verified from Starlette's own routing source that registration order does not explain or fix
+this — see [the bug entry](bugs.md#bug-017--get-on-the-fatsecret-export-actions-is-swallowed-by-get-export_id)
+for the reproduction and a fix hint that does work (constrain the path parameter's shape).
+
+### BUG-010 extended
+
+Three more schema-valid requests that the API correctly rejects on rules the OpenAPI contract
+does not express (an empty restriction label, duplicate recurring IDs, duplicate meal IDs) — see
+[the bug entry](bugs.md#bug-010--contract-details-found-by-schemathesis). None of these are
+correctness defects in the API; the contract is just looser than the validation behind it.
+
+Not covered: a signed-in Silpo or FatSecret run from the UI or MCP tooling (needs the demo
+account's OAuth token, which this session does not have), a chat message with a real Gemini key,
+and CR-04 (recurring purchases still cannot be matched to products by the API — unchanged from
+run 6).
+

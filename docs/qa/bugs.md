@@ -8,27 +8,29 @@ Severity: **Blocker** stops setup or the demo flow; **High** breaks a required
 feature; **Medium** misleads the user or a reviewer; **Low** is cosmetic or
 documentation.
 
-Revision under test: `main` @ `0ef7fbb` (September 11, 2026). This list has not yet
-been sent to the owners; Polina shares it with the team.
+Found on `main` @ `0ef7fbb` (September 11, 2026); the latest retest is run 5 on `afe586e`
+(`main` with #26 plus PR #27). This list has not yet been sent to the owners; Polina shares it
+with the team.
 
 | ID | Severity | Summary | Owner | Status |
 |---|---|---|---|---|
 | BUG-001 | Blocker | Backend cannot be installed or tested from a clean checkout (`pyproject.toml` syntax error) | Rina (file owner); introduced by merge `f7b10e0` from Uliana's branch | Fixed in #20; retested ✅ (run 4) |
-| BUG-002 | Blocker | Web UI never calls the Python API: plan, cart and FatSecret are simulated in the browser | Ksiusha + Alina | Open |
+| BUG-002 | Blocker | Web UI never calls the Python API: plan, cart and FatSecret are simulated in the browser | Ksiusha + Alina | Fixed in #27 (Polina); retested ✅ (run 5) |
 | BUG-003 | High | "Recalculate basket" always fails with `PLANNER_FAILED` and leaves no confirmable plan | Uliana | Fixed in #22; retested ✅ (run 4) |
-| BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 3 of 10 still fail | Uliana | Open; retested in run 4 |
-| BUG-005 | High | Unsupported dietary restrictions typed in the form are silently moved into `notes` | Ksiusha | Open |
-| BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Open |
+| BUG-004 | High | Chat tests abort the backend suite without `GEMINI_API_KEY`; with a key 3 of 10 still fail | Uliana | Fixed in `5fcd4b4` (Sofiia); retested ✅ (run 5) |
+| BUG-005 | High | Unsupported dietary restrictions typed in the form are silently moved into `notes` | Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-006 | Medium | Invented, unlabeled cart panel, store address and user name in the UI | Alina + Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-007 | Low | Days counter stops at 7; the contract allows 1–14 | Ksiusha (confirm with Katia) | Open |
 | BUG-008 | Low | `API_BASE_URL` is documented as runtime configuration but only applies at `next build` | Ksiusha | Open |
 | BUG-009 | Medium | Text contrast below WCAG AA on primary buttons, hints and the cart panel | Katia + Ksiusha + Alina | Open |
-| BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow` | Rina | Open |
-| BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Open |
-| BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Open |
+| BUG-010 | Low | OpenAPI omits the allowed `X-Demo-Scenario` values; 405 responses lack `Allow`; three operations also accept schema-valid bodies the API rejects on uniqueness/label rules the schema does not express | Rina | Open; extended in run 7 |
+| BUG-011 | High | Invented regular purchases (whiskey, butter), prices and brand images are shown as plan data | Alina + Ksiusha | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-012 | High | Cart: "Додати все" skips the preview, and the preview is always stale, so it cannot be confirmed | Alina | Fixed in #27 and #31 (Polina); retested ✅ (run 5) |
 | BUG-013 | Medium | Public-deployment hardening: unbounded sessions and runs, no rate limit, cookie without `Secure` | Rina | Open |
-| BUG-014 | Medium | The generated OpenAPI contract is stale after the live cart changes (`export_contracts.py --check` fails) | Rina | Open |
-| BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Open |
-| BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Open |
+| BUG-014 | Medium | The generated OpenAPI contract is stale after the live cart changes (`export_contracts.py --check` fails) | Rina | Fixed in `5fcd4b4` (Sofiia); retested ✅ (run 5) |
+| BUG-015 | High | Since the shared cart (`1a121e0`), windows narrower than 1280 px have no cart panel, so the cart cannot be synced or confirmed | Alina | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Fixed in #31 (Polina); retested ✅ (run 5) |
+| BUG-017 | Medium | `GET /api/fatsecret/exports/confirm` and `.../preview` are swallowed by the parameterized `GET /api/fatsecret/exports/{export_id}` route and answer 404 instead of 405 | Rina | Found in run 7 (Schemathesis) |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -70,6 +72,13 @@ been sent to the owners; Polina shares it with the team.
 - **Impact:** a hosted demo would show neither the Python pipeline nor any MCP or FatSecret
   call, so "full demo uses verified real MCP calls" cannot be met. The API side works through
   Next.js forwarding (end-to-end suite through `:3000`: 34 passed, 1 known failure).
+- **Fix (#27, Polina; retested in run 5):** new chats run against the API. The form posts to
+  `/api/plans` and polls the run; "↻ Перерахувати кошик" calls `/api/plans/{runId}/recalculate`;
+  the cart preview and confirmation go through `/api/cart/*`; FatSecret through
+  `/api/fatsecret/exports/*`; the connect buttons open `/api/auth/silpo/start` and
+  `/api/auth/fatsecret/start`, and the statuses are read after the return. The result shows the
+  API's `dataMode`. `tests/ui/specs/api-wiring.spec.ts` passes as a regular check. Still in the
+  browser only: the chat, which has no API endpoint, and the invented data of BUG-006 and BUG-011.
 
 ## BUG-003 — "Recalculate basket" always fails
 
@@ -105,6 +114,9 @@ been sent to the owners; Polina shares it with the team.
   `1460.00 UAH`).
 - **Expected:** the suite runs and passes without secrets, with Gemini mocked or injected.
 - **Impact:** CI stays red and the handoffs' test counts cannot be reproduced.
+- **Retest (run 5, `afe586e`):** fixed. No test module reads `GEMINI_API_KEY` any more
+  (`5fcd4b4`, Sofiia), and the documented command passes all 191 tests without it, Uliana's new
+  chat tests from #26 included.
 
 ## BUG-005 — Unsupported restrictions are silently moved into notes
 
@@ -118,9 +130,19 @@ been sent to the owners; Polina shares it with the team.
   restriction labels with an explanation rather than ignoring them"; product rule: notes must
   not silently override structured restrictions.
 - **Impact:** an allergen the user entered is not enforced although the UI accepted it.
-  Becomes live as soon as BUG-002 is fixed.
+  Live since #27: the form now sends these requests to the API.
+
+- **Retest (run 5, since #31):** fixed. The form's "Алергени та заборони" and "Вподобання"
+  fields now load their choices from `GET /api/filters` and let the user pick only from that list;
+  everything typed reaches `PlanningRequest.restrictions`/`.preferences` instead of free text in
+  `notes`. Confirmed by `tests/ui/specs/a11y.spec.ts` and the UI walk-through in run 5.
 
 ## BUG-006 — Invented, unlabeled data in the UI
+
+- **Retest (run 5, since #31):** fixed. The result screen now renders the API's own meal
+  plan, product list and recurring suggestions instead of the fixed cards; the greeting no
+  longer names anyone, and the cart panel shows the store label only when the API supplies
+  one, with a demo note otherwise. Confirmed by `tests/ui/specs/flows.spec.ts`.
 
 - **Where:** `apps/web/src/app/page.tsx:532-585` (`SetupCartPreview`: two
   "Масло солодковершкове Галичина" items at 124.00/79.99 ₴, a discount total and the store
@@ -178,10 +200,32 @@ been sent to the owners; Polina shares it with the team.
     rebuilds the response without the original headers. 13 operations are affected.
 - **Expected:** the header values as an enum in the OpenAPI contract, and 405 responses that
   keep `Allow`.
-- **Impact:** none on the demo flow; the contract is less precise for the frontend types and
-  for automated checks.
+- **Extended in run 7 (`main` @ `100343e`, Schemathesis 4.26.1, 50 examples per operation,
+  `--continue-on-failure`, 1360 cases generated, 5 unique failures reproduced consistently across
+  two runs; JUnit report `tests/contract/reports/junit-20260912T155003Z.xml`):**
+  - `POST /api/plans` accepts `restrictions: [""]` per the schema (`list[str]`), but the API
+    rejects it with `VALIDATION_ERROR: Unsupported restrictions: `. The label set is a fixed
+    enum in `schemas/__init__.py:44-50`, not expressed in the generated contract.
+  - `POST /api/plans/{runId}/recalculate` accepts duplicate or empty `selectedRecurringIds` per
+    the schema, but the API requires unique, known IDs (`routes/api.py:207-208`) and answers 400.
+  - `POST /api/fatsecret/exports/preview` accepts duplicate `mealIds` per the schema, but the API
+    requires unique IDs from the plan (`fatsecret/export.py:84`) and answers 400.
+  - Two of the "unsupported method" failures this run are BUG-017, not a contract gap:
+    `GET /api/fatsecret/exports/confirm` and `.../preview` should answer 405 and instead reach
+    `GET .../{export_id}`. The other four operations Schemathesis flagged as "repeatedly 404"
+    (`POST /api/cart/preview`, `POST /api/cart/confirm`, `POST /api/fatsecret/exports/confirm`,
+    `GET /api/fatsecret/exports/{export_id}`) are not a defect: a fuzzer without a real
+    `runId`/`previewId` in this session can only ever reach the "not found" branch of those
+    routes.
 
 ## BUG-011 — Invented regular purchases, prices and brand images shown as plan data
+
+- **Retest (run 5, since #31):** fixed. `RecurringSuggestions`, `MealPlan` and
+  `ProposedBasket` render only `result.recurringItems`, `result.mealPlan` and
+  `result.selectedProducts`; the fixed butter and whiskey cards, their images and
+  `apps/web/public/butter-galychyna.png` are deleted. Selecting a recurring item is disabled
+  with a stated reason, because the API cannot match one to a product yet (CR-04); the
+  suggestion itself is real, not invented.
 
 - **Found in:** run 3 UI walk-through (desktop and Pixel 7); confirmed by
   `tests/ui/specs/flows.spec.ts` (`test.fail`).
@@ -206,6 +250,10 @@ been sent to the owners; Polina shares it with the team.
 
 ## BUG-012 — The cart addition cannot be previewed and confirmed
 
+- **Retest (run 5, since #31):** fixed. "Додати все в кошик Сільпо" now opens the API
+  preview immediately; there is no local fill-in step. Confirmed by
+  `tests/ui/specs/flows.spec.ts`.
+
 - **Found in:** run 3 UI walk-through; confirmed by two `test.fail` checks in
   `tests/ui/specs/flows.spec.ts`.
 - **Actual:** "Додати все в кошик Сільпо" immediately fills the side cart panel (7 units,
@@ -221,6 +269,11 @@ been sent to the owners; Polina shares it with the team.
 - **Expected** ([product](../PRODUCT.md), "Real cart"): "Add to Silpo cart" → preview of the exact
   changes → "Confirm addition" → verified per-item outcome; nothing changes before confirmation.
 - **Impact:** the confirmed cart addition, a central step of the demo story, cannot be shown.
+- **Retest (run 5, since #27):** the stale preview is gone. "↥ Синхронізувати з Сільпо" gets a
+  fresh preview from `/api/cart/preview`, and "Підтвердити додавання" ends in the receipt
+  "Результат синхронізації" (`tests/ui/specs/flows.spec.ts`, desktop). Still open for Alina:
+  "Додати все в кошик Сільпо" fills the panel before any preview. The panel is only local state
+  until the confirmation; nothing is sent to the cart before it.
 
 ## BUG-013 — Public-deployment hardening
 
@@ -251,8 +304,15 @@ been sent to the owners; Polina shares it with the team.
   (`services/api/README.md`).
 - **Impact:** frontend types and fixtures can drift from the API, and the CI backend job fails at
   this step even after BUG-004 is fixed.
+- **Retest (run 5, `afe586e`):** fixed in `5fcd4b4` (Sofiia); `--check` reports 22 contract and
+  fixture files current.
 
 ## BUG-015 — No cart panel below 1280 px
+
+- **Retest (run 5, since #31):** fixed. Below the `xl` breakpoint the same cart panel renders
+  in the page flow instead of the side column, so preview and confirmation are reachable at
+  every width tested (Pixel 7 included). Confirmed by
+  `tests/ui/specs/flows.spec.ts` on both projects.
 
 - **Found in:** run 4, the retest of Alina's shared cart (`1a121e0`); confirmed by
   `tests/ui/specs/flows.spec.ts` (`test.fail` on the mobile project).
@@ -268,6 +328,10 @@ been sent to the owners; Polina shares it with the team.
 
 ## BUG-016 — Over-budget plans can go to the cart
 
+- **Retest (run 5, since #31):** fixed. "Додати все в кошик Сільпо" is disabled whenever the
+  API's `canConfirmCart` is false, over budget included, and the existing budget warning
+  explains why. Confirmed by `tests/ui/specs/flows.spec.ts`.
+
 - **Found in:** run 4; confirmed by `tests/ui/specs/flows.spec.ts` (`test.fail`).
 - **Actual:** with a budget of 100 UAH the result says "Бюджет перевищено на 390,00 грн.", yet
   "Додати все в кошик Сільпо" stays enabled and "↥ Синхронізувати з Сільпо" opens the preview.
@@ -279,3 +343,42 @@ been sent to the owners; Polina shares it with the team.
 - **Decision needed:** keep the contract and disable adding with an explanation, or change the
   contract and the API together.
 - **Impact:** once the UI calls the API (BUG-002), this path ends in a 409 the user does not expect.
+- **Retest (run 5, since #27):** confirmed at runtime. With a budget of 100 UAH the plan from the
+  API says "Бюджет перевищено на 110,00 грн.", and "Додати все в кошик Сільпо" stays enabled.
+  "↥ Синхронізувати з Сільпо" sends `POST /api/cart/preview`, which the API refuses with 409
+  `STALE_PLAN` ("A complete proposal within budget is required.", `retryable: false`). The page
+  opens "Помилка синхронізації кошика Сільпо" with that English message inside the Ukrainian text
+  and offers "Повторити синхронізацію", which can only fail again. The code `STALE_PLAN` also
+  misnames the reason for the frontend (Rina).
+
+## BUG-017 — `GET` on the FatSecret export actions is swallowed by `GET .../{export_id}`
+
+- **Found in:** run 7, Schemathesis 4.26.1 (`--continue-on-failure`, 1360 cases), reproduced
+  consistently across two runs; JUnit report
+  `tests/contract/reports/junit-20260912T155003Z.xml`.
+- **Where:** `services/api/src/smart_basket/routes/api.py`. Route registration order:
+  `POST /fatsecret/exports/preview` (line 330), `POST /fatsecret/exports/confirm` (line 337),
+  then `GET /fatsecret/exports/{export_id}` (line 345).
+- **Actual:** `GET /api/fatsecret/exports/confirm` and `GET /api/fatsecret/exports/preview` both
+  answer `404 {"code": "NOT_FOUND", "message": "Export not found in this session."}` instead of
+  `405 Method Not Allowed`. Starlette matches routes in registration order; since no `GET` route
+  has the literal path `.../confirm` or `.../preview`, the request falls through to the later
+  `GET /fatsecret/exports/{export_id}` route, which treats "confirm"/"preview" as an `export_id`
+  value and correctly reports it unknown.
+- **Reproduce:**
+  ```
+  curl -X GET -H 'Cookie: smart_basket_demo=<session>' http://127.0.0.1:8000/api/fatsecret/exports/confirm
+  curl -X GET -H 'Cookie: smart_basket_demo=<session>' http://127.0.0.1:8000/api/fatsecret/exports/preview
+  ```
+- **Expected:** `405 Method Not Allowed` with an `Allow` header listing `POST` (RFC 9110), matching
+  BUG-010's existing 405 finding.
+- **Impact:** low on the demo flow — nothing in the app sends `GET` to these paths — but a
+  misdirected or scripted `GET` gets a misleading "not found" instead of "wrong method", and any
+  future path that starts with a real export ID's shape would silently match the wrong handler.
+- **Fix hint:** registration order does not help here — Starlette's router
+  (`starlette/routing.py`, `Router.app`) returns the first route in its list whose path *and*
+  method both match, so a later `GET /{export_id}` still wins over an earlier `POST /confirm`
+  partial match regardless of order. `export_id` values are always shaped
+  `demo-export-<32 hex chars>` (`core.uid("export")`); constrain the path parameter to that
+  pattern (a regex path converter) so literal segments like `confirm`/`preview` fail to match
+  the parameterized route and fall through to the real 405.
