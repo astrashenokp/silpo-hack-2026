@@ -28,9 +28,10 @@ def test_candidates_and_replacement_exclude_unsafe():
     assert len(result.candidates) == 4
     assert result.unresolved_requirements == []
     assert find_replacement(ingredient(), [], context).candidates[0].id == "demo-oats"
-    assert find_replacement(ingredient(), ["demo-oats"], context).unresolved_requirements
+    assert find_replacement(ingredient(), ["demo-oats"], context).candidates[0].id == "demo-oats-unknown"
     assert find_product_candidates([ingredient(unit="ml")], [], context).unresolved_requirements
-    catalog.products["demo-oats"].available = False
+    for product in catalog.products.values():
+        product.available = False
     assert find_product_candidates([ingredient()], [], context).unresolved_requirements
 
 
@@ -47,3 +48,32 @@ def test_restriction_evidence_is_required():
     assert result.unresolved_requirements
     verified = find_product_candidates([requirement], [], MatchingContext(None, catalog, catalog.check_restrictions))
     assert not verified.unresolved_requirements
+
+
+def test_unrestricted_live_candidate_does_not_require_dietary_evidence():
+    catalog = DemoCatalog()
+    catalog.products["demo-oats"].restriction_check = "unknown"
+    catalog.terms = {"oats": ["demo-oats"]}
+
+    result = find_product_candidates([ingredient()], [], MatchingContext(None, catalog))
+
+    assert result.unresolved_requirements == []
+    assert result.candidates[0].restriction_check == "pass"
+
+
+def test_unresolved_reason_distinguishes_dietary_evidence_from_package_data():
+    requirement = ingredient().model_copy(update={"restrictions": ["fish-free"]})
+    catalog = DemoCatalog()
+    unknown = find_product_candidates([requirement], [], MatchingContext(None, catalog))
+    assert "lacked provider evidence" in unknown.unresolved_requirements[0].reason
+
+    missing_size = catalog.products["demo-oats"].model_copy(update={
+        "content_quantity": None,
+        "content_unit": None,
+    })
+    catalog.products = {"demo-oats": missing_size}
+    catalog.terms = {"oats": ["demo-oats"]}
+    unresolved = find_product_candidates(
+        [ingredient()], [], MatchingContext(None, catalog, catalog.check_restrictions)
+    )
+    assert "package contents" in unresolved.unresolved_requirements[0].reason

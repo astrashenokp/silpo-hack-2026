@@ -8,24 +8,27 @@ one reviewed Saved Meal was created, its provider write was read back successful
 and the user found it in FatSecret under **Favorite Meals** in the same connected
 account. No account identity, token, secret, or remote identifier is recorded here.
 
-The same day's Silpo check completed browser OAuth, discovered the official MCP
-read/write tool set, loaded live cart context and returned a normalized live product
-search result. The schema-driven cart adapter is now connected to a reviewed live
-preview/confirmation service with price and availability revalidation, stale-cart
-protection, idempotency, and post-write read-back. Automated provider-boundary tests
-pass; one explicitly authorized real-cart mutation is still required for final live QA.
-The September 11 acceptance attempt reached the live planner after normalizing the
-connected profile's `fish` and `red-meat` labels, but the provider returned empty
-product arrays for both meal staples and the previously successful `молоко` query.
-The planner correctly produced an incomplete, non-confirmable result and made no
-cart mutation. Final write QA is blocked until Silpo search returns inventory for
-the active cart/store context.
+The Silpo checks completed browser OAuth, discovered the official MCP read/write tool
+set, loaded live cart context and returned normalized live product results. The
+schema-driven cart adapter is connected to a reviewed live preview/confirmation
+service with price and availability revalidation, stale-cart protection, idempotency,
+and post-write read-back. Package contents are normalized from provider
+`displayRatio` values, including decimal weights and multipacks.
+
+**Live cart acceptance, September 12, 2026:** the planner matched 13 live candidates,
+selected one verified package each for oats, rice and lentils, stayed within budget,
+reported no unresolved requirements and enabled confirmation. The reviewed preview
+preserved the existing cart and proposed exactly three additions. One explicitly
+authorized confirmation succeeded, provider read-back verified the result, and the
+user saw all three products in the connected Silpo cart. No account identity, token,
+cart identifier, product identifier, run identifier or preview identifier is recorded
+here.
 
 - Date: September 7, 2026.
 - Revision: local working-tree implementation; no PR or shared commit yet.
 - Receivers: Ksiusha, Alina, Uliana, Vika; Arina for provider adapter boundaries.
-- Status: mock integration is complete; connected FatSecret export is implemented
-  and has passed its manual Saved Meal/app-visibility check.
+- Status: connected FatSecret export and the live Silpo catalog/cart flow are
+  implemented and have passed their manual provider-visibility acceptance checks.
 
 The Python API accepts the shared planning input, returns 202, stores progress and
 results per demo cookie session, and supports versioned recalculation. Cart and
@@ -39,14 +42,16 @@ explains generation and frontend type ownership.
 
 Main code: `services/api/src/smart_basket/` (`app.py`, `routes/`, `schemas/`,
 `catalog/`, `cart/`, `fatsecret/`). `demo.py` contains temporary replacements for
-unfinished team modules. No provider credentials are required. Supported environment
-variables: `SMART_BASKET_MODE`, `SMART_BASKET_CORS_ORIGINS`; see `.env.example`.
+unfinished team modules. Demo mode requires no provider credentials; live integrations
+require their documented OAuth or API configuration. Supported environment variables
+and local setup are documented in `.env.example`.
 
-Current verification: 42 passing tests covering strict validation, arithmetic,
+Current verification: 203 passing backend tests covering strict validation, arithmetic,
 restriction evidence, session isolation, worker failures, stale previews, parallel
 duplicate cart confirmation, partial outcomes, personal portions, duplicate export
-protection and fixture schema validation. Dependency deprecation warnings originate
-from Starlette's HTTPX test adapter and AnyIO alias; they do not fail the checks.
+protection, fixture schema validation and live-provider boundary normalization.
+Dependency deprecation warnings originate from third-party libraries and do not fail
+the checks.
 
 Known limitations: process-local state and operation journal, one worker;
 no durable encrypted FatSecret token storage, nutrition/recurrence optimization, pet demand,
