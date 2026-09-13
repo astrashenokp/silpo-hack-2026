@@ -8,9 +8,9 @@ Severity: **Blocker** stops setup or the demo flow; **High** breaks a required
 feature; **Medium** misleads the user or a reviewer; **Low** is cosmetic or
 documentation.
 
-Found on `main` @ `0ef7fbb` (September 11, 2026); the latest retest is run 5 on `afe586e`
-(`main` with #26 plus PR #27). This list has not yet been sent to the owners; Polina shares it
-with the team.
+First found on `main` @ `0ef7fbb` (September 11, 2026). The latest retest is **run 14 on the frozen
+revision `main` @ `402bdcb`**, verified against the live deploy (e2e 40/40, UI 42/42). This list has
+not yet been sent to the owners; Polina shares it with the team.
 
 | ID | Severity | Summary | Owner | Status |
 |---|---|---|---|---|
