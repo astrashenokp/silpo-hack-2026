@@ -10,9 +10,12 @@ from smart_basket.catalog.live import (
     _run_async,
     restriction_check_from_details,
 )
+from smart_basket.catalog.matching import MatchingContext, find_product_candidates
 from smart_basket.cart.service import normalize_cart_snapshot, snapshot_total
 from smart_basket.core import Session
-from smart_basket.schemas import ProductCandidate, ProductSearchResponse, UserContext
+from smart_basket.schemas import (
+    IngredientRequirement, ProductCandidate, ProductSearchResponse, UserContext,
+)
 
 
 def _owner(app, client):
@@ -145,6 +148,24 @@ async def test_connected_catalog_without_cart_branch_uses_labelled_demo_candidat
 
     assert products
     assert all(product.source == "synthetic" for product in products)
+
+
+def test_connected_matching_can_read_details_for_labelled_demo_fallback():
+    owner = Session("owner")
+    owner.silpo_connected = True
+    catalog = SessionCatalog()
+    requirement = IngredientRequirement(
+        id="rice", name="Dry rice", search_terms=["rice"], quantity=500.0,
+        unit="g", meal_ids=["meal-1"], restrictions=["fish-free"],
+    )
+
+    result = find_product_candidates(
+        [requirement], [], MatchingContext(owner, catalog, catalog.check_restrictions),
+    )
+
+    assert result.unresolved_requirements == []
+    assert result.candidates
+    assert all(candidate.source == "synthetic" for candidate in result.candidates)
 
 
 def test_connected_catalog_reuses_context_and_history_loaded_for_the_form():

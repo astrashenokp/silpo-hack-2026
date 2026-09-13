@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request, Response
@@ -15,6 +16,7 @@ from smart_basket.schemas import (
 )
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 def session(request: Request) -> Session:
@@ -93,6 +95,12 @@ def work(
     except Exception as exc:
         with owner.lock:
             run = owner.runs[run_id]
+            logger.exception(
+                "Planner run %s failed after stage %s (%s).",
+                run_id,
+                run.stage,
+                type(exc).__name__,
+            )
             run.status = "failed"
             run.error = exc.error if isinstance(exc, ApiError) else ApiError(
                 "PLANNER_FAILED", "Planner could not produce a valid result.", 502, True).error

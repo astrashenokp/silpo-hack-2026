@@ -342,6 +342,8 @@ class SessionCatalog:
         if not self._live(owner):
             return self.demo.get_product_details(owner, product_id)
         candidate = self._candidates.get((owner.id, product_id))
+        if candidate is None and product_id in self.demo.products:
+            return self.demo.get_product_details(owner, product_id)
         if candidate is None:
             raise KeyError(f"Silpo product {product_id} is not in the reviewed search results.")
         return candidate.model_copy(deep=True)
