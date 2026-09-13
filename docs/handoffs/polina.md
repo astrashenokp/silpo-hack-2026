@@ -1,39 +1,47 @@
 # Handoff: Polina — final integration, QA and release
 
 - **Deploy URL:** https://p01--web--2n7f5yvrbnqy.code.run — Northflank Cloud, Europe-West
-  (London). Set up by Polina, live-verified end to end September 12–13: `POST /api/plans` runs a
-  full plan to `completed` with real meals and products; e2e 40/40 and the full Playwright UI
-  suite 42/42 both pass against this exact public URL, not just locally.
-- **Frozen revision:** `main` @ `402bdcb`, deployed and confirmed running. CI green (5/5).
-  Verified against the live URL at this revision on September 13: e2e 40/40 and the full
-  Playwright UI suite 42/42 (desktop + Pixel 7). Northflank redeploys `web` automatically on a
-  push to `main` — both September 13 fixes reached the live site without a manual rebuild.
-- **Delivery date:** hosting decided and live September 12–13 (treated as the deadline day);
-  recording and submission still ahead.
+  (London). Live-verified end to end September 14: `POST /api/plans` runs a full plan to
+  `completed` with real meals and products; e2e 40/40 and the full Playwright UI suite 56/56 both
+  pass against this exact public URL, not just locally.
+- **Frozen revision:** `main` @ `6784526`, deployed and confirmed running. CI green (5/5).
+  Northflank redeploys `web` automatically on a push to `main` (no rebuild needed for code
+  changes; `API_BASE_URL` build-argument changes still need an explicit Rebuild).
+- **Delivery date:** hosting live since September 12–13; September 14 is the actual deadline day.
+  Recording and submission still ahead.
 - **PR / commit:** intake (#18), QA toolkit (#19), round 2 (#23), whole-project code review
-  (#29), UI fully connected to the API (#27, #31), QA runs 5–14 (#28, #32, #33, #34, #36, #37,
-  #38, #39).
+  (#29), UI fully connected to the API (#27, #31), QA runs 5–17 (#28, #32, #33, #34, #36, #37,
+  #38, #39, #40, #41, #42, #43).
 - **Receiving teammates:** the whole team.
-- **Completed so far:** runs 1–14 (setup, backend and frontend checks, HTTP scenarios, UI
+- **Completed so far:** runs 1–17 (setup, backend and frontend checks, HTTP scenarios, UI
   walk-through, load and security review, full toolkit sweeps, live-credential verification, a
-  real Docker Compose rehearsal, the live public deployment, and two browser-agent batteries
-  against it); end-to-end suite; QA toolkit; CI workflow; deployment runbook
-  and local launcher; demo script; submission checklist; bug list with owners; whole-repository
-  code review; the web UI fully wired to the Python API, including chat.
+  real Docker Compose rehearsal, the live public deployment, three browser-agent batteries, a
+  real Gemini key verified live, and a same-day production outage found, fixed and verified);
+  end-to-end suite; QA toolkit; CI workflow; deployment runbook and local launcher; demo script;
+  submission checklist; bug list with owners; whole-repository code review; the web UI fully
+  wired to the Python API, including a genuinely working chat.
 - **Main files:** `tests/`, `docs/qa/` (test results, bugs, tools, demo script, submission
   checklist, code review), `deploy/` (runbook, Docker, `run-local.ps1`), `.github/workflows/ci.yml`.
 - **Checks and results:** [test results](../qa/test-results.md).
+- **Chat now works live:** a real `GEMINI_API_KEY` was supplied September 13 (verified: all four
+  planning intents parse, a budget change genuinely replans). The default model
+  (`gemini-3.7-flash`) had a 5 requests/minute free-tier limit that exhausted fast; switched to
+  `GEMINI_MODEL=gemini-3.5-flash-lite` on the same key, verified live with the same quality.
+  Script at most a few chat messages with pauses when recording.
 - **Known issues:** [bug list](../qa/bugs.md). BUG-001–BUG-006, BUG-011, BUG-012, BUG-014,
-  BUG-015, BUG-016, BUG-018 and BUG-020 are fixed and retested. Open, none blocking the demo:
-  days capped at 7 (BUG-007), `API_BASE_URL` build-time only (BUG-008), text contrast
-  (BUG-009), contract detail (BUG-010, extended in run 7), public-deployment hardening
-  (BUG-013), a FatSecret route-shadowing 404/405 mismatch (BUG-017, found in run 7), no live
-  `GEMINI_API_KEY` so chat cannot be demoed (BUG-019, needs a key from Uliana), and nine of the
-  ten dietary restrictions emptying the basket on the demo data path (BUG-021, Rina). The one
-  open High-severity item from the code review, CR-04 (recurring purchases cannot be matched to
+  BUG-015, BUG-016, BUG-018, BUG-020, BUG-022, BUG-023 and BUG-025 are fixed and retested. Open,
+  none blocking the demo: days capped at 7 (BUG-007), `API_BASE_URL` build-time only (BUG-008),
+  text contrast (BUG-009), contract detail (BUG-010, extended in run 7), public-deployment
+  hardening (BUG-013), a FatSecret route-shadowing 404/405 mismatch (BUG-017, found in run 7),
+  one generic error for every chat failure (BUG-024, Uliana), nine of the ten dietary
+  restrictions emptying the basket on the demo data path (BUG-021, Rina), and live Edamam
+  meals leaving every basket empty because English ingredient names don't match the catalog
+  (BUG-026, Sofiia + Rina — this is why `SMART_BASKET_MEALS_SOURCE` is `synthetic` on the live
+  deploy, not `edamam`, despite BUG-025 making Edamam itself reachable). The one open
+  High-severity item from the code review, CR-04 (recurring purchases cannot be matched to
   products by the API), is deliberately unfixed pending Rina/Vika/Uliana.
 - **Two things to say out loud before recording:** pick no dietary restriction or only
-  `peanut-free` (BUG-021), and do not script live chat (BUG-019).
+  `peanut-free` (BUG-021), and keep chat to a few messages with pauses (free-tier quota).
 
 ## Launch the local demo today (PowerShell, repository root)
 
@@ -85,12 +93,12 @@ expected 40 passed. Rebuild the frontend after pulling changes to `apps/web`.
 
 | Path | Status | Evidence |
 |---|---|---|
-| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, every run through run 14 (40 of 40), including against the live public URL |
-| Recalculation | working in demo, from the UI too | Fixed in #22; the UI calls it since #27; runs 5–14 |
-| Web UI → Python API | fully connected (PR #27, completed in #31): plans, recalculation, cart, FatSecret, sign-in routes, chat (`POST /api/chat`) | Runs 5–14, UI specs against the running API, now 42/42 desktop + Pixel 7, including against a real Docker deployment and the live public URL |
+| Planning pipeline over HTTP (Uliana, Sofiia, Rina, Vika) | demo, working | End-to-end suite, every run through run 17 (40 of 40), including against the live public URL |
+| Recalculation | working in demo, from the UI too | Fixed in #22; the UI calls it since #27; runs 5–17 |
+| Web UI → Python API | fully connected (PR #27, completed in #31): plans, recalculation, cart, FatSecret, sign-in routes, chat (`POST /api/chat`, genuinely working with a real key since run 16) | Runs 5–17, UI specs against the running API, now 56/56 desktop + Pixel 7, including against a real Docker deployment and the live public URL |
 | Silpo OAuth, tools, context and product search | live and independently re-verified by Polina, not only self-reported | Run 9–10: `claude mcp login silpo` and the MCP Inspector both connected a real account; 40 live tools (matches Arina's and Rina's Sep 11 count), still authenticated a full day later without a new sign-in; all 12 tool names the backend code calls exist verbatim on the live server; real profile, food-restriction, family/pet, cart and product-search responses each matched the exact shape the adapter code expects, including the `displayRatio`-based package-size parsing from Rina's #30. **Not yet exercised: the same login through our own product's `/api/auth/silpo/start`** (only the raw MCP tools were driven directly, not our app's OAuth client), and the cart-write tool (`silpo_add_or_update_cart_products`, intentionally not attempted — it would modify a real cart) |
 | Silpo cart writes | live service with preview, revalidation, idempotency and read-back; one authorized real-cart check still open | Rina's handoff |
-| Edamam | not verified | Credential-gated (Sofiia) |
+| Edamam meal plans | live-verified (run 17): real credentials work, real recipes returned (BUG-025 fixed). **Not enabled** on the live deploy — English ingredient names don't match the catalog, so the basket comes back empty (BUG-026, Sofiia + Rina) | `SMART_BASKET_MEALS_SOURCE=synthetic` on the live deploy |
 | FatSecret export | demo verified; live saved-meal write reported by Rina on September 11, not re-verified; consumer credentials verified live by Polina (`request_token` succeeded, two-legged `foods.search` returned real data, `foods.search.v5` is unavailable for this app's scope) | Run 8; the full three-legged write still needs a human to authorize a FatSecret account in a browser |
 
 ## Release checklist ([QA and Demo](../QA_DEMO.md#september-1213-polinas-release-checklist))
@@ -99,12 +107,12 @@ expected 40 passed. Rebuild the frontend after pulling changes to `apps/web`.
 - [x] Connect frontend, HTTP API, agent and provider adapters — fully connected in #27/#31; the live Silpo *adapter* code itself is verified against real data (run 9), but not yet driven through our own app's sign-in button
 - [x] Start Next.js and Python; `/api` forwarding and background plan execution work locally
 - [x] OAuth redirect/session behavior and CORS on the hosted origin — **live on Northflank now**: `POST /api/plans` reaches `completed` on the real public URL with the correct origin, and e2e (40/40) plus the full UI suite (42/42) both pass against it, not only locally. Silpo/FatSecret OAuth callbacks are pointed at this origin in the API's env vars but not yet clicked through live on this exact deploy
-- [x] Acceptance scenarios run, bugs assigned and retested — runs 1–14 recorded; every author-owned bug found has a named owner in `docs/qa/bugs.md`
+- [x] Acceptance scenarios run, bugs assigned and retested — runs 1–17 recorded; every author-owned bug found has a named owner in `docs/qa/bugs.md`
 - [x] A real MCP interaction verified — live Silpo OAuth, 40 tools and real profile/cart/product-search calls, runs 9–10; Edamam still credential-gated (Sofiia)
 - [ ] FatSecret export acceptance checks on the live account — consumer credentials verified live (run 8) and now configured on the hosted API too; the full user-authorized write still needs a human login
 - [x] No blocking defects in the demo flow — no blocker or High defect open since #31 in Polina-tested paths; CR-04 is the one open High finding, deliberately left to its owners
 - [ ] Demo account, cart context and a repeatable starting state — a live Silpo account is now available (used in runs 9–10) but its cart is a real teammate's cart, not a rehearsal-safe demo one; need a dedicated demo account or an agreed reset step before recording
-- [x] Revision frozen with deploy URL, launch and recovery steps — `main` @ `402bdcb`, live at the deploy URL above, launch/recovery documented
+- [x] Revision frozen with deploy URL, launch and recovery steps — `main` @ `6784526`, live at the deploy URL above, launch/recovery documented
 - [x] Clearly labeled synthetic backup — `DemoBadge`, `X-Data-Mode`, the DEMO warning text; verified in every UI run
 - [x] Current submission rules: links, video access, duration and format — read September 11, [submission checklist](../qa/submission.md); re-check before the 14th, since the portal FAQ did not load on the 11th
 
@@ -121,7 +129,7 @@ demo mode with the DEMO label visible, never presented as a live run.
 |---|---|---|
 | Hosting option | Polina | **Done** — Northflank Cloud, two services (`api`, `web`) built from `deploy/api.Dockerfile` and `deploy/web.Dockerfile` |
 | Deploy URL | Polina | https://p01--web--2n7f5yvrbnqy.code.run — live-verified (e2e 40/40, UI 42/42); redeploys automatically on a push to `main` |
-| Frozen revision | Polina | `main` @ `402bdcb`, deployed, CI green (5/5), live-verified e2e 40/40 + UI 42/42 |
+| Frozen revision | Polina | `main` @ `6784526`, deployed, CI green (5/5), live-verified e2e 40/40 + UI 56/56 |
 | Presenter | Team | — |
 | Submission-account owner | Team | — |
 | Portal requirements | Polina | Read on September 11: [submission checklist](../qa/submission.md); re-check on the 12th and 14th |

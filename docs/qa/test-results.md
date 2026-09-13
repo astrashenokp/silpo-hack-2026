@@ -616,3 +616,51 @@ failures. **Recording guidance: at most a few chat messages, with a pause betwee
 The key must be added as a **runtime variable** on the Northflank `api` service —
 runtime, not a build argument, so a redeploy is enough and no rebuild is needed. Polina has no
 Northflank credentials in this session, so the team does that step.
+
+## Run 17 — production outage and recovery, September 13–14, 2026
+
+- **Trigger:** live verification found `POST /api/plans` failing on every request with
+  `"Edamam returned HTTP 403."` The deploy had `SMART_BASKET_MEALS_SOURCE=edamam` and
+  `EDAMAM_SYNTHETIC_FALLBACK=false`, so the failure reached every user instead of falling back —
+  a full production outage on the deadline day, for every user, demo or connected.
+
+### Fix 1 — the 403 itself (BUG-025)
+
+`EdamamMealPlannerClient.request_plan` sent `account_user` in the URL where the Edamam app ID
+belongs, and `app_id`/`app_key` as query parameters instead of HTTP Basic Auth — exactly the
+shape of request Edamam answers 403 to. Fixed in #43 to the documented contract (app ID in the
+URL, Basic Auth header, `?type=public`). Backend suite 222/222 before merge.
+
+### What the fix immediately uncovered — BUG-026
+
+Once the 403 was gone, every plan came back with `selectedProducts: []`,
+`budgetStatus: incomplete`: Edamam's English ingredient names (`chicken`, `red potatoes`,
+`extra virgin olive oil`, …) never match the catalog's vocabulary (three hardcoded synthetic
+terms — `oats`/`rice`/`lentils` — and no general translation step). Measured: 0 of 49
+requirements matched, on two separate live plans. This is a scope gap between Sofiia's
+ingredient normalization and Rina's catalog matching, not a quick fix, and very likely affects a
+real connected Silpo account too (Ukrainian catalog, no translation for arbitrary English terms).
+
+### Decision
+
+Polina and the user agreed live: revert `SMART_BASKET_MEALS_SOURCE` back to `synthetic` on the
+live deploy rather than ship a plan-with-empty-basket experience on submission day. Done as a
+Northflank runtime-variable change (no rebuild) by the user; verified as the only variable
+touched. BUG-026 recorded for the team to pick up after the deadline.
+
+### Full verification after the revert
+
+| Check | Result |
+|---|---|
+| `POST /api/plans` on the live URL | ✅ `completed`, `dataMode: demo`, real synthetic basket (3 products, 210,00 грн), `budgetStatus: within_budget`, `canConfirmCart: true` |
+| e2e suite against the live URL | ✅ 40/40 |
+| Playwright UI suite against the live URL | ✅ 56/56 (desktop + Pixel 7) |
+| CI on `main` after merge (`6784526`) | ✅ 5/5 |
+
+### Conclusion
+
+A same-day outage was found, root-caused, fixed and verified live within the hour, and its
+immediate fallout (an unrelated, more structural defect) was caught before it reached the
+recorded demo rather than during it. The live deploy is back to the same working state as before
+this incident, with a real fix underneath (BUG-025 closed) and one new, clearly scoped, owner-
+assigned defect on record (BUG-026) rather than a silent regression.
