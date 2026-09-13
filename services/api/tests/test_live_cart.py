@@ -354,6 +354,79 @@ async def test_live_cart_preview_confirm_readback_and_idempotency(
 
 
 @pytest.mark.asyncio
+async def test_live_cart_preview_refreshes_missing_context_and_write_coordinates(
+    app, client, planning_request, monkeypatch
+):
+    wire_plan, owner, plan = _make_plan_live(app, client, planning_request)
+    owner.silpo_cart_id = None
+    owner.silpo_branch_id = None
+    owner.silpo_delivery_type = None
+    owner.silpo_timeslot = None
+    owner.silpo_product_write_metadata.clear()
+
+    @asynccontextmanager
+    async def fake_session(_storage):
+        yield object()
+
+    async def fake_context(_session, session_owner):
+        session_owner.silpo_cart_id = "cart-refreshed"
+        session_owner.silpo_branch_id = "branch-refreshed"
+        session_owner.silpo_delivery_type = "SelfPickup"
+        session_owner.silpo_timeslot = {"start": "start", "end": "end"}
+        return UserContext(
+            preferences=[], restrictions=[], pets=[], history_available=False,
+            cart_context_ready=True, warnings=[],
+        )
+
+    async def fake_cart(_session):
+        return {"shoppingCartId": "cart-refreshed", "products": []}
+
+    async def fake_search(_session, query, branch_id, **kwargs):
+        selected = next(item for item in plan.selected_products if item.name == query)
+        assert branch_id == "branch-refreshed"
+        assert kwargs["cart_id"] == "cart-refreshed"
+        assert kwargs["owner"] is owner
+        owner.silpo_product_write_metadata[selected.product_id] = {
+            "productId": selected.product_id,
+            "companyId": f"company-{selected.product_id}",
+            "branchId": branch_id,
+        }
+        product = ProductCandidate(
+            id=selected.product_id,
+            name=selected.name,
+            requirement_ids=list(selected.requirement_ids),
+            price_minor=selected.unit_price_minor,
+            selling_unit=selected.selling_unit,
+            quantity_step=1.0,
+            content_quantity=None,
+            content_unit=None,
+            available=True,
+            restriction_check="pass",
+            regular_price_minor=None,
+            source="silpo",
+            checked_at="2026-09-13T00:00:00+00:00",
+        )
+        return ProductSearchResponse(query=query, products=[product], warnings=[])
+
+    monkeypatch.setattr("smart_basket.cart.service.get_mcp_session", fake_session)
+    monkeypatch.setattr("smart_basket.cart.service.get_user_context", fake_context)
+    monkeypatch.setattr("smart_basket.cart.service.get_current_cart", fake_cart)
+    monkeypatch.setattr("smart_basket.cart.service.search_products", fake_search)
+
+    response = client.post("/api/cart/preview", json={
+        "runId": wire_plan["runId"], "version": wire_plan["version"],
+    })
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()["changes"]) == len(plan.selected_products)
+    assert owner.silpo_cart_id == "cart-refreshed"
+    assert all(
+        owner.silpo_product_write_metadata[item.product_id].get("companyId")
+        for item in plan.selected_products
+    )
+
+
+@pytest.mark.asyncio
 async def test_live_cart_uncertain_write_uses_readback(
     app, client, planning_request, monkeypatch
 ):

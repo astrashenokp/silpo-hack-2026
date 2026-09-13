@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import logging
 from typing import Any
 
 from smart_basket.catalog.matching import line_total
@@ -10,11 +11,16 @@ from smart_basket.mcp.adapters import (
     add_or_update_cart_products,
     get_current_cart,
     get_product_details,
+    get_user_context,
     normalize_product_search,
+    search_products,
     uah_to_minor,
 )
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.schemas import CartChange, CartItemOutcome, CartPreview, CartReceipt
+
+
+logger = logging.getLogger(__name__)
 
 
 def cart_total(session):
@@ -176,43 +182,107 @@ class LiveCartService:
             metadata = dict(owner.silpo_product_write_metadata)
         if not connected:
             raise ApiError("AUTH_REQUIRED", "Connect the Silpo account before cart preview.", 401)
-        if not cart_id or not branch_id:
-            raise ApiError("CART_CONTEXT_REQUIRED", "Load a complete Silpo cart context first.")
-        if (
-            not plan.selected_products
-            or plan.budget_status != "within_budget"
-            or plan.unresolved_requirements
-            or any(item.source != "silpo" for item in plan.selected_products)
-        ):
-            raise ApiError("STALE_PLAN", "A complete reviewed live Silpo proposal is required.")
 
         try:
             async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
+                # A transient cart read during OAuth used to leave this session permanently
+                # incomplete. Refresh once at the action boundary, where current cart context is
+                # required anyway, so reconnecting the whole Silpo account is unnecessary.
+                if not cart_id or not branch_id:
+                    await get_user_context(mcp_session, owner)
+                    with owner.lock:
+                        cart_id = owner.silpo_cart_id
+                        branch_id = owner.silpo_branch_id
+                        delivery_type = owner.silpo_delivery_type
+                        timeslot = owner.silpo_timeslot
+                        schemas = dict(owner.silpo_tool_schemas)
+                        metadata = dict(owner.silpo_product_write_metadata)
+                if not cart_id or not branch_id:
+                    raise ApiError(
+                        "CART_CONTEXT_REQUIRED",
+                        "Load a complete Silpo cart context first.",
+                    )
+                if (
+                    not plan.selected_products
+                    or plan.budget_status != "within_budget"
+                    or plan.unresolved_requirements
+                    or any(item.source != "silpo" for item in plan.selected_products)
+                ):
+                    raise ApiError(
+                        "STALE_PLAN",
+                        "A complete reviewed live Silpo proposal is required.",
+                    )
+
                 raw_cart = await get_current_cart(mcp_session)
                 snapshot = normalize_cart_snapshot(raw_cart)
                 changes: list[CartChange] = []
                 write_products: list[dict[str, Any]] = []
                 for selected in plan.selected_products:
                     coordinates = metadata.get(selected.product_id)
+                    current = None
+                    if coordinates and coordinates.get("companyId"):
+                        try:
+                            raw_details = await get_product_details(
+                                mcp_session,
+                                selected.product_id,
+                                branch_id,
+                                slug=coordinates.get("slug"),
+                                cart_id=cart_id,
+                                delivery_type=delivery_type,
+                                timeslot=timeslot,
+                                input_schema=schemas.get("silpo_get_product_details"),
+                            )
+                            details = normalize_product_search(
+                                raw_details, selected.name
+                            ).products
+                            current = next(
+                                (
+                                    item for item in details
+                                    if item.id == selected.product_id
+                                ),
+                                None,
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Silpo product detail revalidation failed for %s; "
+                                "refreshing it through catalog search (%s).",
+                                selected.product_id,
+                                type(exc).__name__,
+                            )
+
+                    # Product-detail payloads can omit catalog fields needed by the normalizer,
+                    # and provider write coordinates may expire. The live search endpoint is the
+                    # canonical source for both, so recover them before declaring the plan stale.
+                    if current is None:
+                        refreshed = await search_products(
+                            mcp_session,
+                            selected.name,
+                            branch_id,
+                            cart_id=cart_id,
+                            delivery_type=delivery_type,
+                            timeslot=timeslot,
+                            tool_schemas=schemas,
+                            owner=owner,
+                        )
+                        current = next(
+                            (
+                                item for item in refreshed.products
+                                if item.id == selected.product_id
+                            ),
+                            None,
+                        )
+                        with owner.lock:
+                            coordinates = dict(
+                                owner.silpo_product_write_metadata.get(
+                                    selected.product_id, {}
+                                )
+                            )
+                        metadata[selected.product_id] = coordinates
                     if not coordinates or not coordinates.get("companyId"):
                         raise ApiError(
                             "STALE_PLAN",
                             f"Provider write coordinates expired for {selected.name}; search again.",
                         )
-                    raw_details = await get_product_details(
-                        mcp_session,
-                        selected.product_id,
-                        branch_id,
-                        slug=coordinates.get("slug"),
-                        cart_id=cart_id,
-                        delivery_type=delivery_type,
-                        timeslot=timeslot,
-                        input_schema=schemas.get("silpo_get_product_details"),
-                    )
-                    details = normalize_product_search(raw_details, selected.name).products
-                    current = next(
-                        (item for item in details if item.id == selected.product_id), None
-                    )
                     if (
                         current is None or not current.available
                         or current.price_minor != selected.unit_price_minor
