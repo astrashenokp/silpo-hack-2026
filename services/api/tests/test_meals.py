@@ -1,7 +1,11 @@
+import base64
+import json
+
 import pytest
 
 from smart_basket.meals import build_meal_plan, replan_meal_plan, supported_labels
 from smart_basket.meals.edamam import (
+    EdamamMealPlannerClient,
     EdamamSettings,
     EdamamUnavailable,
     build_edamam_payload,
@@ -238,6 +242,47 @@ def test_edamam_payload_omits_empty_accept_filters():
 
     assert "accept" not in payload["plan"]
     assert "fit" not in payload["plan"]
+
+
+def test_edamam_client_uses_current_meal_planner_auth_contract(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"status": "OK", "selection": []}).encode("utf-8")
+
+    def fake_urlopen(http_request, timeout):
+        captured["request"] = http_request
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("smart_basket.meals.edamam.request.urlopen", fake_urlopen)
+    settings = EdamamSettings(
+        app_id="meal-app/id",
+        app_key="secret-key",
+        account_user="demo-user-1",
+        timeout_seconds=3,
+    )
+
+    response = EdamamMealPlannerClient(settings).request_plan({"size": 1, "plan": {}})
+
+    http_request = captured["request"]
+    headers = dict(http_request.header_items())
+    expected_token = base64.b64encode(b"meal-app/id:secret-key").decode("ascii")
+    assert response["status"] == "OK"
+    assert captured["timeout"] == 3
+    assert http_request.full_url == (
+        "https://api.edamam.com/api/meal-planner/v1/meal-app%2Fid/select?type=public"
+    )
+    assert headers["Authorization"] == f"Basic {expected_token}"
+    assert headers["Edamam-account-user"] == "demo-user-1"
+    assert "secret-key" not in http_request.full_url
 
 
 def test_edamam_selection_and_recipe_details_map_to_contract_models():
