@@ -38,6 +38,8 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-023 | Medium | The chat error text claimed "на сервері не налаштований ключ Gemini (GEMINI_API_KEY)" for *every* interpreter failure, so an exceeded free-tier quota told the user (and a judge) that the server is misconfigured, which is false | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run16`; retested ✅ (run 16, both with and without a key) |
 | BUG-024 | Low | `handle_chat_message` catches every interpreter exception and returns one generic `chat_error`, so a rate limit, a network blip and a missing key are indistinguishable to the caller | Uliana | Open |
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
+| BUG-025 | Blocker | Edamam Meal Planner returned HTTP 403 for every request, and `EDAMAM_SYNTHETIC_FALLBACK=false` on the live deploy meant this failed every plan for every user — production was fully down | Polina (own file, `services/api/src/smart_basket/meals/edamam.py`) | Fixed in #43; retested ✅ (run 17, live: e2e 40/40, UI 56/56) |
+| BUG-026 | Blocker (deliberately not shipped) | Once BUG-025 was fixed, live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's Ukrainian/synthetic vocabulary, so the basket is empty on every plan | Sofiia (ingredient search terms) + Rina (catalog matching); scope decision needed | Open — `SMART_BASKET_MEALS_SOURCE` reverted to `synthetic` on the live deploy, so this is not user-visible in the current submission |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -572,3 +574,51 @@ not yet been sent to the owners; Polina shares it with the team.
 - **Fix hint for the owner:** distinguish at least "no key configured" from "temporarily
   unavailable, retryable" (429 and transport errors) and pass that distinction out, so the client
   can offer a retry instead of inventing an explanation.
+
+## BUG-025 — Edamam Meal Planner returned 403, taking production fully down
+
+- **Found in:** live verification, September 13–14. `POST /api/plans` on
+  `https://p01--web--2n7f5yvrbnqy.code.run` completed with
+  `{"code":"UPSTREAM_UNAVAILABLE","message":"Edamam returned HTTP 403.","retryable":true}` for
+  every request. `SMART_BASKET_MEALS_SOURCE=edamam` and `EDAMAM_SYNTHETIC_FALLBACK=false` were
+  both live, so nothing masked the failure — no plan could be created for anyone, guest or
+  connected.
+- **Where:** `services/api/src/smart_basket/meals/edamam.py`,
+  `EdamamMealPlannerClient.request_plan`. Put `account_user` in the URL where the Edamam **app
+  ID** belongs, and sent `app_id`/`app_key` as query parameters instead of HTTP Basic Auth.
+- **Expected:** the Meal Planner v1 contract: app ID URL-encoded into the path,
+  `Authorization: Basic {app_id}:{app_key}`, `?type=public`, account user in the
+  `Edamam-Account-User` header.
+- **Fix (#43, Polina):** corrected to the documented contract. Added
+  `test_edamam_client_uses_current_meal_planner_auth_contract`, which captures the real outgoing
+  `Request` object and asserts the URL, the Basic Auth token, and that the app key never leaks
+  into the URL.
+- **Retest:** backend suite 222/222 before merge; live afterward, `POST /api/plans` now returns
+  real Edamam recipes (`"Tuscan Roasted Chicken Recipe with Roasted Potatoes"`, `source:
+  "edamam"`) instead of failing — confirmed the 403 itself is gone. Immediately surfaced BUG-026.
+
+## BUG-026 — Live Edamam meals leave every basket empty (0 products)
+
+- **Found in:** live verification right after BUG-025 (fixing the Edamam 403 — see below) was
+  confirmed working: once Edamam succeeds, every plan comes back with
+  `selectedProducts: []` and `budgetStatus: incomplete`.
+- **Where:** the mismatch is between `services/api/src/smart_basket/meals/normalization.py`
+  (Sofiia — generates `search_terms` straight from Edamam's English ingredient names, e.g.
+  `chicken`, `red potatoes`, `extra virgin olive oil`) and
+  `services/api/src/smart_basket/catalog/matching.py` /
+  `services/api/src/smart_basket/catalog/live.py`'s `QUERY_ALIASES` (Rina — only ever knew
+  three hardcoded terms: `oats`, `rice`, `lentils`, the exact vocabulary of the *synthetic*
+  meal source).
+- **Actual:** measured live — 0 of 49 ingredient requirements matched on 2 separate plans.
+  This is not demo-catalog-specific: the live Silpo catalog is in Ukrainian and has no
+  translation step for arbitrary English ingredient names either, so a connected real account
+  would very likely see the same empty-basket outcome.
+- **Impact:** Blocker for the basket/cart half of the product the moment live Edamam meals are
+  on — a real meal plan with a permanently empty, unconfirmable cart.
+- **Decision (Polina + team, September 13):** reverted `SMART_BASKET_MEALS_SOURCE` back to
+  `synthetic` on the live deploy so the basket keeps working for the submission. Live Edamam
+  meals are technically reachable (BUG-025 fixed) but not turned on in production.
+- **Fix hint for the owner:** before re-enabling `SMART_BASKET_MEALS_SOURCE=edamam`, ingredient
+  search terms need either a translation step (English → Ukrainian) before hitting Silpo, or a
+  broader/fuzzier catalog search than exact `QUERY_ALIASES` lookups. Sofiia and Rina to decide
+  which side owns the mapping.
