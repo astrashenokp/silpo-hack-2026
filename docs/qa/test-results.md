@@ -664,3 +664,17 @@ immediate fallout (an unrelated, more structural defect) was caught before it re
 recorded demo rather than during it. The live deploy is back to the same working state as before
 this incident, with a real fix underneath (BUG-025 closed) and one new, clearly scoped, owner-
 assigned defect on record (BUG-026) rather than a silent regression.
+
+## Run 18 — decision revisited: Edamam meals back on, September 14, 2026
+
+- **Context:** after run 17's revert to `synthetic`, the live UI showed placeholder-looking meal
+  titles ("Oatmeal breakfast bowl", "Dry rice bowl") with the ДЕМО label — technically honest, but
+  visually unconvincing for a recorded demo. Weighed against BUG-026 (empty basket).
+- **Decision:** flip `SMART_BASKET_MEALS_SOURCE` back to `edamam`. Realistic recipe names judged
+  more valuable for the submission than a working demo cart. Accepted trade: the basket stays
+  empty on the guest/demo path until BUG-026 is fixed by its owners (Sofiia + Rina).
+- **What this does not undo:** the cart flow itself (preview → confirm → per-item read-back) was
+  fully verified end to end in run 17 while meals were synthetic — that code path is not broken,
+  it simply has nothing to add once every ingredient is unresolved.
+- **Demo script updated:** the Silpo-cart segment (2:45–3:30) is marked not to be attempted live
+  on the current configuration; `docs/qa/demo-script.md` has the full guidance.

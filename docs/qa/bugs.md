@@ -39,7 +39,7 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-024 | Low | `handle_chat_message` catches every interpreter exception and returns one generic `chat_error`, so a rate limit, a network blip and a missing key are indistinguishable to the caller | Uliana | Open |
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 | BUG-025 | Blocker | Edamam Meal Planner returned HTTP 403 for every request, and `EDAMAM_SYNTHETIC_FALLBACK=false` on the live deploy meant this failed every plan for every user — production was fully down | Polina (own file, `services/api/src/smart_basket/meals/edamam.py`) | Fixed in #43; retested ✅ (run 17, live: e2e 40/40, UI 56/56) |
-| BUG-026 | Blocker (deliberately not shipped) | Once BUG-025 was fixed, live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's Ukrainian/synthetic vocabulary, so the basket is empty on every plan | Sofiia (ingredient search terms) + Rina (catalog matching); scope decision needed | Open — `SMART_BASKET_MEALS_SOURCE` reverted to `synthetic` on the live deploy, so this is not user-visible in the current submission |
+| BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket is empty on every plan | Sofiia (ingredient search terms) + Rina (catalog matching); scope decision needed | Open — accepted for the submission (decision, Sep 14): realistic recipe names outweigh a working demo basket; `SMART_BASKET_MEALS_SOURCE=edamam` is live, the cart segment is skipped in the recorded demo |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -615,10 +615,15 @@ not yet been sent to the owners; Polina shares it with the team.
   would very likely see the same empty-basket outcome.
 - **Impact:** Blocker for the basket/cart half of the product the moment live Edamam meals are
   on — a real meal plan with a permanently empty, unconfirmable cart.
-- **Decision (Polina + team, September 13):** reverted `SMART_BASKET_MEALS_SOURCE` back to
-  `synthetic` on the live deploy so the basket keeps working for the submission. Live Edamam
-  meals are technically reachable (BUG-025 fixed) but not turned on in production.
-- **Fix hint for the owner:** before re-enabling `SMART_BASKET_MEALS_SOURCE=edamam`, ingredient
-  search terms need either a translation step (English → Ukrainian) before hitting Silpo, or a
+- **Decision, September 13:** first reverted `SMART_BASKET_MEALS_SOURCE` back to `synthetic` on
+  the live deploy so the basket kept working.
+- **Decision revisited, September 14:** flipped back to `SMART_BASKET_MEALS_SOURCE=edamam` for
+  the submission — realistic recipe names were judged more important than a working demo basket.
+  Accepted consequence: the basket is empty and unconfirmable on the live deploy right now; the
+  recorded demo must skip the Silpo-cart segment on the guest/demo path (see `demo-script.md`).
+  The cart flow itself is not broken — it was fully verified end to end (preview, confirm,
+  per-item read-back) on run 17 while meals were still synthetic.
+- **Fix hint for the owner:** before this can be both real and cart-usable, ingredient search
+  terms need either a translation step (English → Ukrainian) before hitting Silpo, or a
   broader/fuzzier catalog search than exact `QUERY_ALIASES` lookups. Sofiia and Rina to decide
   which side owns the mapping.
