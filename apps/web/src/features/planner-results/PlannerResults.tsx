@@ -273,7 +273,11 @@ function UserChatBubble({ text }: { text: string }) {
 
 function AgentBubble({ text, busy = false }: { text: string; busy?: boolean }) {
   return (
-    <div className="mt-2 flex items-start gap-5">
+    <div
+      className="mt-2 flex items-start gap-5"
+      data-testid="chat-bubble"
+      data-role="agent"
+    >
       <span className="mt-1 hidden md:flex">
         <AgentAvatar size="md" />
       </span>

@@ -15,6 +15,10 @@ from smart_basket.schemas import (
 
 DEMO_FOODS = {"oats": "Dry oats", "rice": "Dry rice", "lentils": "Dry lentils"}
 DelegatedCall = Callable[[str, Mapping[str, object] | None], Awaitable[dict[str, Any]]]
+PREPARATION_TOKENS = {
+    "raw", "dry", "dried", "uncooked", "cooked", "boiled", "steamed",
+    "baked", "plain", "fresh",
+}
 
 
 def _objects(value: Any) -> list[dict[str, Any]]:
@@ -63,12 +67,8 @@ def _candidate_score(source_name: str, food: Mapping[str, Any]) -> float:
     source_basis, candidate_basis = _basis(source), _basis(candidate)
     if source_basis and candidate_basis and source_basis != candidate_basis:
         return 0
-    preparation = {
-        "raw", "dry", "dried", "uncooked", "cooked", "boiled", "steamed",
-        "baked", "plain", "fresh",
-    }
-    source_core = " ".join(token for token in source.split() if token not in preparation)
-    candidate_core = " ".join(token for token in candidate.split() if token not in preparation)
+    source_core = " ".join(token for token in source.split() if token not in PREPARATION_TOKENS)
+    candidate_core = " ".join(token for token in candidate.split() if token not in PREPARATION_TOKENS)
     if source_core == candidate_core:
         score = 1.0
     else:
@@ -91,17 +91,38 @@ def _select_food(source_name: str, foods: list[dict[str, Any]]) -> tuple[dict[st
         key=lambda pair: (pair[0], pair[1].get("food_type") == "Generic"),
         reverse=True,
     )
+    # FatSecret often returns the same generic food more than once with word-order or
+    # preparation-only differences (for example "Dry Oats" and "Oats (Dry)"). Those are not
+    # meaningful alternatives for this one-portion export, so they must not block confirmation.
+    unique_ranked = []
+    seen_semantics = set()
+    for score, food in ranked:
+        normalized = _text(food.get("food_name", ""))
+        core = tuple(sorted(token for token in normalized.split() if token not in PREPARATION_TOKENS))
+        semantic_key = (core, _basis(normalized))
+        if semantic_key in seen_semantics:
+            continue
+        seen_semantics.add(semantic_key)
+        unique_ranked.append((score, food))
+    ranked = unique_ranked
     if not ranked or ranked[0][0] < 0.82:
         return None, "No sufficiently close FatSecret food match was found."
     if (
-        len(ranked) > 1
+        ranked[0][0] < 0.90
+        and len(ranked) > 1
         and ranked[1][0] >= 0.82
-        and ranked[0][0] - ranked[1][0] < 0.05
+        and ranked[0][0] - ranked[1][0] < 0.03
         and str(ranked[0][1].get("food_id")) != str(ranked[1][1].get("food_id"))
     ):
         names = ", ".join(str(pair[1].get("food_name", "unknown")) for pair in ranked[:3])
         return None, f"FatSecret returned ambiguous food matches: {names}."
     return ranked[0][1], None
+
+
+def _fallback_search_expression(source_name: str) -> str | None:
+    normalized = _text(source_name)
+    core = " ".join(token for token in normalized.split() if token not in PREPARATION_TOKENS)
+    return core if core and core != normalized else None
 
 
 def _float(value: Any) -> float | None:
@@ -161,32 +182,52 @@ async def match_live_personal_portion(
 
     for amount in meal.ingredient_amounts:
         personal_quantity = amount.quantity / meal.servings
-        try:
-            search = await call("foods.search.v5", {
-                "search_expression": amount.name,
-                "max_results": 10,
-                "food_type": "generic",
-            })
-        except Exception:
-            search = await call("foods.search", {
-                "search_expression": amount.name,
-                "max_results": 10,
-            })
-        compatible: list[tuple[dict[str, Any], dict[str, Any], float, float]] = []
-        for candidate in _food_results(search)[:5]:
-            if not _servings(candidate):
-                details = await call("food.get.v5", {"food_id": candidate.get("food_id")})
-                detailed = details.get("food")
-                if isinstance(detailed, dict):
-                    candidate = detailed
-            if str(candidate.get("food_type", "")).casefold() == "brand":
-                continue
-            selected_serving = _select_serving(
-                amount.name, amount.unit, personal_quantity, _servings(candidate),
-            )
-            if selected_serving:
-                serving, number_of_units, base_units = selected_serving
-                compatible.append((candidate, serving, number_of_units, base_units))
+        async def compatible_candidates(
+            search_expression: str,
+        ) -> list[tuple[dict[str, Any], dict[str, Any], float, float]]:
+            try:
+                search = await call("foods.search.v5", {
+                    "search_expression": search_expression,
+                    "max_results": 10,
+                    "food_type": "generic",
+                })
+            except Exception:
+                search = await call("foods.search", {
+                    "search_expression": search_expression,
+                    "max_results": 10,
+                })
+            matches = []
+            for candidate in _food_results(search)[:5]:
+                if not _servings(candidate):
+                    details = await call("food.get.v5", {"food_id": candidate.get("food_id")})
+                    detailed = details.get("food")
+                    if isinstance(detailed, dict):
+                        candidate = detailed
+                if str(candidate.get("food_type", "")).casefold() == "brand":
+                    continue
+                selected_serving = _select_serving(
+                    amount.name, amount.unit, personal_quantity, _servings(candidate),
+                )
+                if selected_serving:
+                    serving, number_of_units, base_units = selected_serving
+                    matches.append((candidate, serving, number_of_units, base_units))
+            return matches
+
+        compatible = await compatible_candidates(amount.name)
+        requested = (selections or {}).get(amount.ingredient_id)
+        food, reason = (
+            _select_food(amount.name, [entry[0] for entry in compatible])
+            if not requested
+            else (None, None)
+        )
+        fallback_expression = _fallback_search_expression(amount.name)
+        if not requested and food is None and fallback_expression:
+            compatible.extend(await compatible_candidates(fallback_expression))
+            compatible = list({
+                (str(entry[0].get("food_id")), str(entry[1].get("serving_id"))): entry
+                for entry in compatible
+            }.values())
+            food, reason = _select_food(amount.name, [entry[0] for entry in compatible])
 
         candidate_models = []
         for candidate, serving, number_of_units, base_units in compatible:
@@ -199,7 +240,6 @@ async def match_live_personal_portion(
                 calories=calories * number_of_units / base_units if calories else None,
             ))
 
-        requested = (selections or {}).get(amount.ingredient_id)
         chosen = next((entry for entry in compatible if requested and (
             str(entry[0].get("food_id")), str(entry[1].get("serving_id"))
         ) == requested), None)
@@ -211,8 +251,8 @@ async def match_live_personal_portion(
             ))
             continue
 
-        compatible_foods = [entry[0] for entry in compatible]
-        food, reason = _select_food(amount.name, compatible_foods) if not requested else (chosen[0], None)
+        if requested and chosen:
+            food, reason = chosen[0], None
         if food is None:
             unresolved.append(UnresolvedFood(
                 ingredient_id=amount.ingredient_id,

@@ -14,13 +14,16 @@ class FakeLiveFatSecret:
         self.fail_food_id = None
         self.persist_before_failure = False
         self.ambiguous_oats = False
+        self.needs_core_lentils = False
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
         self.calls.append((method, parameters))
         if method == "foods.search.v5":
             name = parameters["search_expression"]
-            food_id = {"Dry oats": "10", "Dry rice": "20", "Dry lentils": "30"}[name]
+            food_id = {
+                "Dry oats": "10", "Dry rice": "20", "Dry lentils": "30", "lentils": "30",
+            }[name]
             def food(candidate_id, candidate_name):
                 return {
                 "food_id": candidate_id,
@@ -39,7 +42,9 @@ class FakeLiveFatSecret:
             foods = (
                 [food("10", "Oats (Dry)"), food("11", "Dry Oats")]
                 if name == "Dry oats" and self.ambiguous_oats
-                else food(food_id, name)
+                else food("31", "Lentil soup")
+                if name == "Dry lentils" and self.needs_core_lentils
+                else food(food_id, "Lentils, raw" if name == "lentils" else name)
             )
             if isinstance(foods, list):
                 foods[1]["servings"]["serving"]["serving_id"] = "1100"
@@ -240,29 +245,51 @@ def test_reconnected_account_gets_a_distinct_export_operation(planning_request):
         client.__exit__(None, None, None)
 
 
-def test_ambiguous_match_exposes_candidates_and_accepts_verified_selection(planning_request):
+def test_equivalent_matches_resolve_automatically_and_accept_verified_selection(planning_request):
     provider = FakeLiveFatSecret()
     provider.ambiguous_oats = True
     _, client, _ = connected_app(provider)
     try:
         plan = create_plan(client, planning_request)
         first = make_live_preview(client, plan).json()
-        unresolved = first["meals"][0]["unresolved"][0]
-        assert first["canConfirm"] is False
-        assert len(unresolved["candidates"]) == 2
+        assert first["canConfirm"] is True
+        assert first["meals"][0]["unresolved"] == []
 
-        selected = unresolved["candidates"][0]
+        selected = first["meals"][0]["items"][0]
         second = client.post("/api/fatsecret/exports/preview", json={
             **reference(plan),
             "mealIds": [plan["mealPlan"][0]["id"]],
             "selections": [{
                 "mealId": plan["mealPlan"][0]["id"],
-                "ingredientId": unresolved["ingredientId"],
+                "ingredientId": selected["ingredientId"],
                 "foodId": selected["foodId"],
                 "servingId": selected["servingId"],
             }],
         }).json()
         assert second["canConfirm"] is True
         assert second["meals"][0]["items"][0]["foodId"] == selected["foodId"]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_low_confidence_dry_name_retries_with_core_food_name(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.needs_core_lentils = True
+    _, client, _ = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        preview = make_live_preview(client, plan, count=3).json()
+
+        assert preview["canConfirm"] is True
+        dinner = preview["meals"][2]
+        assert dinner["unresolved"] == []
+        assert dinner["items"][0]["matchedName"] == "Lentils, raw"
+        expressions = [
+            parameters["search_expression"]
+            for method, parameters in provider.calls
+            if method == "foods.search.v5"
+        ]
+        assert "Dry lentils" in expressions
+        assert "lentils" in expressions
     finally:
         client.__exit__(None, None, None)

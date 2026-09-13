@@ -41,6 +41,7 @@ import type {
   ChatReply,
   FatSecretExport,
   FatSecretPreview,
+  FatSecretSelection,
   PlanningResult,
   ProductSelection,
 } from "@/lib/api/types";
@@ -133,6 +134,7 @@ export default function Home() {
   // Below lg the sidebar is off-canvas, so it needs an explicit way in and out.
   const [menuOpen, setMenuOpen] = useState(false);
   const [fsPreview, setFsPreview] = useState<FatSecretPreview | null>(null);
+  const [fsSelections, setFsSelections] = useState<FatSecretSelection[]>([]);
   const [fsBusy, setFsBusy] = useState(false);
   const [fsExport, setFsExport] = useState<FatSecretExport | null>(null);
   const [fsKey, setFsKey] = useState<string | null>(null);
@@ -422,6 +424,7 @@ export default function Home() {
     if (savedMeals.length === 0) return;
     setFsExport(null);
     setFsMessage(null);
+    setFsSelections([]);
     // One preview covers one plan version; meals saved from other plans wait for a later export.
     const { runId, version } = savedMeals[0];
     const mealIds = savedMeals
@@ -437,6 +440,35 @@ export default function Home() {
       setFsPreview(preview);
     } catch (error) {
       setFsMessage(describeError(error, "Не вдалося підготувати збереження у FatSecret."));
+    } finally {
+      setFsBusy(false);
+    }
+  }
+
+  async function selectFatSecretCandidate(selection: FatSecretSelection) {
+    if (!fsPreview || fsBusy) return;
+    const nextSelections = [
+      ...fsSelections.filter(
+        (item) =>
+          item.mealId !== selection.mealId || item.ingredientId !== selection.ingredientId,
+      ),
+      selection,
+    ];
+    setFsBusy(true);
+    setFsMessage(null);
+    try {
+      const preview = await apiPreviewFatSecret(
+        fsPreview.runId,
+        fsPreview.version,
+        fsPreview.meals.map((meal) => meal.mealId),
+        undefined,
+        nextSelections,
+      );
+      setFsSelections(nextSelections);
+      setFsKey(newIdempotencyKey());
+      setFsPreview(preview);
+    } catch (error) {
+      setFsMessage(describeError(error, "Не вдалося застосувати вибір FatSecret."));
     } finally {
       setFsBusy(false);
     }
@@ -486,7 +518,11 @@ export default function Home() {
         <FatSecretPreviewModal
           preview={fsPreview}
           onConfirm={confirmFatSecret}
-          onCancel={() => setFsPreview(null)}
+          onCancel={() => {
+            setFsPreview(null);
+            setFsSelections([]);
+          }}
+          onSelectCandidate={(selection) => void selectFatSecretCandidate(selection)}
           busy={fsBusy}
         />
       )}

@@ -1,6 +1,10 @@
 "use client";
 
-import type { FatSecretExport, FatSecretPreview } from "@/lib/api/types";
+import type {
+  FatSecretExport,
+  FatSecretPreview,
+  FatSecretSelection,
+} from "@/lib/api/types";
 import { formatNumber, formatQuantity } from "@/lib/format";
 import { Button, Modal, StatusBadge } from "./ui";
 
@@ -8,11 +12,13 @@ export function FatSecretPreviewModal({
   preview,
   onConfirm,
   onCancel,
+  onSelectCandidate,
   busy,
 }: {
   preview: FatSecretPreview;
   onConfirm: () => void;
   onCancel: () => void;
+  onSelectCandidate: (selection: FatSecretSelection) => void;
   busy: boolean;
 }) {
   return (
@@ -56,10 +62,62 @@ export function FatSecretPreviewModal({
               )}
 
               {blocked && (
-                <p className="mt-2 rounded-lg bg-warn-bg p-2 text-xs text-warn-text">
-                  Не знайдено відповідний продукт/порцію: {meal.unresolved[0].reason} Підтвердження
-                  недоступне, доки всі інгредієнти не зіставлені.
-                </p>
+                <div className="mt-2 space-y-2">
+                  {meal.unresolved.map((unresolved) => (
+                    <div
+                      key={unresolved.ingredientId}
+                      className="rounded-lg bg-warn-bg p-2 text-xs text-warn-text"
+                    >
+                      <p>
+                        Не знайдено однозначну відповідність для інгредієнта: {unresolved.reason}
+                      </p>
+
+                      {unresolved.candidates.length > 0 ? (
+                        <div className="mt-2">
+                          <p className="font-medium text-foreground">
+                            Оберіть правильний варіант FatSecret:
+                          </p>
+                          <ul className="mt-1 space-y-1.5">
+                            {unresolved.candidates.map((candidate) => (
+                              <li
+                                key={`${candidate.foodId}-${candidate.servingId}`}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-white px-2 py-1.5"
+                              >
+                                <span className="text-muted">
+                                  {candidate.matchedName} · {formatNumber(candidate.numberOfUnits)} порцій
+                                  {candidate.calories !== null
+                                    ? ` · ${Math.round(candidate.calories)} ккал`
+                                    : ""}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    onSelectCandidate({
+                                      mealId: meal.mealId,
+                                      ingredientId: unresolved.ingredientId,
+                                      foodId: candidate.foodId,
+                                      servingId: candidate.servingId,
+                                    })
+                                  }
+                                >
+                                  Обрати
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="mt-1">
+                          FatSecret не повернув сумісних варіантів. Цю страву поки зберегти не можна.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-xs text-warn-text">
+                    Підтвердження стане доступним, коли всі інгредієнти буде зіставлено.
+                  </p>
+                </div>
               )}
             </li>
           );

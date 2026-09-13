@@ -57,6 +57,20 @@ test("the result shows the API plan: every day and the chosen products", async (
   await expect(page.getByText(/Demo dry/).first()).toBeVisible();
 });
 
+test("a supported dietary restriction still produces a complete demo basket", async ({ page }) => {
+  await openPlanner(page);
+  await page.getByLabel("Бюджет", { exact: true }).fill("1800");
+  await page.getByRole("checkbox", { name: "Без риби", exact: true }).click();
+  await page.getByRole("button", { name: "Скласти меню та кошик" }).click();
+
+  await expect(page.getByRole("heading", { name: "Обрані продукти" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText(/Demo dry/).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Не вдалося підібрати" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Додати все в кошик Сільпо/ })).toBeEnabled();
+});
+
 test("recalculation adds the server's next version of the plan", async ({ page }) => {
   await createPlan(page);
   await page.getByRole("button", { name: /Перерахувати кошик/ }).first().click();
@@ -71,14 +85,16 @@ test("a chat message is answered by the agent API", async ({ page }) => {
   await page.getByLabel("Повідомлення до планера").fill("зроби дешевше");
   await page.getByRole("button", { name: "Надіслати" }).click();
   await expect(page.getByText("Обробляю запит…")).toHaveCount(0, { timeout: 15_000 });
-  // The answer depends on the deployment: with a Gemini key the agent replans, without one (CI)
-  // or over the free-tier quota it says the AI service is unavailable. Both are valid answers;
-  // what must never happen is silence. Asserting only one of them made this test deployment-bound.
-  await expect(
-    page
-      .getByText(/сервіс ШІ зараз недоступний|Оновлений план|Залишок:|Уточніть запит|Я не зрозуміла запит/)
-      .first(),
-  ).toBeVisible(QUICK);
+  // What the agent says depends on the deployment — with a Gemini key it replans or explains why
+  // it cannot, without one it reports the AI service as unavailable — and every one of those is a
+  // valid answer. Enumerating the wordings made this test deployment-bound twice. The invariant
+  // that actually matters is that the agent answers at all, with something readable.
+  const agentBubbles = page.locator('[data-testid="chat-bubble"][data-role="agent"]');
+  const last = agentBubbles.last();
+  await expect(last).toBeVisible(QUICK);
+  const answer = ((await last.innerText()) ?? "").trim();
+  expect(answer.length).toBeGreaterThan(0);
+  expect(answer).not.toBe("Обробляю запит…");
 });
 
 test("saving a meal to FatSecret previews one personal portion and reports the outcome", async ({ page }) => {
@@ -94,6 +110,80 @@ test("saving a meal to FatSecret previews one personal portion and reports the o
   await dialog.getByRole("button", { name: "Підтвердити збереження" }).click();
   await expect(page.getByRole("heading", { name: "Результат збереження у FatSecret" })).toBeVisible();
   await expect(page.getByText("Збережено").first()).toBeVisible();
+});
+
+test("an ambiguous FatSecret match can be resolved in the preview", async ({ page }) => {
+  await page.route("**/api/fatsecret/exports/preview", async (route) => {
+    const body = route.request().postDataJSON() as {
+      runId: string;
+      version: number;
+      mealIds: string[];
+      selections: Array<{ mealId: string; ingredientId: string; foodId: string; servingId: string }>;
+    };
+    const resolved = body.selections.length > 0;
+    await route.fulfill({
+      json: {
+        previewId: resolved ? "resolved-preview" : "ambiguous-preview",
+        runId: body.runId,
+        version: body.version,
+        accountLabel: "QA FatSecret account",
+        expiresAt: "2026-09-13T15:00:00Z",
+        destination: "saved_meals",
+        portionBasis: "one_person",
+        canConfirm: resolved,
+        meals: [
+          {
+            mealId: body.mealIds[0],
+            title: "Oatmeal breakfast bowl",
+            sourceKcalPerServing: 420,
+            fatsecretKcalPerServing: resolved ? 190 : null,
+            items: resolved
+              ? [
+                  {
+                    ingredientId: "oats",
+                    foodId: "10",
+                    servingId: "100",
+                    matchedName: "Oats, dry",
+                    numberOfUnits: 0.5,
+                    sourceQuantity: 50,
+                    sourceUnit: "g",
+                  },
+                ]
+              : [],
+            unresolved: resolved
+              ? []
+              : [
+                  {
+                    ingredientId: "oats",
+                    reason: "FatSecret returned ambiguous food matches.",
+                    candidates: [
+                      {
+                        foodId: "10",
+                        servingId: "100",
+                        matchedName: "Oats, dry",
+                        numberOfUnits: 0.5,
+                        calories: 190,
+                      },
+                    ],
+                  },
+                ],
+          },
+        ],
+        warnings: [],
+      },
+    });
+  });
+
+  await createPlan(page);
+  await page.getByRole("checkbox", { name: /Зберегти у FatSecret/ }).first().click();
+  await page.getByRole("button", { name: /Збережені у FatSecret/ }).first().click();
+  await page.getByRole("main").getByRole("button", { name: /Зберегти у FatSecret/ }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Оберіть правильний варіант FatSecret:")).toBeVisible();
+  await dialog.getByRole("button", { name: "Обрати" }).click();
+  await expect(dialog.getByText(/Oats, dry/)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Підтвердити збереження" })).toBeEnabled();
 });
 
 test("adding to the Silpo cart shows a preview before anything changes", async ({ page }) => {
