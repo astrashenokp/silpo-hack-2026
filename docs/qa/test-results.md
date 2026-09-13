@@ -516,3 +516,18 @@ input — a reminder to re-verify every agent-reported defect with real input ev
 code. Demo guidance added: pick no restriction or `peanut-free` on the demo data path until
 BUG-021 is resolved by its owner.
 
+### Verified on the live deploy after merging (same day)
+
+| Check on `https://p01--web--2n7f5yvrbnqy.code.run` | Result |
+|---|---|
+| Northflank picked up the merge without a manual rebuild | ✅ "Чати та меню" is present in the served HTML minutes after the merge — pushes to `main` redeploy `web` automatically. The earlier manual-rebuild rule stays true only for **build-argument** changes such as `API_BASE_URL` |
+| `GET /api/health` | ✅ `{"status":"ok","mode":"demo"}` |
+| e2e suite against the live URL | ✅ 40/40 |
+| Playwright UI suite against the live URL (`UI_BASE_URL=…`) | ✅ 42/42, desktop + Pixel 7 — both the run 13 calorie fix and the run 14 drawer fix confirmed in production, not just locally |
+
+Note for whoever runs these next: the UI suite reads **`UI_BASE_URL`** (`tests/ui/playwright.config.ts`),
+while the e2e suite reads `E2E_BASE_URL`. Passing `E2E_BASE_URL` to Playwright silently tests
+`http://localhost:3000` instead, which looks like a wave of connection-refused failures.
+
+**Frozen revision: `main` @ `402bdcb`.**
+
