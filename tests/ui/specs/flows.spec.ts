@@ -131,3 +131,37 @@ test("a guest without purchase history gets no invented regular purchases", asyn
   await expect(page.getByText(/Jameson/)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Регулярні покупки" })).toHaveCount(0);
 });
+
+// BUG-020: below the lg breakpoint the sidebar is off-canvas, so the chat list needs a way in.
+const NEW_CHAT = { name: "+ Новий чат", exact: true } as const;
+
+test("the chat list is reachable on this screen size", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Продовжити як гість (без історії)" }).click();
+
+  const menu = page.getByRole("button", { name: "Чати та меню" });
+  if (await menu.isVisible()) {
+    await expect(page.getByRole("button", NEW_CHAT)).toBeHidden();
+    await menu.click();
+  }
+
+  await expect(page.getByRole("button", NEW_CHAT)).toBeVisible(QUICK);
+  await page.getByRole("button", NEW_CHAT).click();
+  await expect(page.getByRole("heading", { name: "Сільпо AI помічник" })).toBeVisible(QUICK);
+});
+
+test("the page never scrolls sideways, with the chat menu open and closed", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Продовжити як гість (без історії)" }).click();
+  const fits = () =>
+    page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
+  expect(await fits()).toBeTruthy();
+
+  const menu = page.getByRole("button", { name: "Чати та меню" });
+  if (await menu.isVisible()) {
+    await menu.click();
+    await expect(page.getByRole("button", NEW_CHAT)).toBeVisible(QUICK);
+    expect(await fits()).toBeTruthy();
+  }
+});

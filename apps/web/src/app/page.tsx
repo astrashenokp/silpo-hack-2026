@@ -126,6 +126,8 @@ export default function Home() {
   const [cartKey, setCartKey] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"chats" | "saved">("chats");
+  // Below lg the sidebar is off-canvas, so it needs an explicit way in and out.
+  const [menuOpen, setMenuOpen] = useState(false);
   const [fsPreview, setFsPreview] = useState<FatSecretPreview | null>(null);
   const [fsBusy, setFsBusy] = useState(false);
   const [fsExport, setFsExport] = useState<FatSecretExport | null>(null);
@@ -480,6 +482,15 @@ export default function Home() {
         <div className="ml-auto flex items-center gap-3 lg:hidden">
           <button
             type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label="Чати та меню"
+            aria-expanded={menuOpen}
+            className="rounded-lg p-2 text-[#886432] transition-colors hover:bg-[#FFF0E1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46]"
+          >
+            <MenuIcon />
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab(activeTab === "saved" ? "chats" : "saved")}
             aria-label="Збережені у FatSecret"
             className="rounded-lg p-2 text-[#886432] transition-colors hover:bg-[#FFF0E1]"
@@ -491,11 +502,27 @@ export default function Home() {
       </header>
 
       <div className="flex h-[calc(100dvh-64px)] overflow-hidden">
-        <aside className="sticky top-16 hidden h-[calc(100dvh-64px)] w-[272px] shrink-0 self-start flex-col overflow-hidden border-r border-[#E6E6E6] bg-white lg:flex">
+        {menuOpen && (
+          <button
+            type="button"
+            aria-label="Закрити меню чатів"
+            onClick={() => setMenuOpen(false)}
+            className="fixed inset-0 z-30 cursor-default bg-black/30 lg:hidden"
+          />
+        )}
+
+        <aside
+          className={`${
+            menuOpen ? "flex" : "hidden"
+          } fixed inset-y-0 left-0 z-40 h-dvh w-[272px] flex-col overflow-hidden border-r border-[#E6E6E6] bg-white lg:sticky lg:inset-y-auto lg:left-auto lg:top-16 lg:z-auto lg:flex lg:h-[calc(100dvh-64px)] lg:shrink-0 lg:self-start`}
+        >
           <div className="flex flex-col items-center gap-4 px-6 py-6">
             <button
               type="button"
-              onClick={newChat}
+              onClick={() => {
+                newChat();
+                setMenuOpen(false);
+              }}
               className="flex h-10 w-[208px] items-center justify-center gap-2 rounded-full bg-[#F89F46] text-[14px] font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-offset-2"
             >
               <span className="text-xl font-light">+</span>
@@ -519,7 +546,10 @@ export default function Home() {
                   >
                     <button
                       type="button"
-                      onClick={() => selectChat(chat.id)}
+                      onClick={() => {
+                        selectChat(chat.id);
+                        setMenuOpen(false);
+                      }}
                       className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left"
                     >
                       <ChatIcon className={active ? "text-[#F89F46]" : "text-[#6B7280]"} />
@@ -548,7 +578,10 @@ export default function Home() {
           <div className="mt-auto shrink-0 border-t border-[#F2F2F2] bg-white">
             <button
               type="button"
-              onClick={() => setActiveTab(activeTab === "saved" ? "chats" : "saved")}
+              onClick={() => {
+                setActiveTab(activeTab === "saved" ? "chats" : "saved");
+                setMenuOpen(false);
+              }}
               className={`flex h-10 w-full items-center gap-2 px-8 text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F89F46] focus-visible:ring-inset ${
                 activeTab === "saved"
                   ? "bg-[rgba(248,159,70,0.2)] text-[#886432]"
@@ -970,6 +1003,19 @@ function ChatIcon({ className = "" }: { className?: string }) {
         fill="currentColor"
         stroke="white"
         strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function MenuIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={`shrink-0 ${className}`}>
+      <path
+        d="M4 7H20M4 12H20M4 17H20"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
       />
     </svg>
   );

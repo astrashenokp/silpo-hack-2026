@@ -33,6 +33,8 @@ with the team.
 | BUG-017 | Medium | `GET /api/fatsecret/exports/confirm` and `.../preview` are swallowed by the parameterized `GET /api/fatsecret/exports/{export_id}` route and answer 404 instead of 405 | Rina | Found in run 7 (Schemathesis) |
 | BUG-018 | Low | The per-day calorie figure was labeled "average per day" but was an average across that day's meals (e.g. shows ~620 next to a 2000 kcal/day target, reading as a huge shortfall that isn't real) | Polina (own file, `apps/web/src/features/planner-results/components/MealPlan.tsx`) | Fixed on `feature/polina-qa-run13`; retested ✅ (run 13, e2e 40/40, UI 24/24) |
 | BUG-019 | Low | The hosted API has no real `GEMINI_API_KEY`, so chat on the live deploy always answers "Чат недоступний: ... GEMINI_API_KEY" instead of doing anything — this is the documented fallback behavior working correctly, not a crash, but chat cannot be demoed live without a real key | Uliana (owns the chat module and any Gemini key); Polina to add it as a Northflank runtime variable once supplied | Open — blocked on a real key |
+| BUG-020 | Medium | Below the `lg` breakpoint (<1024 px) the sidebar is `display:none` with no replacement control, so "Новий чат", the chat list and "Збережені у FatSecret" cannot be reached at all — same class of defect as BUG-015 | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run14`; retested ✅ (run 14, UI 42/42) |
+| BUG-021 | Medium | In demo mode any dietary restriction other than `peanut-free` makes every product unmatched ("No candidate passed dietary verification … lacked provider evidence"), so the basket comes back empty while the meal plan looks fine | Rina (matching + demo catalog evidence); scope decision with Sofiia | Open — deliberately not fixed by Polina, see below |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -433,3 +435,73 @@ with the team.
   needed, unlike `API_BASE_URL`) and retests `/api/chat` against the live URL.
 - **Until then:** do not claim live chat in the video; either skip that segment or record it
   once against a key if one arrives before the deadline.
+
+## BUG-020 — The chat list is unreachable below 1024 px
+
+- **Found in:** run 14, overnight browser-agent pass (the agent's viewport was ~785 px wide and it
+  could not open a new chat at all; confirmed independently in Playwright: at 785 px the
+  "+ Новий чат" button resolves to 0 visible elements).
+- **Where:** `apps/web/src/app/page.tsx`. The `<aside>` held `hidden … lg:flex`, and the
+  `lg:hidden` header cluster offered only the FatSecret bookmark and the demo badge — no control
+  that could reveal the sidebar.
+- **Actual:** under 1024 px "Новий чат", the whole chat list and "Збережені у FatSecret" are
+  `display:none` with nothing to replace them, so a phone or a narrow laptop window cannot start
+  a second chat, return to an earlier one, or open saved meals.
+- **Impact:** Medium. Exactly the class of defect as BUG-015 (cart panel unreachable when narrow),
+  which the contract treats as a real failure rather than cosmetics. It also silently blocked the
+  QA pass's D3 scenario, so plan persistence between chats could not be checked at all.
+- **Fix (this branch, additive only):** the sidebar markup and its contents are untouched. Added a
+  "Чати та меню" toggle to the existing `lg:hidden` header cluster, a `menuOpen` state, a
+  dismissable backdrop, and off-canvas classes so the same `<aside>` slides in as a drawer below
+  `lg`; at `lg` and above every original class still applies and nothing new renders. Choosing a
+  chat, creating one, or opening saved meals closes the drawer.
+- **Retest:** UI suite 42/42 (desktop + Pixel 7) including four new checks — the chat list is
+  reachable at both sizes, the drawer closes from the backdrop, the desktop layout is unchanged
+  (no menu button, no backdrop), the full plan flow still completes at 390 px, and the document
+  never scrolls sideways with the drawer open or closed. e2e 40/40.
+
+## BUG-021 — Any restriction except `peanut-free` empties the basket in demo mode
+
+- **Found in:** run 14. Selecting "Без молочного" + "Без глютену" + "Вегетаріанське" produced a
+  normal meal plan but a basket where every line failed with "No candidate passed dietary
+  verification (0 failed, N lacked provider evidence)" and confirmation was unavailable.
+- **Where:** `services/api/src/smart_basket/demo.py:60-63`:
+  ```python
+  def check_restrictions(self, product, restrictions):
+      if set(restrictions) - {"peanut-free"}:
+          return "unknown"
+      return product.restriction_check
+  ```
+  The demo catalog carries composition evidence for `peanut-free` only. Everything else returns
+  `"unknown"`, and `catalog/matching.py:37-46` then correctly refuses to treat an unverified
+  product as safe ("Never infer safety from a product name").
+- **This is the safety design working, not a crash.** `GET /api/filters` still offers those
+  labels, so the interface invites a choice the demo data cannot back with evidence.
+- **Measured against the running API** (1 person, 1 day, UAH 1,800, one restriction at a time):
+
+  | Restriction | `budgetStatus` | Products |
+  |---|---|---|
+  | `peanut-free` | `within_budget` | matched |
+  | `gluten-free` | `incomplete` | none, `unresolvedRequirements` populated |
+  | `dairy-free` | `incomplete` | none, `unresolvedRequirements` populated |
+
+  So **1 of the 10 restrictions `/api/filters` offers works in demo mode; the other 9 empty the
+  basket**. The five *preference* labels (`vegetarian`, `vegan`, `paleo`, `high-fiber`,
+  `high-protein`) never reach `check_restrictions` and are unaffected — which is why other
+  multi-label combinations in the same run still produced a basket, and why the demo script's
+  golden input ("shared vegetarian meals") is safe as written.
+- **Impact:** Medium, and demo-visible: a judge who picks a common restriction gets an empty
+  basket. It does not affect the live Silpo catalog path, where real composition evidence exists.
+- **Deliberately not fixed by Polina.** The fix is a dietary-safety decision in Rina's module, not
+  an integration detail: making these products pass means asserting real composition claims
+  (and "gluten-free oats" is genuinely contested because of cross-contamination). Inventing that
+  evidence is the same class of fabrication as BUG-006/BUG-011 and is what the fail-closed design
+  exists to prevent.
+- **Fix options for the owner (pick one, do not silently widen `check_restrictions`):**
+  1. Give the synthetic products explicit, defensible labels (dry rice and lentils really are
+     vegetarian, vegan, dairy-free and gluten-free; leave oats out of the gluten-free claim) and
+     let `check_restrictions` answer from that evidence per label.
+  2. Or restrict `GET /api/filters` in demo mode to the labels the demo catalog can actually
+     verify, so the interface never offers a choice that must fail.
+- **Demo guidance until then:** in the recorded walkthrough use either no restriction or
+  `peanut-free`; do not pick gluten/dairy/vegetarian restrictions on the demo data path.

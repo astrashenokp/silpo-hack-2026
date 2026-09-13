@@ -477,3 +477,42 @@ correct, already-known behavior, not new defects. Nothing here blocks the demo h
 mode with the DEMO label visible. Chat over the live deploy remains unusable until a real Gemini
 key arrives — do not script it into the recorded video unless one arrives first.
 
+## Run 14 — full overnight browser-agent battery, September 13, 2026
+
+- **Revision:** `main` @ `859eda7` (run 13's calorie fix confirmed live first). 28 scenarios
+  driven by Claude's browser extension against `https://p01--web--2n7f5yvrbnqy.code.run`, guest
+  mode only. Everything the agent reported was then re-verified locally in Playwright before any
+  code was touched.
+
+The agent's own verdict was "4 new problems". After verification: **2 real, 2 false alarms.**
+
+| Agent's report | Verdict after verification |
+|---|---|
+| Submit button does not respond to Enter/Space | ❌ **False alarm.** With real keyboard events the native `<button type="submit">` submits on both Enter and Space (Playwright, filled form). The agent drives the page with synthetic JS events, which never produce a native default action. My own first probe reproduced the "failure" only because the budget field was empty and inline validation correctly blocked the submit |
+| No visible focus ring on the checkbox and the submit button | ❌ **False alarm.** After genuine `Tab` navigation both elements report `:focus-visible` matching and a painted ring — submit `rgba(248,159,70,.46) 0 0 0 1.83px`, checkbox `rgb(248,159,70) 0 0 0 2px`. Programmatic `.focus()` deliberately does not trigger `:focus-visible`, which is what the agent measured |
+| "Новий чат" / chat sidebar not functional or unreachable when narrow | ✅ **Real — BUG-020, fixed.** At 785 px the button resolves to 0 visible elements: the `<aside>` was `hidden … lg:flex` with no replacement control under 1024 px |
+| 3+ restrictions completely break product matching | ✅ **Real — BUG-021, documented for its owner, deliberately not fixed here.** `demo.py` carries composition evidence for `peanut-free` only; every other label returns `"unknown"` and the matcher correctly fails closed |
+
+### What changed in the code
+
+Only `apps/web/src/app/page.tsx` (my file since #31), and only additively: the sidebar markup and
+every original class are preserved, with a "Чати та меню" toggle, a `menuOpen` state, a backdrop
+and off-canvas classes added so the same panel becomes reachable below `lg`. At `lg` and above the
+rendering is byte-for-byte the previous one. No teammate's module was touched.
+
+| Check | Result |
+|---|---|
+| Playwright UI suite (now 42 checks: 38 existing + 4 new for BUG-020) | ✅ 42/42 desktop + Pixel 7 |
+| e2e suite | ✅ 40/40 |
+| `tsc --noEmit`, `next build` | ✅ clean |
+| Desktop layout unchanged (no menu button, no backdrop, sidebar visible) | ✅ asserted as a test |
+| No horizontal scroll at 390 px, drawer open and closed | ✅ asserted as a test |
+
+### Conclusion
+
+The battery was worth running: it found one real reachability defect that the existing suite did
+not cover, and its two keyboard findings were both artifacts of how a browser agent synthesises
+input — a reminder to re-verify every agent-reported defect with real input events before changing
+code. Demo guidance added: pick no restriction or `peanut-free` on the demo data path until
+BUG-021 is resolved by its owner.
+

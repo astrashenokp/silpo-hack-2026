@@ -38,6 +38,10 @@ record a step as live after it has been verified on the frozen revision.
 - [ ] Frozen revision and deploy URL recorded in `docs/handoffs/polina.md`.
 - [ ] `deploy/run-local.ps1 -Test` (or the deployed URL with the same suites) passes.
 - [ ] Demo account signed in, cart context ready, cart emptied of rehearsal items.
+- [ ] On the demo data path, pick **no dietary restriction, or only `peanut-free`**. The other
+      nine restrictions offered by the form return an empty basket, because the demo catalog has
+      composition evidence for `peanut-free` alone and the matcher refuses to guess (BUG-021).
+      The golden input is unaffected: "vegetarian" is a *preference*, not a restriction.
 - [ ] Browser: clean profile, 100% zoom, notifications off. The cart is reachable at every width since BUG-015 was fixed, so a narrower window is fine if it helps framing.
 - [ ] No personal data, tokens or account IDs visible; FatSecret account label checked.
 - [ ] Backup: a fully labeled demo-mode take recorded first, in case a live provider fails.
