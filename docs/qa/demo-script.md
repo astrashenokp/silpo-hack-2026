@@ -38,6 +38,9 @@ record a step as live after it has been verified on the frozen revision.
 - [ ] Frozen revision and deploy URL recorded in `docs/handoffs/polina.md`.
 - [ ] `deploy/run-local.ps1 -Test` (or the deployed URL with the same suites) passes.
 - [ ] Demo account signed in, cart context ready, cart emptied of rehearsal items.
+- [ ] Chat works now that a real Gemini key exists, but the key is **free-tier: 5 requests per
+      minute**. Script at most two or three chat messages and leave a pause between them; a sixth
+      message inside a minute answers "сервіс ШІ зараз недоступний" (BUG-023/BUG-024).
 - [ ] On the demo data path, pick **no dietary restriction, or only `peanut-free`**. The other
       nine restrictions offered by the form return an empty basket, because the demo catalog has
       composition evidence for `peanut-free` alone and the matcher refuses to guess (BUG-021).

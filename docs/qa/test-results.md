@@ -565,3 +565,54 @@ traceable to the agent's input layer rather than the product. The prompt rule th
 difference: require the agent to state how it produced the input, and to mark anything its tools
 cannot genuinely do as "not verifiable" instead of "broken". Both real defects it did find
 (BUG-020, BUG-022) were genuine and are fixed.
+
+## Run 16 — first run with a real Gemini key, September 13, 2026
+
+- **Revision:** `main` @ `2b17e0f` plus this branch. A real `GEMINI_API_KEY` was supplied by the
+  team. The key was never written to any tracked file: it was passed as an environment variable
+  to a local API process and to throwaway scripts in the scratchpad only.
+
+### The key works, and chat is genuinely functional
+
+| Check | Result |
+|---|---|
+| Interpreter constructs with the key, model `gemini-3.7-flash` | ✅ |
+| `зменши бюджет до 1200 гривень` | ✅ `change_budget`, `budget_uah=1200` |
+| `зроби дешевше` | ✅ `reduce_cost` |
+| `заміни рис на щось інше` / `заміни рис` | ✅ `replace_ingredient`, `ingredient=rice` |
+| `поясни план` | ✅ `explain_plan` |
+| End to end over HTTP: plan at 1,800 UAH → chat "зменши бюджет до 1200 гривень" | ✅ `type: plan`, new version 2, `budgetMinor` 180000 → **120000**, `canConfirmCart` true |
+| Multi-turn: then "а тепер до 900" | ✅ version 3, budget → 90000 |
+| Out-of-scope message ("а що ти вмієш?") | ✅ `unsupported`, handled gracefully, plan kept |
+
+This closes the last unverified integration: chat is no longer a documented gap.
+
+### The catch: the key is free-tier, 5 requests per minute
+
+`RateLimitError: Error code: 429 … Quota exceeded for metric:
+generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 5, model:
+gemini-3.7-flash … Please retry in 32.9s`. Waiting a minute restores it, so the limit is per
+minute and the key is healthy — but a demo that sends six chat messages in a minute will see
+failures. **Recording guidance: at most a few chat messages, with a pause between them.**
+
+### Two defects this exposed
+
+- **BUG-023 (mine, fixed):** the UI blamed a missing key for every `chat_error`, so an exceeded
+  quota told the user our server is misconfigured. Now it states only what is known and suggests
+  retrying. The UI chat check asserted that same key-specific string, so it only passed on a
+  deployment without a key — it now accepts any real answer and fails only on silence.
+- **BUG-024 (Uliana, open):** the API collapses every interpreter exception into one `chat_error`,
+  so a retryable rate limit is indistinguishable from a missing key.
+
+### Suites, run in both deployment states
+
+| State | e2e | UI |
+|---|---|---|
+| Without a key (CI parity) | ✅ 40/40 | ✅ 46/46 |
+| With the real key | ✅ 38 passed, 2 skipped by design | ✅ 46/46 |
+
+### Still to do (not possible from here)
+
+The key must be added as a **runtime variable** on the Northflank `api` service —
+runtime, not a build argument, so a redeploy is enough and no rebuild is needed. Polina has no
+Northflank credentials in this session, so the team does that step.

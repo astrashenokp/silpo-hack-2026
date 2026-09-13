@@ -100,7 +100,9 @@ function chatReplyText(reply: ChatReply, plan: PlanningResult | null): string {
     case "blocked":
       return "Ця дія зараз недоступна для поточного плану.";
     case "chat_error":
-      return "Чат недоступний: на сервері не налаштований ключ Gemini (GEMINI_API_KEY).";
+      // The API reports every interpreter failure the same way — a missing key and an
+      // exceeded quota included — so do not claim a cause the reply does not carry.
+      return "Не вдалося обробити запит: сервіс ШІ зараз недоступний (можливо, перевищено ліміт запитів). Спробуйте ще раз за хвилину.";
     default:
       return "Я не зрозуміла запит. Спробуйте: «зроби дешевше», «заміни рис», «бюджет 1500».";
   }
