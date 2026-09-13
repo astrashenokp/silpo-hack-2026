@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ContextSummary from "@/features/planner-input/ContextSummary";
 import { apiFilters } from "@/lib/api/client";
 import type { SupportedLabels } from "@/lib/api/types";
@@ -130,6 +130,7 @@ export default function PlannerForm({
   const [pets, setPets] = useState<{ name: string; count: number }[]>([]);
 
   const [useHistory, setUseHistory] = useState(false);
+  const hydratedContext = useRef<PlanningContext | null>(null);
 
   const [supported, setSupported] =
     useState<SupportedLabels>({ preferences: [], restrictions: [] });
@@ -256,6 +257,24 @@ export default function PlannerForm({
       cancelled = true;
     };
   }, [accountConnected]);
+
+  // A connected Silpo profile is an input source, not just an informational card. Hydrate the
+  // structured controls once per loaded context so the user can still edit every value after it
+  // appears without a later render overwriting those edits.
+  useEffect(() => {
+    if (!context || hydratedContext.current === context) return;
+
+    setPreferences(context.preferences);
+    setRestrictions(context.restrictions);
+    setPets(
+      context.pets.map((pet) => ({
+        name: pet.species === "cat" ? "Кішка" : "Собака",
+        count: pet.count,
+      })),
+    );
+    setUseHistory(context.historyAvailable);
+    hydratedContext.current = context;
+  }, [context]);
 
   function validateBudget(value: string) {
     if (!value.trim()) {
@@ -426,7 +445,7 @@ export default function PlannerForm({
       pets: normalizedPets,
 
       includeRecurring:
-        context?.historyAvailable
+        (context?.historyAvailable || accountConnected)
           ? useHistory
           : false,
 
@@ -992,7 +1011,8 @@ export default function PlannerForm({
         <label
           className={`flex max-w-[411px] items-start gap-2 ${
             context &&
-            !context.historyAvailable
+            !context.historyAvailable &&
+            !accountConnected
               ? "cursor-not-allowed"
               : "cursor-pointer"
           }`}
@@ -1000,7 +1020,7 @@ export default function PlannerForm({
           <input
             type="checkbox"
             checked={useHistory}
-            disabled={!context?.historyAvailable}
+            disabled={!context || (!context.historyAvailable && !accountConnected)}
             onChange={(event) =>
               setUseHistory(event.target.checked)
             }
@@ -1021,8 +1041,9 @@ export default function PlannerForm({
             {context &&
               !context.historyAvailable && (
                 <span className="mt-1 block text-[11px] text-[#98A2B3]">
-                  Історія покупок зараз
-                  недоступна
+                  {accountConnected
+                    ? "Історія поки порожня — аналіз можна ввімкнути, але пропозицій може не бути."
+                    : "Підключіть акаунт Сільпо, щоб увімкнути аналіз історії."}
                 </span>
               )}
           </span>

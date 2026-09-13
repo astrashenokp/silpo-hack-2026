@@ -21,6 +21,47 @@ test("connecting Silpo goes through the API sign-in route and returns to the app
   expect(startCalls).toBeGreaterThan(0);
 });
 
+test("a connected account can enable history analysis even when its history is empty", async ({ page }) => {
+  await page.route("**/api/integrations/silpo", (route) =>
+    route.fulfill({ json: { connected: true, toolsAvailable: ["silpo_get_cart"], reason: null } }),
+  );
+
+  await page.goto("/?silpo=connected");
+  await page.getByRole("button", { name: /Почати планування/ }).click();
+  const history = page.getByRole("checkbox", { name: /Аналізувати історію покупок/ });
+
+  await expect(history).toBeEnabled();
+  await history.click();
+  await expect(history).toBeChecked();
+  await expect(page.getByText(/Історія поки порожня/)).toBeVisible();
+});
+
+test("Silpo profile preferences, restrictions and pets populate the planner controls", async ({ page }) => {
+  await page.route("**/api/integrations/silpo", (route) =>
+    route.fulfill({ json: { connected: true, toolsAvailable: ["silpo_get_cart"], reason: null } }),
+  );
+  await page.route("**/api/context", (route) =>
+    route.fulfill({
+      json: {
+        preferences: ["vegetarian"],
+        restrictions: ["fish-free"],
+        pets: [{ species: "dog", count: 2 }],
+        historyAvailable: true,
+        cartContextReady: true,
+        warnings: [],
+      },
+    }),
+  );
+
+  await page.goto("/?silpo=connected");
+  await page.getByRole("button", { name: /Почати планування/ }).click();
+
+  await expect(page.getByRole("checkbox", { name: "Вегетаріанське" })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Без риби" })).toBeChecked();
+  await expect(page.getByText("Собака", { exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /Аналізувати історію покупок/ })).toBeChecked();
+});
+
 test("a FatSecret sign-in the API cannot start is explained on the page", async ({ page }) => {
   await page.route("**/api/auth/fatsecret/start", (route) =>
     route.fulfill({
