@@ -185,14 +185,15 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
       onClick={onClose}
     >
       <div
-        className={`w-full ${maxWidth} rounded-2xl bg-white p-5 shadow-xl`}
+        data-testid="modal-scroll-container"
+        className={`my-auto max-h-[calc(100dvh-2rem)] w-full ${maxWidth} overflow-y-auto overscroll-contain rounded-2xl bg-white p-5 shadow-xl`}
         onClick={(event) => event.stopPropagation()}
       >
         {children}

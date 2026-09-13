@@ -194,6 +194,43 @@ test("adding to the Silpo cart shows a preview before anything changes", async (
   ).toBeVisible(QUICK);
 });
 
+test("a long cart preview scrolls to its confirmation controls", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.route("**/api/cart/preview", (route) =>
+    route.fulfill({
+      json: {
+        previewId: "long-cart-preview",
+        runId: "demo-run-scroll-check",
+        version: 1,
+        expiresAt: "2099-09-13T15:00:00Z",
+        existingCartTotalMinor: 0,
+        addedGoodsTotalMinor: 200000,
+        projectedGoodsTotalMinor: 200000,
+        changes: Array.from({ length: 20 }, (_, index) => ({
+          productId: `scroll-product-${index + 1}`,
+          name: `Товар для перевірки прокрутки ${index + 1}`,
+          beforeQuantity: 0,
+          afterQuantity: 1,
+          unitPriceMinor: 10000,
+        })),
+        warnings: [],
+      },
+    }),
+  );
+
+  await createPlan(page);
+  const dialog = await addToCart(page);
+  const scrollContainer = dialog.getByTestId("modal-scroll-container");
+  const confirm = dialog.getByRole("button", { name: "Підтвердити додавання" });
+
+  await expect(scrollContainer).toBeVisible(QUICK);
+  expect(await scrollContainer.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await confirm.scrollIntoViewIfNeeded();
+  const box = await confirm.boundingBox();
+  expect(box).not.toBeNull();
+  expect((box?.y ?? 601) + (box?.height ?? 0)).toBeLessThanOrEqual(600);
+});
+
 test("the cart panel and its sync control are reachable on this screen size", async ({ page }) => {
   await createPlan(page);
   const dialog = await addToCart(page);
