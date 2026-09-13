@@ -7,6 +7,7 @@ behind Sofiia's Python boundary and never stores raw recipe payloads as fixtures
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from hashlib import sha1
 import json
@@ -99,8 +100,8 @@ class EdamamMealPlannerClient:
     def request_plan(self, payload: dict) -> dict:
         url = (
             f"{self.settings.base_url.rstrip('/')}/api/meal-planner/v1/"
-            f"{self.settings.account_user}/select"
-            f"?{parse.urlencode({'app_id': self.settings.app_id, 'app_key': self.settings.app_key})}"
+            f"{parse.quote(self.settings.app_id, safe='')}/select"
+            f"?{parse.urlencode({'type': 'public'})}"
         )
         data = json.dumps(payload).encode("utf-8")
         http_request = request.Request(
@@ -109,6 +110,7 @@ class EdamamMealPlannerClient:
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
+                "Authorization": _basic_authorization(self.settings),
                 "Edamam-Account-User": self.settings.account_user,
             },
             method="POST",
@@ -142,6 +144,11 @@ class EdamamMealPlannerClient:
             raise EdamamUnavailable(f"Edamam recipe lookup for {uri} returned HTTP {exc.code}.") from exc
         except (TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise EdamamUnavailable("Edamam recipe lookup is unavailable or returned invalid data.") from exc
+
+
+def _basic_authorization(settings: EdamamSettings) -> str:
+    credentials = f"{settings.app_id}:{settings.app_key}".encode("utf-8")
+    return f"Basic {base64.b64encode(credentials).decode('ascii')}"
 
 
 @dataclass(frozen=True)
