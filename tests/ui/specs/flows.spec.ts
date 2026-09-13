@@ -71,8 +71,14 @@ test("a chat message is answered by the agent API", async ({ page }) => {
   await page.getByLabel("Повідомлення до планера").fill("зроби дешевше");
   await page.getByRole("button", { name: "Надіслати" }).click();
   await expect(page.getByText("Обробляю запит…")).toHaveCount(0, { timeout: 15_000 });
-  // CI runs without GEMINI_API_KEY, so the agent reports the missing interpreter instead of a plan.
-  await expect(page.getByText(/GEMINI_API_KEY/)).toBeVisible(QUICK);
+  // The answer depends on the deployment: with a Gemini key the agent replans, without one (CI)
+  // or over the free-tier quota it says the AI service is unavailable. Both are valid answers;
+  // what must never happen is silence. Asserting only one of them made this test deployment-bound.
+  await expect(
+    page
+      .getByText(/сервіс ШІ зараз недоступний|Оновлений план|Залишок:|Уточніть запит|Я не зрозуміла запит/)
+      .first(),
+  ).toBeVisible(QUICK);
 });
 
 test("saving a meal to FatSecret previews one personal portion and reports the outcome", async ({ page }) => {

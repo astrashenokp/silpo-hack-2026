@@ -32,9 +32,11 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-016 | Medium | An over-budget plan can be added and synced to the cart, while the contract says to disable confirmation | Alina; decision with Rina and Katia | Fixed in #31 (Polina); retested ✅ (run 5) |
 | BUG-017 | Medium | `GET /api/fatsecret/exports/confirm` and `.../preview` are swallowed by the parameterized `GET /api/fatsecret/exports/{export_id}` route and answer 404 instead of 405 | Rina | Found in run 7 (Schemathesis) |
 | BUG-018 | Low | The per-day calorie figure was labeled "average per day" but was an average across that day's meals (e.g. shows ~620 next to a 2000 kcal/day target, reading as a huge shortfall that isn't real) | Polina (own file, `apps/web/src/features/planner-results/components/MealPlan.tsx`) | Fixed on `feature/polina-qa-run13`; retested ✅ (run 13, e2e 40/40, UI 24/24) |
-| BUG-019 | Low | The hosted API has no real `GEMINI_API_KEY`, so chat on the live deploy always answers "Чат недоступний: ... GEMINI_API_KEY" instead of doing anything — this is the documented fallback behavior working correctly, not a crash, but chat cannot be demoed live without a real key | Uliana (owns the chat module and any Gemini key); Polina to add it as a Northflank runtime variable once supplied | Open — blocked on a real key |
+| BUG-019 | Low | The hosted API had no real `GEMINI_API_KEY`, so chat on the live deploy could not do anything | Uliana (chat module); Polina to add the runtime variable | **Key supplied Sep 13 and verified working** (run 16): all four planning intents parse and a budget change really replans. Still to do: add it as a Northflank runtime variable on the `api` service. Note the key is free-tier, **5 requests per minute** |
 | BUG-020 | Medium | Below the `lg` breakpoint (<1024 px) the sidebar is `display:none` with no replacement control, so "Новий чат", the chat list and "Збережені у FatSecret" cannot be reached at all — same class of defect as BUG-015 | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run14`; retested ✅ (run 14, UI 42/42) |
 | BUG-021 | Medium | In demo mode any dietary restriction other than `peanut-free` makes every product unmatched ("No candidate passed dietary verification … lacked provider evidence"), so the basket comes back empty while the meal plan looks fine | Rina (matching + demo catalog evidence); scope decision with Sofiia | Open — deliberately not fixed by Polina, see below |
+| BUG-023 | Medium | The chat error text claimed "на сервері не налаштований ключ Gemini (GEMINI_API_KEY)" for *every* interpreter failure, so an exceeded free-tier quota told the user (and a judge) that the server is misconfigured, which is false | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run16`; retested ✅ (run 16, both with and without a key) |
+| BUG-024 | Low | `handle_chat_message` catches every interpreter exception and returns one generic `chat_error`, so a rate limit, a network blip and a missing key are indistinguishable to the caller | Uliana | Open |
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
@@ -530,3 +532,43 @@ not yet been sent to the owners; Polina shares it with the team.
 - **Retest:** UI 46/46 (desktop + Pixel 7), e2e 40/40, `tsc` and `next build` clean. Two new
   permanent checks: cancelling re-enables adding and removes the note, then the plan can be added
   and confirmed for real; and a confirmed plan stays disabled.
+
+## BUG-023 — The chat error blamed a missing key for every failure
+
+- **Found in:** run 16, the first run with a real `GEMINI_API_KEY`. The suite's own chat check
+  started failing precisely because the app answered for real; re-running it alone "passed" only
+  because the free-tier quota had been used up and the app fell back to the same message.
+- **Where:** `apps/web/src/app/page.tsx` (Polina's file since #31). The `chat_error` branch
+  returned "Чат недоступний: на сервері не налаштований ключ Gemini (GEMINI_API_KEY)."
+- **Actual:** the API answers `chat_error` for *any* interpreter failure (BUG-024). Once a real
+  key exists, the most likely one is an exceeded quota — the free tier allows **5 requests per
+  minute** — so a guest, or a judge, who sends a sixth message in a minute is told the server has
+  no key configured. That is a false statement about our own deployment, in front of the people
+  scoring it.
+- **Fix (this branch):** the message no longer asserts a cause it cannot know: "Не вдалося
+  обробити запит: сервіс ШІ зараз недоступний (можливо, перевищено ліміт запитів). Спробуйте ще
+  раз за хвилину." True whether the key is missing, rate-limited or briefly unreachable, and it
+  tells the user what to do.
+- **Also fixed here:** `tests/ui/specs/flows.spec.ts` asserted that exact key-related string, so
+  the check only passed on a deployment *without* a key and would have broken CI the moment
+  anyone added one. It now accepts any real answer — a replanned budget or a clearly worded
+  unavailable message — and only fails on silence.
+- **Retest:** with a key and without it, both: e2e 40/40 (2 chat tests skip by design when a key
+  is present) and UI 46/46.
+
+## BUG-024 — Every interpreter failure looks the same to the caller
+
+- **Where:** `services/api/src/smart_basket/agent/orchestrator.py:530-544`. `handle_chat_message`
+  wraps `interpret()` in `except Exception` and always returns the same `chat_error` payload.
+- **Actual:** a missing key, an exceeded quota (HTTP 429, which the SDK raises as
+  `RateLimitError` and which the free tier hits after 5 requests a minute), a network blip and a
+  malformed model response are indistinguishable to the frontend, which therefore cannot say
+  anything specific or decide whether retrying is worthwhile.
+- **Measured:** with a valid key, `interpret()` succeeded for `change_budget`, `reduce_cost` and
+  `replace_ingredient`, then raised `RateLimitError: Error code: 429 … limit: 5, model:
+  gemini-3.7-flash … Please retry in 32.9s`. Waiting a minute restored it.
+- **Impact:** Low on its own, but it forced BUG-023: the UI had to guess a cause. It also hides a
+  retryable condition behind a permanent-sounding error.
+- **Fix hint for the owner:** distinguish at least "no key configured" from "temporarily
+  unavailable, retryable" (429 and transport errors) and pass that distinction out, so the client
+  can offer a retry instead of inventing an explanation.
