@@ -21,9 +21,19 @@ class Planner(Protocol):
 
 class DemoCatalog:
     """Normalized invented catalog. Known composition labels are fixture evidence only."""
+    SUPPORTED_RESTRICTIONS = {
+        "peanut-free", "gluten-free", "dairy-free", "tree-nut-free",
+        "shellfish-free", "soy-free", "egg-free", "pork-free", "fish-free",
+        "red-meat-free",
+    }
+
     def __init__(self):
         self.products = {}
         self.terms = {}
+        # Explicit labels on synthetic fixtures, never guesses from product names. The oats
+        # fixture represents a certified gluten-free product so every demo restriction has a
+        # verifiable candidate while the UI continues to label the result as synthetic.
+        self.restriction_labels = {}
         for key, name, size, price in [
             ("oats", "Demo dry oats, 500 g", 500, 6000),
             ("rice", "Demo dry rice, 1000 g", 1000, 8000),
@@ -35,6 +45,7 @@ class DemoCatalog:
                 restriction_check="pass", regular_price_minor=None, source="synthetic", checked_at=now())
             self.products[product.id] = product
             self.terms[key] = [product.id]
+            self.restriction_labels[product.id] = set(self.SUPPORTED_RESTRICTIONS)
         for suffix, changes in [
             ("unavailable", {"available": False}),
             ("unknown", {"restriction_check": "unknown"}),
@@ -43,6 +54,7 @@ class DemoCatalog:
             product = self.products["demo-oats"].model_copy(update={"id": f"demo-oats-{suffix}", **changes})
             self.products[product.id] = product
             self.terms["oats"].append(product.id)
+            self.restriction_labels[product.id] = set(self.SUPPORTED_RESTRICTIONS)
 
     def search_products(self, session, query):
         return [self.products[id].model_copy(deep=True) for id in self.terms.get(query.casefold(), [])]
@@ -58,9 +70,11 @@ class DemoCatalog:
         return []
 
     def check_restrictions(self, product, restrictions):
-        if set(restrictions) - {"peanut-free"}:
+        if product.restriction_check != "pass":
+            return product.restriction_check
+        if not set(restrictions).issubset(self.restriction_labels.get(product.id, set())):
             return "unknown"
-        return product.restriction_check
+        return "pass"
 
 
 class DemoPlanner:

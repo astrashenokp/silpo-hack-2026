@@ -50,6 +50,22 @@ def test_restriction_evidence_is_required():
     assert not verified.unresolved_requirements
 
 
+@pytest.mark.parametrize("restriction", sorted(DemoCatalog.SUPPORTED_RESTRICTIONS))
+def test_every_demo_restriction_has_explicitly_verified_products(restriction):
+    requirement = ingredient().model_copy(update={"restrictions": [restriction]})
+    catalog = DemoCatalog()
+
+    result = find_product_candidates(
+        [requirement], [], MatchingContext(None, catalog, catalog.check_restrictions)
+    )
+
+    assert result.unresolved_requirements == []
+    assert any(
+        candidate.available and candidate.restriction_check == "pass"
+        for candidate in result.candidates
+    )
+
+
 def test_unrestricted_live_candidate_does_not_require_dietary_evidence():
     catalog = DemoCatalog()
     catalog.products["demo-oats"].restriction_check = "unknown"

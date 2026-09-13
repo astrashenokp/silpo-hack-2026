@@ -136,6 +136,39 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
     )
 
 
+@pytest.mark.asyncio
+async def test_connected_catalog_without_cart_branch_uses_labelled_demo_candidates():
+    owner = Session("owner")
+    owner.silpo_connected = True
+
+    products = await SessionCatalog()._search(owner, "rice")
+
+    assert products
+    assert all(product.source == "synthetic" for product in products)
+
+
+@pytest.mark.asyncio
+async def test_empty_live_search_uses_labelled_demo_candidates(monkeypatch):
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+
+    @asynccontextmanager
+    async def fake_session(storage):
+        yield object()
+
+    async def empty_search(*args, **kwargs):
+        return ProductSearchResponse(query="rice", products=[], warnings=[])
+
+    monkeypatch.setattr("smart_basket.catalog.live.get_mcp_session", fake_session)
+    monkeypatch.setattr("smart_basket.catalog.live.search_products", empty_search)
+
+    products = await SessionCatalog()._search(owner, "rice")
+
+    assert products
+    assert all(product.source == "synthetic" for product in products)
+
+
 def _make_plan_live(app, client, planning_request):
     wire_plan = create_plan(client, planning_request)
     owner = _owner(app, client)

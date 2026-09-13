@@ -226,7 +226,9 @@ class SessionCatalog:
 
     async def _search(self, owner, query: str):
         if not owner.silpo_branch_id:
-            return []
+            # A connected profile may legitimately have no active cart/branch yet. The app is
+            # still a labelled demo, so keep planning usable with transparent synthetic items.
+            return self.demo.search_products(owner, query)
         found: dict[str, ProductCandidate] = {}
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
             for provider_query in self.QUERY_ALIASES.get(query.casefold(), (query,)):
@@ -287,6 +289,9 @@ class SessionCatalog:
                                 **existing,
                                 **coordinates,
                             }
+        if not enriched:
+            return self.demo.search_products(owner, query)
+
         candidates = []
         for candidate in enriched:
             normalized = candidate.model_copy(update={"restriction_check": "unknown"})
