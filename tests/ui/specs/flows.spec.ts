@@ -115,6 +115,30 @@ test("the cart preview from the API can be confirmed", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
 });
 
+// BUG-022: dismissing the preview confirms nothing, so the plan must not stay "handed over".
+test("cancelling the cart preview lets the plan be added again", async ({ page }) => {
+  await createPlan(page);
+  const dialog = await addToCart(page);
+  await dialog.getByRole("button", { name: "Скасувати" }).click();
+  await expect(dialog).toBeHidden();
+
+  const addButton = page.getByRole("button", { name: /Додати все в кошик Сільпо/ });
+  await expect(addButton).toBeEnabled(QUICK);
+  await expect(page.getByText(/Товари цього плану передані в кошик Сільпо/)).toHaveCount(0);
+
+  const reopened = await addToCart(page);
+  await reopened.getByRole("button", { name: "Підтвердити додавання" }).click();
+  await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
+});
+
+test("a confirmed plan stays marked as handed over", async ({ page }) => {
+  await createPlan(page);
+  const dialog = await addToCart(page);
+  await dialog.getByRole("button", { name: "Підтвердити додавання" }).click();
+  await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Додати все в кошик Сільпо/ })).toBeDisabled(QUICK);
+});
+
 test("an over-budget plan cannot be added to the Silpo cart", async ({ page }) => {
   await createPlan(page, "100");
   await expect(page.getByRole("button", { name: /Додати все в кошик Сільпо/ })).toBeDisabled(QUICK);
