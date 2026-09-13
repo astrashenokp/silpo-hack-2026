@@ -329,6 +329,8 @@ def test_context_uses_silpo_after_connection(app, client, monkeypatch):
     assert response.status_code == 200
     assert response.headers["X-Data-Mode"] == "live"
     assert response.json()["historyAvailable"] is True
+    assert session.silpo_context is not None
+    assert session.silpo_context.history_available is True
 
 
 def test_product_search_uses_stored_branch(app, client, monkeypatch):

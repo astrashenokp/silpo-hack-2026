@@ -1014,14 +1014,7 @@ async def get_user_context(session, owner=None) -> UserContext:
     elif not cart_ready:
         warnings.append("Silpo cart exists, but its store or delivery context is incomplete.")
 
-    if owner is not None:
-        with owner.lock:
-            owner.silpo_cart_id = str(cart_id) if cart_id is not None else None
-            owner.silpo_branch_id = str(branch_id) if branch_id is not None else None
-            owner.silpo_delivery_type = str(delivery_type) if delivery_type is not None else None
-            owner.silpo_timeslot = timeslot
-
-    return UserContext(
+    context = UserContext(
         preferences=preferences,
         restrictions=restrictions,
         pets=pets,
@@ -1029,3 +1022,14 @@ async def get_user_context(session, owner=None) -> UserContext:
         cart_context_ready=cart_ready,
         warnings=warnings,
     )
+
+    if owner is not None:
+        with owner.lock:
+            owner.silpo_cart_id = str(cart_id) if cart_id is not None else None
+            owner.silpo_branch_id = str(branch_id) if branch_id is not None else None
+            owner.silpo_delivery_type = str(delivery_type) if delivery_type is not None else None
+            owner.silpo_timeslot = timeslot
+            owner.silpo_context = context.model_copy(deep=True)
+            owner.silpo_purchase_history = list(history)
+
+    return context

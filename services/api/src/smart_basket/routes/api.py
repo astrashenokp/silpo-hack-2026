@@ -146,6 +146,8 @@ async def context(request: Request, response: Response):
         if "429" in message or "rate limit" in message:
             raise ApiError("RATE_LIMITED", "Silpo request limit was reached.", 429, True) from exc
         raise ApiError("UPSTREAM_UNAVAILABLE", "Could not load context from Silpo.", 502, True) from exc
+    with owner.lock:
+        owner.silpo_context = live_context.model_copy(deep=True)
     response.headers["X-Data-Mode"] = "live"
     return live_context
 

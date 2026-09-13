@@ -254,6 +254,8 @@ async def test_get_user_context_reads_profile_history_and_cart_without_exposing_
     assert owner.silpo_cart_id == "cart-1"
     assert owner.silpo_branch_id == "branch-1"
     assert owner.silpo_delivery_type == "SelfPickup"
+    assert owner.silpo_context == context
+    assert owner.silpo_purchase_history
     assert ("silpo_get_my_offline_orders", {
         "branchId": "branch-1",
         "deliveryType": "SelfPickup",

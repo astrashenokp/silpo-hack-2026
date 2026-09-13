@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from copy import deepcopy
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
@@ -202,33 +203,50 @@ class SessionCatalog:
 
     async def _context(self, owner):
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
-            return await get_user_context(mcp_session, owner)
+            context = await get_user_context(mcp_session, owner)
+        with owner.lock:
+            owner.silpo_context = context.model_copy(deep=True)
+        return context
 
     def get_user_context(self, owner):
         if not self._live(owner):
             return self.demo.get_user_context(owner)
+        with owner.lock:
+            cached = owner.silpo_context
+        if cached is not None:
+            return cached.model_copy(deep=True)
         return _run_async(lambda: self._context(owner))
 
     async def _history(self, owner):
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
-            return await get_purchase_history(
+            history = await get_purchase_history(
                 mcp_session,
                 branch_id=owner.silpo_branch_id,
                 delivery_type=owner.silpo_delivery_type,
                 timeslot=owner.silpo_timeslot,
                 tool_schemas=owner.silpo_tool_schemas,
             )
+        with owner.lock:
+            owner.silpo_purchase_history = deepcopy(history)
+        return history
 
     def get_purchase_history(self, owner):
         if not self._live(owner):
             return self.demo.get_purchase_history(owner)
-        return _run_async(lambda: self._history(owner))
+        with owner.lock:
+            cached = deepcopy(owner.silpo_purchase_history)
+        if cached is not None:
+            return cached
+        try:
+            return _run_async(lambda: self._history(owner))
+        except Exception as exc:
+            logger.warning(
+                "Silpo purchase history is temporarily unavailable; using empty history (%s).",
+                type(exc).__name__,
+            )
+            return self.demo.get_purchase_history(owner)
 
-    async def _search(self, owner, query: str):
-        if not owner.silpo_branch_id:
-            # A connected profile may legitimately have no active cart/branch yet. The app is
-            # still a labelled demo, so keep planning usable with transparent synthetic items.
-            return self.demo.search_products(owner, query)
+    async def _search_live(self, owner, query: str):
         found: dict[str, ProductCandidate] = {}
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
             for provider_query in self.QUERY_ALIASES.get(query.casefold(), (query,)):
@@ -298,6 +316,22 @@ class SessionCatalog:
             self._candidates[(owner.id, normalized.id)] = normalized.model_copy(deep=True)
             candidates.append(normalized)
         return candidates
+
+    async def _search(self, owner, query: str):
+        if not owner.silpo_branch_id:
+            # A connected profile may legitimately have no active cart/branch yet. The app is
+            # still a labelled demo, so keep planning usable with transparent synthetic items.
+            return self.demo.search_products(owner, query)
+        try:
+            return await self._search_live(owner, query)
+        except Exception as exc:
+            logger.warning(
+                "Silpo product search is temporarily unavailable for %s; "
+                "using labelled synthetic candidates (%s).",
+                query,
+                type(exc).__name__,
+            )
+            return self.demo.search_products(owner, query)
 
     def search_products(self, owner, query: str):
         if not self._live(owner):

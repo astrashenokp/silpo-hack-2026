@@ -60,6 +60,8 @@ class Session:
     silpo_branch_id: str | None = None
     silpo_delivery_type: str | None = None
     silpo_timeslot: object | None = None
+    silpo_context: object | None = None
+    silpo_purchase_history: list[dict] | None = None
     fatsecret_request_token: str | None = None
     fatsecret_request_secret: str | None = None
     fatsecret_access_token: str | None = None

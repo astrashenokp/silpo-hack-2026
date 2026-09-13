@@ -12,7 +12,7 @@ from smart_basket.catalog.live import (
 )
 from smart_basket.cart.service import normalize_cart_snapshot, snapshot_total
 from smart_basket.core import Session
-from smart_basket.schemas import ProductCandidate, ProductSearchResponse
+from smart_basket.schemas import ProductCandidate, ProductSearchResponse, UserContext
 
 
 def _owner(app, client):
@@ -142,6 +142,57 @@ async def test_connected_catalog_without_cart_branch_uses_labelled_demo_candidat
     owner.silpo_connected = True
 
     products = await SessionCatalog()._search(owner, "rice")
+
+    assert products
+    assert all(product.source == "synthetic" for product in products)
+
+
+def test_connected_catalog_reuses_context_and_history_loaded_for_the_form():
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_context = UserContext(
+        preferences=["vegetarian"], restrictions=["fish-free"],
+        pets=[{"species": "dog", "count": 1}], history_available=False,
+        cart_context_ready=False, warnings=["Silpo purchase history is empty."],
+    )
+    owner.silpo_purchase_history = []
+    catalog = SessionCatalog()
+
+    context = catalog.get_user_context(owner)
+    history = catalog.get_purchase_history(owner)
+
+    assert context.preferences == ["vegetarian"]
+    assert context.pets[0].species == "dog"
+    assert history == []
+    assert context is not owner.silpo_context
+
+
+def test_live_history_failure_uses_empty_demo_fallback(monkeypatch):
+    owner = Session("owner")
+    owner.silpo_connected = True
+    catalog = SessionCatalog()
+
+    async def failed_history(_owner):
+        raise RuntimeError("temporary MCP failure")
+
+    monkeypatch.setattr(catalog, "_history", failed_history)
+
+    assert catalog.get_purchase_history(owner) == []
+
+
+@pytest.mark.asyncio
+async def test_live_search_failure_uses_labelled_demo_candidates(monkeypatch):
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+    catalog = SessionCatalog()
+
+    async def failed_search(_owner, _query):
+        raise RuntimeError("temporary MCP failure")
+
+    monkeypatch.setattr(catalog, "_search_live", failed_search)
+
+    products = await catalog._search(owner, "rice")
 
     assert products
     assert all(product.source == "synthetic" for product in products)

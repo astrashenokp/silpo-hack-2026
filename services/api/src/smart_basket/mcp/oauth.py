@@ -44,6 +44,8 @@ class SilpoOAuthFlow:
             self.owner.silpo_connected = True
             self.owner.silpo_tools = tools
             self.owner.silpo_tool_schemas = tool_schemas
+            self.owner.silpo_context = None
+            self.owner.silpo_purchase_history = None
 
     async def wait_for_authorization_url(self) -> str | None:
         done, _ = await asyncio.wait(
