@@ -531,3 +531,37 @@ while the e2e suite reads `E2E_BASE_URL`. Passing `E2E_BASE_URL` to Playwright s
 
 **Frozen revision: `main` @ `402bdcb`.**
 
+
+## Run 15 — second overnight browser-agent battery, September 13, 2026
+
+- **Revision:** `main` @ `1dfcaf4`, against the live deploy. The prompt was rewritten after run 14
+  to forbid reporting findings the tool cannot physically produce (synthetic keyboard events,
+  unverifiable viewport widths). That worked: the agent correctly marked keyboard checks ⏭️ and
+  reported its real `window.innerWidth` (785) instead of guessing about other widths.
+
+The agent reported 2 new problems. After verification: **1 real, 1 false alarm.**
+
+| Agent's report | Verdict after verification |
+|---|---|
+| "Чати та меню" disappears after a browser Back, making the chat list unreachable | ❌ **False alarm.** A genuine in-app back navigation (two history entries on the same origin) keeps both header buttons and the drawer still opens; a reload during planning also keeps them. The app has no client-side routing, so Back leaves it entirely — in a fresh context straight to `about:blank`. The agent had been testing the pre-deploy build earlier in the same browser, so Back restored a cached document from *before* the drawer existed, which is exactly why a full reload "restored" the button |
+| "Скасувати" in the cart preview does not fully cancel | ✅ **Real — BUG-022, fixed.** Cancel left the plan marked as handed over, so its add button stayed disabled under a note pointing at a window that had just closed. A `failed` receipt had the same dead end |
+
+### What changed in the code
+
+Only `apps/web/src/app/page.tsx`: the preview now records which conversation item opened it, and
+dismissing it clears that item's `added` mark unless a receipt exists. A successful confirmation
+still keeps the plan marked as handed over.
+
+| Check | Result |
+|---|---|
+| Playwright UI suite (now 46 checks: 42 + 4 new) | ✅ 46/46 desktop + Pixel 7 |
+| e2e suite | ✅ 40/40 |
+| `tsc --noEmit`, `next build` | ✅ clean |
+
+### Conclusion
+
+Two batteries in a row have now produced a 50% and then a 33% false-alarm rate, every false alarm
+traceable to the agent's input layer rather than the product. The prompt rule that made the
+difference: require the agent to state how it produced the input, and to mark anything its tools
+cannot genuinely do as "not verifiable" instead of "broken". Both real defects it did find
+(BUG-020, BUG-022) were genuine and are fixed.

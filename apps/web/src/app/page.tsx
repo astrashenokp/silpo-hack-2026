@@ -120,6 +120,8 @@ export default function Home() {
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   // The cart mirrors one plan version: the API previews and confirms exactly its products.
   const [cartPlan, setCartPlan] = useState<PlanningResult | null>(null);
+  // Which conversation item opened the current preview, so cancelling can undo its "added" mark.
+  const [cartSource, setCartSource] = useState<{ chatId: number; itemId: string } | null>(null);
   const [cartPreview, setCartPreview] = useState<CartPreview | null>(null);
   const [cartReceipt, setCartReceipt] = useState<CartReceipt | null>(null);
   const [cartBusy, setCartBusy] = useState(false);
@@ -284,9 +286,20 @@ export default function Home() {
   // Adding never changes anything by itself: the preview of the exact changes opens at once.
   function addPlanToCart(products: ProductSelection[], plan: PlanningResult, itemId: string) {
     updateItem(activeChatId, itemId, { added: true } as Partial<ConversationItem>);
+    setCartSource({ chatId: activeChatId, itemId });
     setCartPlan(plan);
     setCartReceipt(null);
     void requestPreview(plan);
+  }
+
+  // Dismissing the preview confirms nothing, so the plan must not stay marked as handed over:
+  // otherwise its add button stays disabled asking for a confirmation window that is gone.
+  function dismissPreview() {
+    setCartPreview(null);
+    if (cartSource && !cartReceipt) {
+      updateItem(cartSource.chatId, cartSource.itemId, { added: false } as Partial<ConversationItem>);
+      setCartSource(null);
+    }
   }
 
   async function handleConfirmCart() {
@@ -295,8 +308,9 @@ export default function Home() {
     try {
       const receipt = await apiConfirmCart(cartPreview.previewId, cartKey);
       if (receipt.status === "failed") {
-        // A stored receipt is final for this preview, so a retry needs a fresh preview.
-        setCartPreview(null);
+        // A stored receipt is final for this preview, so a retry needs a fresh preview —
+        // which means the plan must stop counting as handed over, or it cannot be re-added.
+        dismissPreview();
         setCartKey(null);
         setSyncError("Сільпо не додав товари. Створіть новий перегляд і спробуйте ще раз.");
         return;
@@ -324,6 +338,7 @@ export default function Home() {
     setCartPreview(null);
     setCartReceipt(null);
     setCartKey(null);
+    setCartSource(null);
   }
 
   async function recalculatePlan(plan: PlanningResult, selectedRecurringIds: string[]) {
@@ -732,7 +747,7 @@ export default function Home() {
             <CartPreviewModal
               preview={cartPreview}
               onConfirm={handleConfirmCart}
-              onCancel={() => setCartPreview(null)}
+              onCancel={dismissPreview}
               busy={cartBusy}
             />
           )}

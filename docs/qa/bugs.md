@@ -35,6 +35,7 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-019 | Low | The hosted API has no real `GEMINI_API_KEY`, so chat on the live deploy always answers "Чат недоступний: ... GEMINI_API_KEY" instead of doing anything — this is the documented fallback behavior working correctly, not a crash, but chat cannot be demoed live without a real key | Uliana (owns the chat module and any Gemini key); Polina to add it as a Northflank runtime variable once supplied | Open — blocked on a real key |
 | BUG-020 | Medium | Below the `lg` breakpoint (<1024 px) the sidebar is `display:none` with no replacement control, so "Новий чат", the chat list and "Збережені у FatSecret" cannot be reached at all — same class of defect as BUG-015 | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run14`; retested ✅ (run 14, UI 42/42) |
 | BUG-021 | Medium | In demo mode any dietary restriction other than `peanut-free` makes every product unmatched ("No candidate passed dietary verification … lacked provider evidence"), so the basket comes back empty while the meal plan looks fine | Rina (matching + demo catalog evidence); scope decision with Sofiia | Open — deliberately not fixed by Polina, see below |
+| BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -505,3 +506,27 @@ not yet been sent to the owners; Polina shares it with the team.
      verify, so the interface never offers a choice that must fail.
 - **Demo guidance until then:** in the recorded walkthrough use either no restriction or
   `peanut-free`; do not pick gluten/dairy/vegetarian restrictions on the demo data path.
+
+## BUG-022 — Cancelling the cart preview leaves the plan stuck as "handed over"
+
+- **Found in:** run 15, the second overnight browser-agent battery. Reported as "«Скасувати» не
+  завжди повністю скасовує стан додавання"; reproduced exactly in Playwright.
+- **Where:** `apps/web/src/app/page.tsx`. `addPlanToCart` marked the conversation item
+  `added: true` before opening the preview, and the modal's `onCancel` only did
+  `setCartPreview(null)`. `PlannerResults` computes `addDisabled={added || dirty || blocked}`
+  and shows "Товари цього плану передані в кошик Сільпо; підтвердьте додавання у вікні
+  перегляду."
+- **Actual:** after pressing only "Скасувати" — nothing confirmed, nothing sent to Silpo — the
+  "Додати все в кошик Сільпо" button stays permanently disabled for that plan, under a note
+  telling the user to confirm in a window that was just closed. The same dead end followed a
+  `failed` receipt, whose own error text asks the user to create a new preview they cannot open.
+- **Impact:** Medium and demo-visible: one stray "Скасувати" makes that plan un-addable for the
+  rest of the session. The only way out was the cart panel's separate sync control, which is not
+  what the message points at.
+- **Fix (this branch):** the preview now remembers which conversation item opened it
+  (`cartSource`); dismissing it clears that item's `added` mark unless a receipt exists, so
+  cancelling truly cancels. A failed receipt goes through the same path. A *successful*
+  confirmation still keeps the plan marked as handed over, which is correct.
+- **Retest:** UI 46/46 (desktop + Pixel 7), e2e 40/40, `tsc` and `next build` clean. Two new
+  permanent checks: cancelling re-enables adding and removes the note, then the plan can be added
+  and confirmed for real; and a confirmed plan stays disabled.
