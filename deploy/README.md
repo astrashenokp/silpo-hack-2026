@@ -49,7 +49,7 @@ The browser talks only to the web origin. Session cookies, OAuth callbacks and e
 | `FATSECRET_CONSUMER_KEY`, `FATSECRET_CONSUMER_SECRET` | api | from Arina/Rina through a private channel | yes |
 | `FATSECRET_OAUTH_CALLBACK_URL` | api | `https://<web-origin>/api/auth/fatsecret/callback` | no |
 | `FATSECRET_TIMEOUT_SECONDS`, `FATSECRET_ALLOW_EDAMAM_EXPORT` | api | `10`, `false` until Sofiia confirms data use | no |
-| `SMART_BASKET_MEALS_SOURCE`, `EDAMAM_SYNTHETIC_FALLBACK` | api | `synthetic`, `true` until live Edamam is verified | no |
+| `SMART_BASKET_MEALS_SOURCE`, `EDAMAM_SYNTHETIC_FALLBACK` | api | `edamam`, `true` so valid credentials use Edamam and provider failures remain recoverable | no |
 | `EDAMAM_MEAL_PLANNER_APP_ID`, `EDAMAM_MEAL_PLANNER_APP_KEY`, `EDAMAM_ACCOUNT_USER` | api | from Sofiia, only for the live check | yes |
 
 The root `.env.example` lists the same names. Never commit values; `deploy/.env.api` is

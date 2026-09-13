@@ -4,7 +4,9 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    SMART_BASKET_MODE=demo
+    SMART_BASKET_MODE=demo \
+    SMART_BASKET_MEALS_SOURCE=edamam \
+    EDAMAM_SYNTHETIC_FALLBACK=true
 
 WORKDIR /srv
 COPY services/api/pyproject.toml services/api/pyproject.toml

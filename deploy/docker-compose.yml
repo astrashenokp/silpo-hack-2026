@@ -15,6 +15,8 @@ services:
         required: false
     environment:
       SMART_BASKET_MODE: demo
+      SMART_BASKET_MEALS_SOURCE: edamam
+      EDAMAM_SYNTHETIC_FALLBACK: "true"
       SMART_BASKET_CORS_ORIGINS: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}
       SMART_BASKET_FRONTEND_URL: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}
       SILPO_OAUTH_CALLBACK_URL: ${PUBLIC_WEB_ORIGIN:-http://localhost:3000}/api/auth/silpo/callback
