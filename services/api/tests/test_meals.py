@@ -8,6 +8,7 @@ from smart_basket.meals.edamam import (
     EdamamMealPlannerClient,
     EdamamSettings,
     EdamamUnavailable,
+    _search_terms,
     build_edamam_payload,
     collect_assignments,
     map_edamam_plan_response,
@@ -234,6 +235,43 @@ def test_edamam_settings_reject_invalid_timeout(monkeypatch):
 
     with pytest.raises(EdamamUnavailable):
         EdamamSettings.from_env()
+
+
+def test_search_terms_keeps_the_real_category_when_edamam_provides_one():
+    terms = _search_terms({"food": "chicken", "foodCategory": "Poultry"})
+    assert terms == ["chicken", "Poultry"]
+
+
+@pytest.mark.parametrize(
+    "name,expected_guess",
+    [
+        ("fish broth", "canned soup"),
+        ("vegetable stock", "canned soup"),
+        ("chicken bouillon", "canned soup"),
+        ("cornflakes", "grains"),
+        ("bran cereal", "grains"),
+        ("Guacamole", "condiments and sauces"),
+        ("fresh salsa", "condiments and sauces"),
+        ("hummus", "condiments and sauces"),
+    ],
+)
+def test_search_terms_guesses_a_category_only_when_edamam_gave_none(name, expected_guess):
+    # These are the exact real-world gaps observed live (run 21): Edamam sent no foodCategory at
+    # all for them, so the category-based matching in demo.py had nothing to key off.
+    terms = _search_terms({"food": name, "foodCategory": None})
+    assert terms == [name, expected_guess]
+
+
+def test_search_terms_does_not_guess_when_a_real_category_already_resolves():
+    # A real Edamam category must never be overridden by the name heuristic, even if the name
+    # also happens to contain a hint word.
+    terms = _search_terms({"food": "chicken stock cube", "foodCategory": "Condiments and sauces"})
+    assert terms == ["chicken stock cube", "Condiments and sauces"]
+
+
+def test_search_terms_leaves_a_genuinely_unrecognisable_ingredient_alone():
+    terms = _search_terms({"food": "an entirely novel ingredient", "foodCategory": None})
+    assert terms == ["an entirely novel ingredient"]
 
 
 def test_edamam_payload_omits_empty_accept_filters():
