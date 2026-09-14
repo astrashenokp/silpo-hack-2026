@@ -63,8 +63,11 @@ const ERROR_TEXT: Record<string, string> = {
   CART_CONTEXT_REQUIRED: "У вашому акаунті Сільпо немає активного кошика з магазином і способом отримання.",
   IDEMPOTENCY_CONFLICT: "Цей ключ підтвердження вже використано для іншого перегляду.",
   CONFIRMATION_IN_PROGRESS: "Це підтвердження вже виконується. Зачекайте кілька секунд.",
-  RATE_LIMITED: "Сільпо тимчасово обмежив кількість запитів. Спробуйте за хвилину.",
-  UPSTREAM_UNAVAILABLE: "Сервіс Сільпо тимчасово недоступний.",
+  // Shared codes: Edamam, FatSecret and Silpo can all raise these (see agent/orchestrator.py,
+  // fatsecret/export.py, cart/service.py) — naming one provider here is wrong whenever a
+  // different one actually failed, which is exactly what was reported live tonight.
+  RATE_LIMITED: "Перевищено ліміт запитів до зовнішнього сервісу. Спробуйте за хвилину.",
+  UPSTREAM_UNAVAILABLE: "Зовнішній сервіс тимчасово недоступний. Спробуйте ще раз за хвилину.",
   VALIDATION_ERROR: "Сервер відхилив запит: перевірте параметри плану.",
   UNRESOLVED_FOODS: "Не всі інгредієнти зіставлені з продуктами FatSecret.",
   STALE_ACCOUNT: "Підключення FatSecret змінилося. Створіть новий перегляд.",

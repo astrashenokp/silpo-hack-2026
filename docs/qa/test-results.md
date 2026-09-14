@@ -744,3 +744,36 @@ catalog with Edamam's English terms directly and was not touched by this change.
 deliberately excluded from `restriction_labels`, so a requested restriction still resolves to
 "unknown" for them (same fail-closed rule as BUG-021) — only unrestricted requirements can select
 one. Verified by a dedicated test.
+
+## Run 23 — BUG-034/BUG-035: live-Silpo demo fallback restored, Silpo-blame text fixed, September 14, 2026
+
+- **Ask:** Polina, live, urgent: "чому знову нічого не може підібратися???? ПЕРЕРОБИ" — a
+  connected-account plan matched nothing at all, right after the 21:25 commit `61d857f`
+  ("preserve arbitrary live ingredients") had intentionally removed the demo-catalog fallback for
+  connected accounts (6 tests explicitly asserted "does not mix demo candidates").
+- **Root cause:** `SessionCatalog._search()`/`_search_live()` returned `[]` on no live match
+  instead of falling back to the demo category bucket, and `prepare_requirements()` discarded the
+  ingredient's category search term — the same term the demo bucket is keyed by — so even a
+  restored fallback would have had nothing to match on.
+- **Fix:** restored `self.demo.search_products(...)` in all three no-live-result paths in
+  `catalog/live.py`; `prepare_requirements()` now keeps both the ingredient name and its category
+  term. Found and fixed a second bug surfaced by the restored fallback: `get_product_details()`
+  raised `KeyError` for a connected owner's demo-fallback product id (e.g. `demo-rice`) because it
+  routed purely on `_live(owner)` instead of checking whether that specific id was demo-sourced —
+  fixed to check the live cache first, matching the pattern `check_restrictions()` already used.
+- **Separately, same session:** BUG-035 — `page.tsx`'s `ERROR_TEXT` map named Silpo specifically
+  for `RATE_LIMITED`/`UPSTREAM_UNAVAILABLE`, codes Edamam and FatSecret raise just as often;
+  reworded to name "зовнішній сервіс" instead. This only fixes the mislabeling; while checking it
+  live Polina confirmed Silpo itself is fine and a real FatSecret export failure was hiding behind
+  the wrong label — logged separately as BUG-036 (open, needs the actual FatSecret provider
+  message to diagnose further).
+
+| Check | Result |
+|---|---|
+| Backend suite (6 tests in `test_live_cart.py` updated for the restored contract) | ✅ 298/298 |
+| `tsc --noEmit` (apps/web) | ✅ clean |
+| Secret scan of the diff before commit | ✅ clean |
+
+**Disclosure:** this is the second time tonight a teammate's intentional, tested design decision
+was reversed at Polina's explicit, real-time direction (after BUG-031) — flagged here for Rina to
+review post-deadline alongside BUG-031/BUG-034 in `bugs.md`.
