@@ -8,13 +8,14 @@ a usage scenario, the implementation approach and a prototype demonstration
 The status column reflects [run 5 of the test results](test-results.md) on September 11. Only
 record a step as live after it has been verified on the frozen revision.
 
-**September 14 decision — read before recording:** `SMART_BASKET_MEALS_SOURCE=edamam` is back on
-for real, realistic recipe names (`GET /api/plans` now returns titles like "Tuscan Roasted
-Chicken Recipe with Roasted Potatoes" instead of "Dry oats bowl"). This was a deliberate trade:
-Edamam's English ingredient names do not match the catalog, so **the basket is empty on every
-plan** (BUG-026, run 17/18). Segment 2:45–3:30 below ("Silpo cart") **cannot be shown working on
-the guest/demo data path** until this is fixed. See "What to say and not to say" and "Before
-recording" for how to handle this in the recording.
+**September 14 update:** `SMART_BASKET_MEALS_SOURCE=edamam` is live for real, realistic recipe
+names (`GET /api/plans` returns titles like "Tuscan Roasted Chicken Recipe with Roasted
+Potatoes"). Runs 17–19 fixed the outage, meal slots and calorie targeting this caused. **BUG-026
+(empty basket) is now fixed too (run 20):** the demo catalog matches Edamam's `foodCategory`
+taxonomy, resolving 98% of real live ingredients. Segment 2:45–3:30 ("Silpo cart") **can go back
+in the recording** on the guest/demo path — re-verify once more against the live deploy first,
+since a small number of ingredients (those Edamam sends with no category at all, like a bare
+"broth") can still leave a line unresolved on any given plan.
 
 ## Storyline
 
@@ -25,7 +26,7 @@ recording" for how to handle this in the recording.
 | 1:00–1:30 | Input | Golden input in the form: 1,800 UAH, 2,000 kcal, 3 people, 4 days, vegetarian, cat, restocking on | ✅ form works (days are capped at 7, BUG-007) |
 | 1:30–2:00 | Agent progress | Completed stages: context → history → meals → matching → optimization → ready | ✅ steps follow the stage of the API run, polled every 2 s (since #27) |
 | 2:00–2:45 | Result | Meals by day with portions and calories, basket with package quantities, budget remaining, warnings with the DEMO label | ✅ the API plan, entirely; no invented products, prices or images remain (BUG-006, BUG-011 fixed in #31) |
-| 2:45–3:30 | Silpo cart | "Add to Silpo cart" → preview of exact changes → "Confirm addition" → verified per-item result | ⚠️ the flow itself works and was fully verified live (preview, confirm, per-item read-back) on run 17 **while `SMART_BASKET_MEALS_SOURCE=synthetic`**. With Edamam meals on (current config), the basket is empty and confirmation is disabled — do not attempt this segment live; see the September 14 note above |
+| 2:45–3:30 | Silpo cart | "Add to Silpo cart" → preview of exact changes → "Confirm addition" → verified per-item result | ✅ the flow was fully verified live on run 17 (synthetic meals) and the basket now resolves for live Edamam meals too (run 20, 98% of ingredients) — re-check the specific plan used for recording resolves fully before filming, since a rare uncategorized ingredient can still leave one line unmatched |
 | 3:30–3:50 | FatSecret | Save one meal → preview of one personal portion → confirm → saved outcome | ✅ demo flow works in the UI; live account checked by Rina through the API |
 | 3:50–4:15 | Implementation and quality | Next.js → Python API → agent modules → MCP gateway; automated checks (e2e, contract fuzzing, UI, accessibility) | ✅ QA toolkit and results exist |
 | 4:15–4:45 | Value and limits | Measured facts only; what is demo and what is live; next steps | Fill in from the final test run |
@@ -38,11 +39,10 @@ recording" for how to handle this in the recording.
   MCP to be a functionally significant part of the project.
 - The invented cart panel, the "Катерина" greeting and the whiskey suggestion are gone (BUG-006,
   BUG-011); only say what the API actually returned on the recorded revision.
-- With Edamam meals on, do not narrate or attempt "adding to the Silpo cart" for the guest/demo
-  path — the basket is empty (BUG-026), which is honestly labeled in the UI, but showing it live
-  would read as a broken product. Either skip that beat, describe it verbally as a next step, or
-  record it as a separate labeled clip against the synthetic data path (segment verified working
-  in run 17), clearly captioned as a different configuration.
+- The basket now shows real category-matched demo products (e.g. "Demo poultry, 500 g" for a
+  chicken recipe) next to real Edamam recipe names — say so plainly if asked ("товари в кошику —
+  демонстраційні, підібрані за категорією продукту"); do not imply they are specific real Silpo
+  SKUs.
 - Present Saved Meals as saved recipes for one portion, not as diary entries or food eaten.
 - No time-saving percentages or market claims without measurement.
 
@@ -50,9 +50,10 @@ recording" for how to handle this in the recording.
 
 - [ ] Frozen revision and deploy URL recorded in `docs/handoffs/polina.md`.
 - [ ] `deploy/run-local.ps1 -Test` (or the deployed URL with the same suites) passes.
-- [ ] `SMART_BASKET_MEALS_SOURCE=edamam` is live (decision, September 14): meal names are real
-      recipes, but the basket comes back empty on the guest/demo path (BUG-026) — do not attempt
-      the Silpo-cart segment live; see the September 14 note above.
+- [ ] `SMART_BASKET_MEALS_SOURCE=edamam` is live: meal names are real recipes and the basket now
+      resolves for the guest/demo path (BUG-026 fixed, run 20). Create the exact plan you intend
+      to record once beforehand and confirm it shows no "Не вдалося підібрати" block before
+      filming — a rare uncategorized ingredient can still leave a plan short.
 - [ ] Demo account signed in, cart context ready, cart emptied of rehearsal items.
 - [ ] Chat works now that a real Gemini key exists, but the key is **free-tier: 5 requests per
       minute**. Script at most two or three chat messages and leave a pause between them; a sixth

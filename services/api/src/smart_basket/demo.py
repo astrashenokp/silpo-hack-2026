@@ -19,6 +19,39 @@ class Planner(Protocol):
                          session: object, emit_progress: Callable[[str, str], None]) -> PlanningResult: ...
 
 
+# Edamam tags each ingredient with a `foodCategory` (see meals/edamam.py:_search_terms), a
+# bounded taxonomy of ~25 values, unlike the ingredient names themselves which are effectively
+# unlimited. Measured live across 145 real ingredients (4 recipe-sourced plans, run 20): 140
+# carried a category, spread over exactly these values (case varies in Edamam's own data, e.g.
+# both "Condiments and sauces" and "condiments and sauces" were observed — search_products()
+# already casefolds, so that is handled for free). Matching a generic bucket by category, instead
+# of trying to name every ingredient a recipe could ever contain, is what makes coverage of
+# arbitrary live recipes tractable at all.
+CATEGORY_PRODUCTS = [
+    # (bucket key, display name, package grams, price in kopiykas, category aliases)
+    ("vegetables", "Demo mixed vegetables", 500, 4500, ["vegetables", "canned vegetables"]),
+    ("condiments", "Demo condiments and sauces", 200, 3500, ["condiments and sauces"]),
+    ("grains", "Demo grains", 500, 5500, ["grains", "cooked grains"]),
+    ("bread", "Demo bread and pastries", 400, 4000,
+     ["bread, rolls and tortillas", "quick breads and pastries"]),
+    ("fruit", "Demo fruit", 500, 5000, ["fruit", "canned fruit"]),
+    ("sugars", "Demo sugar", 500, 3000, ["sugars", "sugar syrups"]),
+    ("dairy", "Demo dairy", 500, 5500, ["dairy"]),
+    ("milk", "Demo milk", 500, 3200, ["milk"]),
+    ("cheese", "Demo cheese", 250, 6500, ["cheese"]),
+    ("oils", "Demo cooking oil", 250, 4500, ["oils"]),
+    ("eggs", "Demo eggs", 300, 4000, ["eggs"]),
+    ("poultry", "Demo poultry", 500, 9000, ["poultry"]),
+    ("meats", "Demo meat", 500, 11000, ["meats", "cured meats"]),
+    ("seafood", "Demo seafood", 400, 12000, ["seafood"]),
+    ("plant-protein", "Demo plant-based protein", 300, 6000, ["plant-based protein", "vegan products"]),
+    ("soup", "Demo canned soup", 400, 3800, ["canned soup"]),
+    ("beverages", "Demo beverages", 500, 3000, ["non-dairy beverages", "100% juice", "wines"]),
+    ("chocolate", "Demo chocolate", 200, 5200, ["chocolate"]),
+    ("water", "Demo water", 1000, 1500, ["water"]),
+]
+
+
 class DemoCatalog:
     """Normalized invented catalog. Known composition labels are fixture evidence only."""
     SUPPORTED_RESTRICTIONS = {
@@ -55,6 +88,19 @@ class DemoCatalog:
             self.products[product.id] = product
             self.terms["oats"].append(product.id)
             self.restriction_labels[product.id] = set(self.SUPPORTED_RESTRICTIONS)
+        # Category buckets for live Edamam recipes: no composition evidence exists for a generic
+        # placeholder, so — unlike oats/rice/lentils above — these are deliberately left out of
+        # restriction_labels. check_restrictions() below then answers "unknown" for any requested
+        # restriction, the same fail-closed behaviour as every other unverified candidate (see
+        # BUG-021); only an unrestricted requirement can select one.
+        for key, name, size, price, aliases in CATEGORY_PRODUCTS:
+            product = ProductCandidate(id=f"demo-cat-{key}", name=f"{name}, {size} g", requirement_ids=[],
+                price_minor=price, selling_unit="package", quantity_step=1.0,
+                content_quantity=float(size), content_unit="g", available=True,
+                restriction_check="pass", regular_price_minor=None, source="synthetic", checked_at=now())
+            self.products[product.id] = product
+            for alias in aliases:
+                self.terms.setdefault(alias.casefold(), []).append(product.id)
 
     def search_products(self, session, query):
         return [self.products[id].model_copy(deep=True) for id in self.terms.get(query.casefold(), [])]

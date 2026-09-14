@@ -715,3 +715,32 @@ commit.
 
 BUG-029 fixed on `feature/polina-edamam-weightless-ingredients` (backend 226/226); live re-check
 of the 3 000 kcal plan pending that deploy.
+
+## Run 20 — BUG-026 resolved: category-based catalog for live Edamam ingredients, September 14, 2026
+
+- **Ask:** Polina, live: "я думаю для едамам там можна підібрати відповідні продукти" — find
+  real matching products for Edamam ingredients instead of accepting the empty basket.
+- **Why a finite product list alone can't work:** Edamam recipe ingredients are effectively
+  unbounded (`chicken`, `red potatoes`, `extra virgin olive oil`, `parmesan cheese`, `white wine`,
+  …); no hand-curated list of specific names will ever cover arbitrary recipes.
+- **What does work:** every Edamam ingredient carries a `foodCategory` — already passed as the
+  second `search_terms` entry in `meals/edamam.py` — and that taxonomy is bounded (~25 values).
+  Collected the real distribution across 145 live ingredients (4 plans) before choosing buckets;
+  `demo.py` now ships 19 generic, clearly-labeled synthetic products keyed by category.
+
+| Check | Result |
+|---|---|
+| Backend suite | ✅ 257/257 (31 new: parametrized per category, case-insensitivity, restriction fail-closed, a realistic 9-ingredient set) |
+| Fix verified against fresh live data the fix had never seen (3 new live plans, 117 ingredients) | ✅ **115/117 resolve (98%)**, up from 0 before this run |
+| Remaining unresolved | `fish broth`, `Guacamole` — both carried **no category at all** from Edamam; an honestly-disclosed residual gap, not a defect in the fix |
+| e2e, local | ✅ 40/40 |
+| Playwright UI, local | ✅ 58/58 |
+
+**Scope, stated plainly:** this fixes the guest/demo catalog path only — what every QA run and
+the planned recording use. A connected real Silpo account still searches its live Ukrainian
+catalog with Edamam's English terms directly and was not touched by this change.
+
+**Dietary honesty preserved:** the new category products carry no composition evidence and are
+deliberately excluded from `restriction_labels`, so a requested restriction still resolves to
+"unknown" for them (same fail-closed rule as BUG-021) — only unrestricted requirements can select
+one. Verified by a dedicated test.
