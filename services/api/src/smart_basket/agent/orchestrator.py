@@ -49,16 +49,28 @@ def cart_confirmable(
     """One rule for every branch: a complete, in-budget plan on a usable catalog.
 
     A plan built on the live Silpo catalog is confirmed through the live cart service;
-    a demo plan is confirmed through the demo cart service.
+    a plan whose products are all synthetic is confirmed through the demo cart service —
+    regardless of `data_mode`, which only reports whether the *meals* (not the products) came
+    from a live provider. Confirming was previously blocked whenever `data_mode == "mixed"`
+    (live meals, demo catalog), even with a complete, in-budget, fully-resolved plan; relaxed
+    2026-09-14 (Polina, explicit direction) once live Edamam meals became the shipped
+    configuration and every product in such a plan is still, unambiguously, a synthetic one —
+    the mismatch this guarded against (writing demo product IDs through the live cart path)
+    cannot happen, since that path is only ever taken when uses_live_catalog is true.
+    `data_mode` is kept as a parameter for the warning text below and the API's own display
+    field; only the confirmability decision no longer depends on it.
     """
     uses_live_catalog = bool(selected_products) and all(
         item.source == "silpo" for item in selected_products
+    )
+    uses_demo_catalog = bool(selected_products) and all(
+        item.source == "synthetic" for item in selected_products
     )
     return (
         budget_status == "within_budget"
         and len(unresolved_requirements) == 0
         and context.cart_context_ready
-        and (uses_live_catalog or data_mode == "demo")
+        and (uses_live_catalog or uses_demo_catalog)
     )
 
 
@@ -333,7 +345,7 @@ class UlianaPlanner:
         )
         if data_mode == "mixed":
             warnings.append(
-                "Meal data is live or mixed while catalog/cart data remains demo; cart confirmation is disabled."
+                "Meal data is live or mixed while catalog/cart data remains demo."
             )
 
         emit_progress(
@@ -1042,8 +1054,7 @@ class UlianaPlanner:
         if data_mode == "mixed":
             mixed_warning = (
                 "Meal data is live or mixed while "
-                "catalog/cart data remains demo; "
-                "cart confirmation is disabled."
+                "catalog/cart data remains demo."
             )
 
             if mixed_warning not in warnings:
