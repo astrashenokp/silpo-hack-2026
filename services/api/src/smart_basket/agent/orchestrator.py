@@ -46,9 +46,11 @@ def cart_confirmable(
     unresolved_requirements,
     context,
 ):
-    """One rule for every branch: a complete, in-budget plan on a usable catalog.
+    """One rule for every branch: a reviewed, in-budget plan on a usable catalog.
 
-    A plan built on the live Silpo catalog is confirmed through the live cart service;
+    A plan built on the live Silpo catalog is confirmed through the live cart service. Explicitly
+    unresolved ingredients are omitted, so verified live products can still be added as a partial
+    basket. A synthetic demo remains confirmable only when every requirement is resolved;
     a plan whose products are all synthetic is confirmed through the demo cart service —
     regardless of `data_mode`, which only reports whether the *meals* (not the products) came
     from a live provider. Confirming was previously blocked whenever `data_mode == "mixed"`
@@ -66,12 +68,13 @@ def cart_confirmable(
     uses_demo_catalog = bool(selected_products) and all(
         item.source == "synthetic" for item in selected_products
     )
-    return (
-        budget_status == "within_budget"
+    live_partial = uses_live_catalog and budget_status in {"within_budget", "incomplete"}
+    complete_demo = (
+        uses_demo_catalog
+        and budget_status == "within_budget"
         and len(unresolved_requirements) == 0
-        and context.cart_context_ready
-        and (uses_live_catalog or uses_demo_catalog)
     )
+    return context.cart_context_ready and (live_partial or complete_demo)
 
 
 class UlianaPlanner:

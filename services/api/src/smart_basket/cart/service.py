@@ -208,13 +208,12 @@ class LiveCartService:
                     )
                 if (
                     not plan.selected_products
-                    or plan.budget_status != "within_budget"
-                    or plan.unresolved_requirements
+                    or plan.budget_status == "over_budget"
                     or any(item.source != "silpo" for item in plan.selected_products)
                 ):
                     raise ApiError(
                         "STALE_PLAN",
-                        "A complete reviewed live Silpo proposal is required.",
+                        "A reviewed live Silpo proposal within budget is required.",
                     )
 
                 raw_cart = await get_current_cart(mcp_session)
@@ -322,6 +321,11 @@ class LiveCartService:
             "LIVE: confirmation will update the connected Silpo cart.",
             "Existing unrelated cart items are preserved.",
         ]
+        if plan.unresolved_requirements:
+            warnings.append(
+                f"{len(plan.unresolved_requirements)} unmatched ingredient(s) are omitted; "
+                "only the reviewed Silpo products shown above will be added."
+            )
         if any(price is None for _, price in snapshot.values()):
             warnings.append(
                 "Silpo omitted a unit price for one or more existing lines; displayed cart totals exclude those lines."

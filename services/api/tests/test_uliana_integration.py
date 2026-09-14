@@ -59,6 +59,20 @@ def test_cart_confirmable_still_requires_budget_completeness_and_cart_context():
     )
 
 
+def test_live_cart_can_confirm_found_products_when_other_ingredients_are_unresolved():
+    base = dict(
+        data_mode="mixed",
+        selected_products=[_product("silpo")],
+        unresolved_requirements=["not-found"],
+        context=_ready_context(),
+    )
+    assert cart_confirmable(budget_status="incomplete", **base)
+    assert not cart_confirmable(budget_status="over_budget", **base)
+
+    base["selected_products"] = [_product("synthetic")]
+    assert not cart_confirmable(budget_status="incomplete", **base)
+
+
 def test_uliana_planner_through_api():
     # 1. Створюємо demo catalog Ріни
     catalog = DemoCatalog()

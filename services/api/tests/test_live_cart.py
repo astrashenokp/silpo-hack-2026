@@ -19,7 +19,7 @@ from smart_basket.cart.service import normalize_cart_snapshot, snapshot_total
 from smart_basket.core import Session
 from smart_basket.schemas import (
     IngredientRequirement, ProductCandidate, ProductSearchResponse,
-    UserContext,
+    UnresolvedRequirement, UserContext,
 )
 
 
@@ -437,6 +437,10 @@ async def test_live_cart_preview_confirm_readback_and_idempotency(
     app, client, planning_request, monkeypatch
 ):
     wire_plan, owner, plan = _make_plan_live(app, client, planning_request)
+    plan.unresolved_requirements = [
+        UnresolvedRequirement(requirement_id="not-found", reason="No catalog candidates were found.")
+    ]
+    plan.budget_status = "incomplete"
     state = {"written": False, "calls": []}
 
     @asynccontextmanager
@@ -483,6 +487,7 @@ async def test_live_cart_preview_confirm_readback_and_idempotency(
     assert preview["existingCartTotalMinor"] == 3000
     assert preview["projectedGoodsTotalMinor"] == 3000 + plan.basket_total_minor
     assert all(change["beforeQuantity"] == 0 for change in preview["changes"])
+    assert any("1 unmatched ingredient" in warning for warning in preview["warnings"])
 
     body = {"previewId": preview["previewId"], "idempotencyKey": "live-once"}
     first = client.post("/api/cart/confirm", json=body)
