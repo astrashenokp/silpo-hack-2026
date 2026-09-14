@@ -194,16 +194,18 @@ async def test_live_catalog_does_not_lose_relevant_product_after_first_two_hits(
 
 
 @pytest.mark.asyncio
-async def test_connected_catalog_without_cart_branch_does_not_mix_demo_candidates():
+async def test_connected_catalog_without_cart_branch_falls_back_to_demo():
+    # A connected profile may legitimately have no active cart/branch yet; planning must stay
+    # usable with a labelled synthetic candidate rather than leaving the ingredient unresolved.
     owner = Session("owner")
     owner.silpo_connected = True
 
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert products == []
+    assert products and all(p.source == "synthetic" for p in products)
 
 
-def test_connected_matching_without_live_context_stays_unresolved():
+def test_connected_matching_without_live_context_uses_demo_fallback():
     owner = Session("owner")
     owner.silpo_connected = True
     catalog = SessionCatalog()
@@ -216,8 +218,8 @@ def test_connected_matching_without_live_context_stays_unresolved():
         [requirement], [], MatchingContext(owner, catalog, catalog.check_restrictions),
     )
 
-    assert result.unresolved_requirements
-    assert result.candidates == []
+    assert result.unresolved_requirements == []
+    assert result.candidates and all(c.source == "synthetic" for c in result.candidates)
 
 
 def test_connected_catalog_reuses_context_and_history_loaded_for_the_form():
@@ -254,7 +256,7 @@ def test_live_history_failure_uses_empty_demo_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_live_search_failure_does_not_mix_demo_candidates(monkeypatch):
+async def test_live_search_failure_falls_back_to_demo(monkeypatch):
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -267,11 +269,11 @@ async def test_live_search_failure_does_not_mix_demo_candidates(monkeypatch):
 
     products = await catalog._search(owner, "rice")
 
-    assert products == []
+    assert products and all(p.source == "synthetic" for p in products)
 
 
 @pytest.mark.asyncio
-async def test_empty_live_search_does_not_mix_demo_candidates(monkeypatch):
+async def test_empty_live_search_falls_back_to_demo(monkeypatch):
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -288,7 +290,7 @@ async def test_empty_live_search_does_not_mix_demo_candidates(monkeypatch):
 
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert products == []
+    assert products and all(p.source == "synthetic" for p in products)
 
 
 @pytest.mark.parametrize(("query", "product_name"), [
@@ -338,6 +340,8 @@ def test_piece_products_convert_to_edamam_grams(query, pieces, expected_grams):
 
 @pytest.mark.asyncio
 async def test_live_catalog_does_not_search_generic_edamam_category(monkeypatch):
+    # A category such as "grains" is not evidence that an arbitrary live result is the right
+    # ingredient — it must go straight to a labelled synthetic candidate, never to a live search.
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -348,7 +352,9 @@ async def test_live_catalog_does_not_search_generic_edamam_category(monkeypatch)
     catalog = SessionCatalog()
     monkeypatch.setattr(catalog, "_search_live", should_not_search)
 
-    assert await catalog._search(owner, "grains") == []
+    products = await catalog._search(owner, "grains")
+
+    assert products and all(p.source == "synthetic" for p in products)
 
 
 def test_live_catalog_dynamically_translates_every_unknown_ingredient():
@@ -381,7 +387,10 @@ def test_live_catalog_dynamically_translates_every_unknown_ingredient():
     prepared = catalog.prepare_requirements(owner, [requirement])
     profile = catalog._profile(owner, "shiitake mushrooms")
 
-    assert prepared[0].search_terms == ["shiitake mushrooms"]
+    # The name goes first so the dynamic profile above drives the live search, but the
+    # ingredient's own category term is kept too — it is what lets a genuinely unavailable
+    # ingredient still resolve to a labelled synthetic candidate instead of staying unresolved.
+    assert prepared[0].search_terms == ["shiitake mushrooms", "vegetables"]
     assert profile is not None
     assert profile.provider_queries == ("гриби шиїтаке", "шиїтаке")
     assert live_product_name_matches(

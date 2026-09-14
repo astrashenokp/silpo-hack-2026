@@ -363,7 +363,14 @@ class SessionCatalog:
                     grams_per_piece=translation.grams_per_piece,
                 )
                 self._dynamic_profiles[(owner.id, _normalized_words(requirement.name))] = profile
-            prepared.append(requirement.model_copy(update={"search_terms": [requirement.name]}))
+            # requirement.name goes first so the dynamic/static profile above is what actually
+            # drives the live search; the ingredient's own category terms (from Edamam, or the
+            # demo-only bucket guesses in meals/edamam.py) are kept after it, not discarded, since
+            # they are what lets _search() fall back to a labelled synthetic candidate when even a
+            # correctly translated live search finds nothing Silpo carries.
+            prepared.append(requirement.model_copy(update={
+                "search_terms": list(dict.fromkeys([requirement.name, *requirement.search_terms])),
+            }))
 
         logger.info(
             "Prepared %d live ingredient searches (%d dynamically translated).",
@@ -489,29 +496,38 @@ class SessionCatalog:
             normalized = candidate.model_copy(update={"restriction_check": "unknown"})
             self._candidates[(owner.id, normalized.id)] = normalized.model_copy(deep=True)
             candidates.append(normalized)
+        if not candidates:
+            # A verified live match beats a guess, but no live match must not mean no product at
+            # all: prepare_requirements() already tried a static profile, then Gemini translation,
+            # for this exact query — genuinely running out of options (out of stock, an ingredient
+            # Silpo just doesn't carry, a translation the evidence check still rejected) should
+            # fall back to a labelled synthetic candidate, the same safety net every other gap in
+            # this catalog already uses, not a silent "Не вдалося підібрати".
+            return self.demo.search_products(owner, query)
         return candidates
 
     async def _search(self, owner, query: str):
         if not owner.silpo_branch_id:
-            # Never mix synthetic IDs into a connected user's real basket. Without a writable
-            # branch the requirement stays unresolved until Silpo context is available.
-            return []
+            # A connected profile may legitimately have no active cart/branch yet. Keep planning
+            # usable with transparent synthetic items until Silpo context is available.
+            return self.demo.search_products(owner, query)
         if (
             _normalized_words(query) in EDAMAM_CATEGORY_TERMS
             and self._profile(owner, query) is None
         ):
-            # A category such as "grains" is not evidence that an arbitrary result is flour.
-            return []
+            # A category such as "grains" is not evidence that an arbitrary result is flour —
+            # go straight to a labelled synthetic candidate instead of an unverified live guess.
+            return self.demo.search_products(owner, query)
         try:
             return await self._search_live(owner, query)
         except Exception as exc:
             logger.warning(
                 "Silpo product search is temporarily unavailable for %s; "
-                "leaving the ingredient unresolved (%s).",
+                "using a labelled synthetic candidate (%s).",
                 query,
                 type(exc).__name__,
             )
-            return []
+            return self.demo.search_products(owner, query)
 
     def search_products(self, owner, query: str):
         if not self._live(owner):
@@ -521,10 +537,13 @@ class SessionCatalog:
     def get_product_details(self, owner, product_id: str):
         if not self._live(owner):
             return self.demo.get_product_details(owner, product_id)
+        # A connected owner's search can still return a demo-fallback candidate (no live match,
+        # empty search, a transient Silpo failure) — those ids only ever live in self.demo, never
+        # in the live cache, so check there before treating a miss as an error.
         candidate = self._candidates.get((owner.id, product_id))
-        if candidate is None:
-            raise KeyError(f"Silpo product {product_id} is not in the reviewed search results.")
-        return candidate.model_copy(deep=True)
+        if candidate is not None:
+            return candidate.model_copy(deep=True)
+        return self.demo.get_product_details(owner, product_id)
 
     def check_restrictions(self, product, restrictions):
         if not restrictions:
