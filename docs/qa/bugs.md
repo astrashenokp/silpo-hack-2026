@@ -39,7 +39,7 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-024 | Low | `handle_chat_message` catches every interpreter exception and returns one generic `chat_error`, so a rate limit, a network blip and a missing key are indistinguishable to the caller | Uliana | Open |
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 | BUG-025 | Blocker | Edamam Meal Planner returned HTTP 403 for every request, and `EDAMAM_SYNTHETIC_FALLBACK=false` on the live deploy meant this failed every plan for every user — production was fully down | Polina (own file, `services/api/src/smart_basket/meals/edamam.py`) | Fixed in #43; retested ✅ (run 17, live: e2e 40/40, UI 56/56) |
-| BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket was empty on every plan | Polina, in Sofiia's `services/api/src/smart_basket/demo.py` (user-authorised) | Fixed on `feature/polina-edamam-category-catalog`: matching by Edamam's bounded `foodCategory` taxonomy resolves 98% of real live ingredients (115/117, fresh live data, run 20) instead of 0%. The demo-only Silpo-cart segment can go back in the recording |
+| BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket was empty on every plan | Polina, in Sofiia's `services/api/src/smart_basket/demo.py` + `meals/edamam.py` (user-authorised) | Fixed in #48 (98%, run 20); narrowed further in #49 with a name-based fallback for the ~2% Edamam sends with no category at all ("fish broth", "cornflakes", "Guacamole") |
 | BUG-027 | High | With live Edamam meals, slots got any recipe (a macaron filling as dinner, pizza bread as breakfast) and daily calories landed 65–71% over the target (4 960 / 5 131 kcal vs 3 000) | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #46; live ✅ (run 19: 2 people × 2 days × 2 000 kcal → sensible slots, 2 028 / 1 960 kcal) |
 | BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed in #46; UI ✅ (run 19, 58/58); new strings confirmed in the live bundle |
 | BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #47; retested ✅ live (run 19: same input completed twice, once with a "Jalapeno left out" warning instead of failing) |
@@ -732,3 +732,21 @@ not yet been sent to the owners; Polina shares it with the team.
   restriction fail-closed behaviour, and a realistic 9-ingredient live-shaped set (8/9 resolve,
   matching the one genuinely uncategorized case). Backend 257/257 (was 226). e2e 40/40, UI 58/58
   locally.
+
+## BUG-026, narrowed further — a name-based fallback for the last ~2%
+
+- **Found in:** run 21, live, right after the new Edamam application key was applied. A 2-day
+  plan with real recipes resolved 17 of 19 ingredients; the 2 unresolved ("fish broth",
+  "cornflakes") had no `foodCategory` from Edamam at all, so #48's category matching had nothing
+  to key off — a `budgetStatus: incomplete` plan the cart correctly refused to preview, exactly
+  the safety behaviour BUG-016 established, not a new defect.
+- **Fix:** `meals/edamam.py`'s `_search_terms` now guesses a category from the ingredient name,
+  but only when Edamam sends none, and only for name patterns actually observed missing a
+  category live (broth/stock/bouillon → the existing "canned soup" bucket; cornflakes/cereal/
+  muesli/granola → "grains"; guacamole/salsa/hummus/pesto/dip → "condiments and sauces"). A real
+  Edamam-provided category is never overridden, and an ingredient matching no pattern is left
+  exactly as before — this narrows the known gap, it does not claim to close it.
+- **Tests:** a real category from Edamam is kept as-is; each observed name pattern resolves to
+  the right existing bucket; a name that merely contains a hint word is not reclassified when a
+  real category is already present; a genuinely unrecognised, uncategorised ingredient is left
+  alone. Backend 268/268 (was 257).

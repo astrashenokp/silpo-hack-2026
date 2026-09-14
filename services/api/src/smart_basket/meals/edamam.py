@@ -388,11 +388,37 @@ def _ingredient_name(ingredient: dict) -> str:
     return "Ingredient"
 
 
+# When Edamam gives an ingredient no foodCategory at all, matching has nothing to work with —
+# measured live, this is a small residual (2 of 117 real ingredients: "fish broth", "Guacamole",
+# plus "cornflakes" observed separately). These three name patterns map unambiguously onto a
+# demo.py category bucket that already exists; this is a narrow, evidence-based fallback for the
+# specific gap actually observed, not an attempt to guess arbitrary ingredient names.
+_NAME_CATEGORY_HINTS = [
+    (("broth", "stock", "bouillon"), "canned soup"),
+    (("cornflakes", "cereal", "muesli", "granola"), "grains"),
+    (("guacamole", "salsa", "hummus", "pesto", " dip", "dip ", "dip,"), "condiments and sauces"),
+]
+
+
+def _guessed_category(name: str) -> str | None:
+    lowered = f" {name.casefold()} "
+    for keywords, category in _NAME_CATEGORY_HINTS:
+        if any(keyword in lowered for keyword in keywords):
+            return category
+    return None
+
+
 def _search_terms(ingredient: dict) -> list[str]:
     terms = []
-    for value in (_ingredient_name(ingredient), ingredient.get("foodCategory")):
+    name = _ingredient_name(ingredient)
+    category = ingredient.get("foodCategory")
+    for value in (name, category):
         if isinstance(value, str) and value and value not in terms:
             terms.append(value)
+    if category is None:
+        guess = _guessed_category(name)
+        if guess and guess not in terms:
+            terms.append(guess)
     return terms
 
 
