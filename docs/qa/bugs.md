@@ -44,6 +44,7 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed in #46; UI ✅ (run 19, 58/58); new strings confirmed in the live bundle |
 | BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #47; retested ✅ live (run 19: same input completed twice, once with a "Jalapeno left out" warning instead of failing) |
 | BUG-030 | Medium | With no calorie target, live Edamam has no calorie floor and breakfast has no dish filter: one plan served a juice for breakfast (197 kcal), a recipe literally titled "Tst" for lunch (83 kcal), ~583 kcal for the day | Sofiia (meal-planning rules) | Open — the demo's golden input sets a calorie target, so not demo-blocking |
+| BUG-031 | High | `cart_confirmable()` and `DemoCartService._check_products` both refused ANY plan whose `dataMode` was "mixed" (live Edamam meals + demo catalog) — even a perfectly complete, in-budget, fully-resolved plan — so the cart could never be confirmed once live Edamam meals shipped, regardless of match quality | Polina, in Uliana's `agent/orchestrator.py` + `cart/service.py` (user-authorised, explicit "post relax this" direction) | Fixed on `feature/polina-mixed-demo-cart-confirm`; tests 275/275; live check pending deploy |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -750,3 +751,42 @@ not yet been sent to the owners; Polina shares it with the team.
   the right existing bucket; a name that merely contains a hint word is not reclassified when a
   real category is already present; a genuinely unrecognised, uncategorised ingredient is left
   alone. Backend 268/268 (was 257).
+
+## BUG-031 — "Mixed" data mode unconditionally blocked cart confirmation
+
+- **Found in:** run 21, live, right after BUG-026's category matching was confirmed working end
+  to end (13/13 products, 0 unresolved, within budget). `canConfirmCart` was still `false`.
+- **Root cause:** two independent, deliberately written and tested guards, not a bug in the
+  usual sense:
+  - `agent/orchestrator.py`'s `cart_confirmable()` required `uses_live_catalog or data_mode ==
+    "demo"` — `data_mode` becomes `"mixed"` whenever meals come from Edamam, regardless of how
+    the products resolved, so this returned `false` unconditionally for every live-Edamam plan.
+  - `cart/service.py`'s `DemoCartService._check_products` separately required `plan.data_mode ==
+    "demo"`, refusing `/cart/preview` with `DEMO_ONLY` even if the first check had passed.
+  - A dedicated test, `test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart`, confirms
+    this was intentional, tested design — not an oversight.
+- **Why it no longer holds:** `data_mode` reports the *meal* source (live/demo/mixed); it says
+  nothing about the *product* source, which is the only thing that actually determines which
+  cart-write path (live Silpo vs demo) is safe to use. A plan with live Edamam meals but
+  exclusively synthetic products is exactly as safe to write through the demo cart service as a
+  fully-synthetic plan — the case this guarded against (writing demo product IDs through the live
+  path) cannot happen, since that path is only ever taken when every product's source is
+  `"silpo"`.
+- **Decision, September 14 (Polina, explicit):** relaxed both checks to key off product source
+  instead of `data_mode`. `data_mode` keeps reporting "mixed" for display (the DemoBadge, the
+  warning text) — the disclosure stays fully honest — only the confirmability decision changed.
+  This reverses tested, intentional behavior from another module; flagged here in full for
+  Uliana and Rina to review after the deadline.
+- **Fix:**
+  - `cart_confirmable()`: added `uses_demo_catalog` (all products `"synthetic"`) alongside the
+    existing `uses_live_catalog`; the rule is now `uses_live_catalog or uses_demo_catalog`. A
+    genuinely incoherent mix of product sources in one basket is still refused.
+  - `DemoCartService._check_products`: dropped the `plan.data_mode != "demo"` clause; kept the
+    `any(p.source != "synthetic" ...)` guard.
+  - Both warning strings ("cart confirmation is disabled") corrected to state only what remains
+    true (mixed data sources), since it is no longer accurate that confirmation is disabled.
+- **Tests:** the existing intentional-behavior test renamed and its assertions flipped to the
+  new contract (`canConfirmCart: true`, `/api/cart/preview` → 200). Added a direct parametrized
+  unit test of `cart_confirmable()` covering demo, mixed+synthetic, live, mixed+live, a
+  genuinely incoherent source mix (still refused), and an empty selection (still refused); plus
+  budget/unresolved/cart-context-ready edge cases. Backend 275/275 (was 268).
