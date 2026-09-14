@@ -32,7 +32,11 @@ class DemoCartService:
         self.catalog = catalog
 
     def _check_products(self, plan, session):
-        if plan.data_mode != "demo" or any(p.source != "synthetic" for p in plan.selected_products):
+        # `data_mode` reports the *meal* source (live/demo/mixed), not the product source, and
+        # is no longer part of this check — see cart_confirmable()'s docstring in orchestrator.py
+        # for why (2026-09-14, Polina, explicit direction). What this service must actually
+        # refuse is a plan whose products are not all synthetic; that guard stays.
+        if any(p.source != "synthetic" for p in plan.selected_products):
             raise ApiError("DEMO_ONLY", "This service accepts only synthetic plans.")
         if not plan.can_confirm_cart or plan.budget_status != "within_budget" or not plan.selected_products:
             raise ApiError("STALE_PLAN", "A complete proposal within budget is required.")
@@ -204,13 +208,12 @@ class LiveCartService:
                     )
                 if (
                     not plan.selected_products
-                    or plan.budget_status != "within_budget"
-                    or plan.unresolved_requirements
+                    or plan.budget_status == "over_budget"
                     or any(item.source != "silpo" for item in plan.selected_products)
                 ):
                     raise ApiError(
                         "STALE_PLAN",
-                        "A complete reviewed live Silpo proposal is required.",
+                        "A reviewed live Silpo proposal within budget is required.",
                     )
 
                 raw_cart = await get_current_cart(mcp_session)
@@ -318,6 +321,11 @@ class LiveCartService:
             "LIVE: confirmation will update the connected Silpo cart.",
             "Existing unrelated cart items are preserved.",
         ]
+        if plan.unresolved_requirements:
+            warnings.append(
+                f"{len(plan.unresolved_requirements)} unmatched ingredient(s) are omitted; "
+                "only the reviewed Silpo products shown above will be added."
+            )
         if any(price is None for _, price in snapshot.values()):
             warnings.append(
                 "Silpo omitted a unit price for one or more existing lines; displayed cart totals exclude those lines."

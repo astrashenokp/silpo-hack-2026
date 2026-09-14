@@ -63,8 +63,11 @@ const ERROR_TEXT: Record<string, string> = {
   CART_CONTEXT_REQUIRED: "У вашому акаунті Сільпо немає активного кошика з магазином і способом отримання.",
   IDEMPOTENCY_CONFLICT: "Цей ключ підтвердження вже використано для іншого перегляду.",
   CONFIRMATION_IN_PROGRESS: "Це підтвердження вже виконується. Зачекайте кілька секунд.",
-  RATE_LIMITED: "Сільпо тимчасово обмежив кількість запитів. Спробуйте за хвилину.",
-  UPSTREAM_UNAVAILABLE: "Сервіс Сільпо тимчасово недоступний.",
+  // Shared codes: Edamam, FatSecret and Silpo can all raise these (see agent/orchestrator.py,
+  // fatsecret/export.py, cart/service.py) — naming one provider here is wrong whenever a
+  // different one actually failed, which is exactly what was reported live tonight.
+  RATE_LIMITED: "Перевищено ліміт запитів до зовнішнього сервісу. Спробуйте за хвилину.",
+  UPSTREAM_UNAVAILABLE: "Зовнішній сервіс тимчасово недоступний. Спробуйте ще раз за хвилину.",
   VALIDATION_ERROR: "Сервер відхилив запит: перевірте параметри плану.",
   UNRESOLVED_FOODS: "Не всі інгредієнти зіставлені з продуктами FatSecret.",
   STALE_ACCOUNT: "Підключення FatSecret змінилося. Створіть новий перегляд.",
@@ -506,7 +509,18 @@ export default function Home() {
       storeLabel={accountConnected ? null : "Демо-кошик: справжній акаунт Сільпо не змінюється"}
       onSync={() => cartPlan && void requestPreview(cartPlan)}
       onClear={clearCart}
-      syncDisabled={!cartPlan || cartItems.length === 0}
+      // Once this plan already has a receipt, the server correctly refuses to preview it again
+      // (STALE_PLAN, "already has a cart receipt") — but the modal's own retry button calls back
+      // into this exact handler, so leaving Sync clickable here traps the user in a repeating
+      // error with no way out. Nothing is left to sync for an applied plan.
+      syncDisabled={!cartPlan || cartItems.length === 0 || cartReceipt !== null}
+      syncDisabledReason={
+        cartReceipt !== null
+          ? "Кошик уже підтверджено — синхронізувати більше нічого."
+          : !cartPlan || cartItems.length === 0
+            ? "Спершу натисніть «Додати все в кошик Сільпо» у плані."
+            : null
+      }
       syncBusy={cartBusy}
       mode={cartPlan?.dataMode ?? dataMode}
     />

@@ -8,13 +8,18 @@ from smart_basket.catalog.live import (
     _field_paths,
     _package_signals,
     _run_async,
+    ingredient_package_amount,
+    live_query_profile,
+    live_product_name_matches,
     restriction_check_from_details,
 )
 from smart_basket.catalog.matching import MatchingContext, find_product_candidates
+from smart_basket.catalog.translation import IngredientTranslation
 from smart_basket.cart.service import normalize_cart_snapshot, snapshot_total
 from smart_basket.core import Session
 from smart_basket.schemas import (
-    IngredientRequirement, ProductCandidate, ProductSearchResponse, UserContext,
+    IngredientRequirement, ProductCandidate, ProductSearchResponse,
+    UnresolvedRequirement, UserContext,
 )
 
 
@@ -128,8 +133,8 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
     monkeypatch.setattr("smart_basket.catalog.live.get_silpo_product_details", fake_details)
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert queries == ["крупа рисова", "рис", "rice"]
-    assert len(products) == 3
+    assert queries == ["крупа рисова", "рис"]
+    assert len(products) == 2
     assert all(product.restriction_check == "unknown" for product in products)
     assert all(product.content_quantity == 500 for product in products)
     assert all(product.content_unit == "g" for product in products)
@@ -140,17 +145,67 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_connected_catalog_without_cart_branch_uses_labelled_demo_candidates():
+async def test_live_catalog_does_not_lose_relevant_product_after_first_two_hits(monkeypatch):
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+
+    @asynccontextmanager
+    async def fake_session(storage):
+        yield object()
+
+    async def fake_search(_session, query, branch_id, **kwargs):
+        products = [
+            ProductCandidate(
+                id=f"{query}-{index}",
+                name=("Крупа рисова довгозерниста" if index == 4 else f"Снек #{index}"),
+                requirement_ids=[],
+                price_minor=100 + index,
+                selling_unit="package",
+                quantity_step=1.0,
+                content_quantity=None,
+                content_unit=None,
+                available=True,
+                restriction_check="unknown",
+                regular_price_minor=None,
+                source="silpo",
+                checked_at="2026-09-14T00:00:00+00:00",
+            )
+            for index in range(5)
+        ]
+        return ProductSearchResponse(query=query, products=products, warnings=[])
+
+    async def fake_details(_session, product_id, branch_id, **kwargs):
+        owner.silpo_product_write_metadata[product_id] = {
+            "productId": product_id,
+            "companyId": "company-1",
+            "branchId": branch_id,
+        }
+        return {"product": {"id": product_id, "displayRatio": "500 г"}}
+
+    monkeypatch.setattr("smart_basket.catalog.live.get_mcp_session", fake_session)
+    monkeypatch.setattr("smart_basket.catalog.live.search_products", fake_search)
+    monkeypatch.setattr("smart_basket.catalog.live.get_silpo_product_details", fake_details)
+
+    products = await SessionCatalog()._search(owner, "rice")
+
+    assert len(products) == 2
+    assert all("Крупа рисова" in product.name for product in products)
+
+
+@pytest.mark.asyncio
+async def test_connected_catalog_without_cart_branch_falls_back_to_demo():
+    # A connected profile may legitimately have no active cart/branch yet; planning must stay
+    # usable with a labelled synthetic candidate rather than leaving the ingredient unresolved.
     owner = Session("owner")
     owner.silpo_connected = True
 
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert products
-    assert all(product.source == "synthetic" for product in products)
+    assert products and all(p.source == "synthetic" for p in products)
 
 
-def test_connected_matching_can_read_details_for_labelled_demo_fallback():
+def test_connected_matching_without_live_context_uses_demo_fallback():
     owner = Session("owner")
     owner.silpo_connected = True
     catalog = SessionCatalog()
@@ -164,8 +219,7 @@ def test_connected_matching_can_read_details_for_labelled_demo_fallback():
     )
 
     assert result.unresolved_requirements == []
-    assert result.candidates
-    assert all(candidate.source == "synthetic" for candidate in result.candidates)
+    assert result.candidates and all(c.source == "synthetic" for c in result.candidates)
 
 
 def test_connected_catalog_reuses_context_and_history_loaded_for_the_form():
@@ -202,7 +256,7 @@ def test_live_history_failure_uses_empty_demo_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_live_search_failure_uses_labelled_demo_candidates(monkeypatch):
+async def test_live_search_failure_falls_back_to_demo(monkeypatch):
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -215,12 +269,11 @@ async def test_live_search_failure_uses_labelled_demo_candidates(monkeypatch):
 
     products = await catalog._search(owner, "rice")
 
-    assert products
-    assert all(product.source == "synthetic" for product in products)
+    assert products and all(p.source == "synthetic" for p in products)
 
 
 @pytest.mark.asyncio
-async def test_empty_live_search_uses_labelled_demo_candidates(monkeypatch):
+async def test_empty_live_search_falls_back_to_demo(monkeypatch):
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -237,8 +290,113 @@ async def test_empty_live_search_uses_labelled_demo_candidates(monkeypatch):
 
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert products
-    assert all(product.source == "synthetic" for product in products)
+    assert products and all(p.source == "synthetic" for p in products)
+
+
+@pytest.mark.parametrize(("query", "product_name"), [
+    ("all purpose flour", "Tanqueray Flor de Sevilla Gin"),
+    ("tomato", "Пиво Underwood Red Tomato"),
+    ("salt", "Льодяник Fizi Vanilla salt"),
+    ("milk", "Цукерки-соломинки Quick Milk"),
+])
+def test_live_name_evidence_rejects_observed_fuzzy_false_positives(query, product_name):
+    assert not live_product_name_matches(query, product_name)
+
+
+@pytest.mark.parametrize(("query", "product_name"), [
+    ("all purpose flour", "Борошно пшеничне Зерновита 1 кг"),
+    ("tomato", "Помідор рожевий ваговий"),
+    ("salt", "Сіль кухонна кам'яна 1 кг"),
+    ("milk", "Молоко Селянське 2,5% 900 г"),
+    ("onion", "Цибуля ріпчаста вагова"),
+    ("extra virgin olive oil", "Олія оливкова Extra Virgin 500 мл"),
+])
+def test_live_name_evidence_accepts_relevant_silpo_products(query, product_name):
+    assert live_product_name_matches(query, product_name)
+
+
+@pytest.mark.parametrize(("query", "millilitres", "expected_grams"), [
+    ("extra virgin olive oil", 500.0, 455.0),
+    ("milk", 900.0, 927.0),
+    ("white wine", 750.0, 742.5),
+    ("water", 1000.0, 1000.0),
+])
+def test_known_liquid_packages_convert_to_edamam_grams(query, millilitres, expected_grams):
+    assert ingredient_package_amount(
+        live_query_profile(query), millilitres, "ml"
+    ) == (expected_grams, "g")
+
+
+@pytest.mark.parametrize(("query", "pieces", "expected_grams"), [
+    ("eggs", 10.0, 500.0),
+    ("onion", 1.0, 150.0),
+    ("tomato", 2.0, 300.0),
+])
+def test_piece_products_convert_to_edamam_grams(query, pieces, expected_grams):
+    assert ingredient_package_amount(
+        live_query_profile(query), pieces, "piece"
+    ) == (expected_grams, "g")
+
+
+@pytest.mark.asyncio
+async def test_live_catalog_does_not_search_generic_edamam_category(monkeypatch):
+    # A category such as "grains" is not evidence that an arbitrary live result is the right
+    # ingredient — it must go straight to a labelled synthetic candidate, never to a live search.
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+
+    async def should_not_search(*args, **kwargs):
+        raise AssertionError("generic category must not reach Silpo search")
+
+    catalog = SessionCatalog()
+    monkeypatch.setattr(catalog, "_search_live", should_not_search)
+
+    products = await catalog._search(owner, "grains")
+
+    assert products and all(p.source == "synthetic" for p in products)
+
+
+def test_live_catalog_dynamically_translates_every_unknown_ingredient():
+    class FakeTranslator:
+        def translate(self, ingredients):
+            assert [item.name for item in ingredients] == ["shiitake mushrooms"]
+            return {
+                ingredients[0].id: IngredientTranslation(
+                    id=ingredients[0].id,
+                    queries=["гриби шиїтаке", "шиїтаке"],
+                    evidence_terms=["шиїтаке"],
+                    grams_per_piece=20,
+                )
+            }
+
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+    requirement = IngredientRequirement(
+        id="mushroom-1",
+        name="shiitake mushrooms",
+        search_terms=["shiitake mushrooms", "vegetables"],
+        quantity=200.0,
+        unit="g",
+        meal_ids=["meal-1"],
+        restrictions=[],
+    )
+    catalog = SessionCatalog(translator=FakeTranslator())
+
+    prepared = catalog.prepare_requirements(owner, [requirement])
+    profile = catalog._profile(owner, "shiitake mushrooms")
+
+    # The name goes first so the dynamic profile above drives the live search, but the
+    # ingredient's own category term is kept too — it is what lets a genuinely unavailable
+    # ingredient still resolve to a labelled synthetic candidate instead of staying unresolved.
+    assert prepared[0].search_terms == ["shiitake mushrooms", "vegetables"]
+    assert profile is not None
+    assert profile.provider_queries == ("гриби шиїтаке", "шиїтаке")
+    assert live_product_name_matches(
+        "shiitake mushrooms", "Гриби шиїтаке свіжі", profile
+    )
+    assert ingredient_package_amount(profile, 4, "piece") == (80, "g")
 
 
 def _make_plan_live(app, client, planning_request):
@@ -288,6 +446,10 @@ async def test_live_cart_preview_confirm_readback_and_idempotency(
     app, client, planning_request, monkeypatch
 ):
     wire_plan, owner, plan = _make_plan_live(app, client, planning_request)
+    plan.unresolved_requirements = [
+        UnresolvedRequirement(requirement_id="not-found", reason="No catalog candidates were found.")
+    ]
+    plan.budget_status = "incomplete"
     state = {"written": False, "calls": []}
 
     @asynccontextmanager
@@ -334,6 +496,7 @@ async def test_live_cart_preview_confirm_readback_and_idempotency(
     assert preview["existingCartTotalMinor"] == 3000
     assert preview["projectedGoodsTotalMinor"] == 3000 + plan.basket_total_minor
     assert all(change["beforeQuantity"] == 0 for change in preview["changes"])
+    assert any("1 unmatched ingredient" in warning for warning in preview["warnings"])
 
     body = {"previewId": preview["previewId"], "idempotencyKey": "live-once"}
     first = client.post("/api/cart/confirm", json=body)

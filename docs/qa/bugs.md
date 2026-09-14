@@ -44,6 +44,12 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed in #46; UI ✅ (run 19, 58/58); new strings confirmed in the live bundle |
 | BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #47; retested ✅ live (run 19: same input completed twice, once with a "Jalapeno left out" warning instead of failing) |
 | BUG-030 | Medium | With no calorie target, live Edamam has no calorie floor and breakfast has no dish filter: one plan served a juice for breakfast (197 kcal), a recipe literally titled "Tst" for lunch (83 kcal), ~583 kcal for the day | Sofiia (meal-planning rules) | Open — the demo's golden input sets a calorie target, so not demo-blocking |
+| BUG-031 | High | `cart_confirmable()` and `DemoCartService._check_products` both refused ANY plan whose `dataMode` was "mixed" (live Edamam meals + demo catalog) — even a perfectly complete, in-budget, fully-resolved plan — so the cart could never be confirmed once live Edamam meals shipped, regardless of match quality | Polina, in Uliana's `agent/orchestrator.py` + `cart/service.py` (user-authorised, explicit "post relax this" direction) | Fixed in #50; live ✅ (run 22: 13/13 products, preview 200, confirm 200/success) |
+| BUG-032 | Medium | The CartPanel's "Синхронізувати з Сільпо" button stayed clickable after a plan's cart was already confirmed; clicking it hit 409 `STALE_PLAN`, and the error modal's own "retry" button called the same handler, trapping the user in a repeating "Помилка синхронізації кошика Сільпо" with no way out | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed in #51; retested live — the disabled state alone gave no reason, extended in BUG-033 |
+| BUG-033 | Low | The now-correctly-disabled Sync button (BUG-032) gave no reason for being disabled — reported live as "кнопка синхронізації не натискається" (the button doesn't respond), reading as broken rather than as intentional | Polina (own files, `CartPanel.tsx` + `page.tsx`) | Fixed on `feature/polina-sync-disabled-reason`; UI 60/60, e2e 40/40 |
+| BUG-034 | Blocker | The 21:25 commit `61d857f` ("preserve arbitrary live ingredients") removed the demo-catalog fallback for connected Silpo accounts entirely: `SessionCatalog._search()`/`_search_live()` returned `[]` on no branch, no live match, or any live-search exception, and `prepare_requirements()` discarded a requirement's category search term, so a connected account with an active cart could still end up with nothing to match against — reported live as "нічого не може підібратися" | Polina, in Rina's `catalog/live.py` (user-authorised, second explicit override tonight after BUG-031) | Fixed on `feature/polina-live-search-demo-fallback`: restored `self.demo.search_products(...)` as the fallback in all three no-live-result paths, and `prepare_requirements()` now keeps both the ingredient name *and* its original category term as search terms so the demo category bucket can still be found. `get_product_details()` also still routed purely on `_live(owner)` instead of on whether the specific product id was demo-sourced, throwing `KeyError` for a connected owner's demo-fallback candidate — fixed to check the live cache first and fall back to `self.demo`, mirroring the pattern `check_restrictions()` already used (keyed on `product.source`, not the owner). 6 tests in `test_live_cart.py` updated for the restored contract; full suite 298/298 ✅; `tsc --noEmit` clean |
+| BUG-035 | Medium | The frontend `ERROR_TEXT` map hardcoded Silpo-specific blame text for `RATE_LIMITED`/`UPSTREAM_UNAVAILABLE`, but both codes are raised by Edamam, FatSecret and Silpo backends alike (`agent/orchestrator.py`, `fatsecret/export.py`, `cart/service.py`) — reported live as "ФЕТ СІКРЕТ ПИШЕ ЩО СІЛЬПО ТИМЧАСОВО НЕ ПРАЦЮЄ", i.e. a genuine FatSecret-side failure was shown as a Silpo outage | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-live-search-demo-fallback`: both messages reworded to name "зовнішній сервіс" instead of Silpo specifically. Note: this only fixes the mislabeling — the underlying FatSecret write failure it was masking is still open, see BUG-036 |
+| BUG-036 | High | Live FatSecret Saved Meal export for a connected account fails with `UPSTREAM_UNAVAILABLE` (surfaced by BUG-035's mislabeled text as a Silpo outage) — confirmed live tonight that Silpo itself is fine and FatSecret specifically is failing, but `FatSecretClientError`/write-verification failures in `fatsecret/export.py` don't preserve or surface the underlying FatSecret provider message, so root cause (quota/rate limit vs. a malformed `saved_meal_item.add` write vs. an expired token) could not be diagnosed from the client alone; no server-log access from this session | Uliana / Polina (`fatsecret/export.py`, `fatsecret/matching.py`) | Open — needs the actual FatSecret provider error message (Northflank logs or a Claude-in-browser check, as used for the earlier `FATSECRET_ALLOW_EDAMAM_EXPORT` root cause) before a fix can be scoped |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -750,3 +756,73 @@ not yet been sent to the owners; Polina shares it with the team.
   the right existing bucket; a name that merely contains a hint word is not reclassified when a
   real category is already present; a genuinely unrecognised, uncategorised ingredient is left
   alone. Backend 268/268 (was 257).
+
+## BUG-031 — "Mixed" data mode unconditionally blocked cart confirmation
+
+- **Found in:** run 21, live, right after BUG-026's category matching was confirmed working end
+  to end (13/13 products, 0 unresolved, within budget). `canConfirmCart` was still `false`.
+- **Root cause:** two independent, deliberately written and tested guards, not a bug in the
+  usual sense:
+  - `agent/orchestrator.py`'s `cart_confirmable()` required `uses_live_catalog or data_mode ==
+    "demo"` — `data_mode` becomes `"mixed"` whenever meals come from Edamam, regardless of how
+    the products resolved, so this returned `false` unconditionally for every live-Edamam plan.
+  - `cart/service.py`'s `DemoCartService._check_products` separately required `plan.data_mode ==
+    "demo"`, refusing `/cart/preview` with `DEMO_ONLY` even if the first check had passed.
+  - A dedicated test, `test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart`, confirms
+    this was intentional, tested design — not an oversight.
+- **Why it no longer holds:** `data_mode` reports the *meal* source (live/demo/mixed); it says
+  nothing about the *product* source, which is the only thing that actually determines which
+  cart-write path (live Silpo vs demo) is safe to use. A plan with live Edamam meals but
+  exclusively synthetic products is exactly as safe to write through the demo cart service as a
+  fully-synthetic plan — the case this guarded against (writing demo product IDs through the live
+  path) cannot happen, since that path is only ever taken when every product's source is
+  `"silpo"`.
+- **Decision, September 14 (Polina, explicit):** relaxed both checks to key off product source
+  instead of `data_mode`. `data_mode` keeps reporting "mixed" for display (the DemoBadge, the
+  warning text) — the disclosure stays fully honest — only the confirmability decision changed.
+  This reverses tested, intentional behavior from another module; flagged here in full for
+  Uliana and Rina to review after the deadline.
+- **Fix:**
+  - `cart_confirmable()`: added `uses_demo_catalog` (all products `"synthetic"`) alongside the
+    existing `uses_live_catalog`; the rule is now `uses_live_catalog or uses_demo_catalog`. A
+    genuinely incoherent mix of product sources in one basket is still refused.
+  - `DemoCartService._check_products`: dropped the `plan.data_mode != "demo"` clause; kept the
+    `any(p.source != "synthetic" ...)` guard.
+  - Both warning strings ("cart confirmation is disabled") corrected to state only what remains
+    true (mixed data sources), since it is no longer accurate that confirmation is disabled.
+- **Tests:** the existing intentional-behavior test renamed and its assertions flipped to the
+  new contract (`canConfirmCart: true`, `/api/cart/preview` → 200). Added a direct parametrized
+  unit test of `cart_confirmable()` covering demo, mixed+synthetic, live, mixed+live, a
+  genuinely incoherent source mix (still refused), and an empty selection (still refused); plus
+  budget/unresolved/cart-context-ready edge cases. Backend 275/275 (was 268).
+
+## BUG-032 — Sync button kept failing after the cart was already confirmed
+
+- **Found in:** run 22, live, right after BUG-031's fix let the very first confirm-to-cart
+  succeed end to end. Reproduced immediately after: preview → confirm (200, success) → sync
+  again on the same plan → 409 `STALE_PLAN`, `"This proposal already has a cart receipt; review
+  that outcome."`
+- **Where:** `apps/web/src/app/page.tsx`, the `cartPanel()` builder. `syncDisabled` only checked
+  `!cartPlan || cartItems.length === 0` — nothing accounted for the plan already having a
+  receipt. The resulting error modal's retry button (`onRetry={handleRetrySync}`) calls
+  `requestPreview(cartPlan)` again when there is no open preview, i.e. the exact same call that
+  just failed — so retrying could never succeed, only repeat the same error.
+- **Fix:** `syncDisabled` also checks `cartReceipt !== null` — once a plan's cart is confirmed,
+  the sync control disables, matching the main "Додати все в кошик Сільпо" button's existing
+  behaviour (disabled via `added` since BUG-022). Nothing is lost: there is nothing left to sync
+  for an applied plan.
+- **Tests:** new UI check confirms the cart, then asserts the sync button is disabled and the
+  error modal never appears. UI 60/60 (was 58), e2e 40/40, `tsc`/`next build` clean.
+
+## BUG-033 — A correctly-disabled Sync button gave no reason
+
+- **Found in:** live testing right after BUG-032 shipped. A silently disabled button (no visible
+  message, no tooltip) reads as broken, not as "there is nothing to do here right now" —
+  reported as "кнопка синхронізації не натискається!!".
+- **Fix:** `CartPanel` takes an optional `syncDisabledReason` and shows it both as a `title`
+  tooltip and as small text under the button whenever `syncDisabled` is true for a reason more
+  specific than an empty cart. `page.tsx` supplies two concrete reasons: "Кошик уже
+  підтверджено — синхронізувати більше нічого" (a receipt already exists, BUG-032's case) and
+  "Спершу натисніть «Додати все в кошик Сільпо» у плані" (nothing has been added to the panel
+  yet). Purely additive — `syncDisabled`'s own logic is unchanged.
+- **Tests:** UI 60/60, e2e 40/40, `tsc`/`next build` clean.

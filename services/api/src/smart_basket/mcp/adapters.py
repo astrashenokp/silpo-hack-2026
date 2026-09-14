@@ -176,6 +176,7 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
     unit = next((product[key] for key in (
         "contentUnit", "packageUnit", "weightUnit", "volumeUnit",
     ) if product.get(key) is not None), None)
+    sale_ratio = product.get("ratio")
     package = next((product[key] for key in (
         "packageSize", "package", "packaging", "weightText", "displayRatio",
     ) if product.get(key) is not None), None)
@@ -186,6 +187,28 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
     if value is None and isinstance(package, (int, float, Decimal)) and not isinstance(package, bool):
         value = package
     if isinstance(package, str):
+        # Provider responses use real Ukrainian unit labels in production. Keep this parser
+        # separate from the legacy aliases below so "500 г", "0,5 кг", "10 шт" and
+        # multipacks are normalized even when the catalog sells the product by piece.
+        ua_multipack = re.search(
+            r"(\d+(?:[.,]\d+)?)\s*[*x×]\s*(\d+(?:[.,]\d+)?)\s*"
+            r"(кг|г|мл|л|шт)",
+            package.casefold(),
+        )
+        ua_match = re.search(
+            r"(\d+(?:[.,]\d+)?)\s*(кг|г|мл|л|шт)",
+            package.casefold(),
+        )
+        if ua_multipack:
+            if value is None:
+                count = Decimal(ua_multipack.group(1).replace(",", "."))
+                item_amount = Decimal(ua_multipack.group(2).replace(",", "."))
+                value = count * item_amount
+            unit = unit or ua_multipack.group(3)
+        elif ua_match:
+            if value is None:
+                value = ua_match.group(1).replace(",", ".")
+            unit = unit or ua_match.group(2)
         multipack = re.search(
             r"(\d+(?:[.,]\d+)?)\s*[*xх×]\s*(\d+(?:[.,]\d+)?)\s*"
             r"(кг|kg|г|g|мл|ml|л|l|шт|piece)",
@@ -208,6 +231,13 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
     if value is None:
         label = product.get("title") or product.get("name")
         if isinstance(label, str):
+            ua_label_match = re.search(
+                r"(?:^|\s)(\d+(?:[.,]\d+)?)\s*(кг|г|мл|л|шт)(?:\b|$)",
+                label.casefold(),
+            )
+            if ua_label_match:
+                value = ua_label_match.group(1).replace(",", ".")
+                unit = unit or ua_label_match.group(2)
             match = re.search(
                 r"(?:^|\s)(\d+(?:[.,]\d+)?)\s*(кг|kg|г|g|мл|ml|л|l|шт|piece)(?:\b|$)",
                 label.casefold(),
@@ -215,7 +245,14 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
             if match:
                 value = match.group(1).replace(",", ".")
                 unit = unit or match.group(2)
+    if value is None and unit is None and str(sale_ratio).strip().casefold() in {
+        "шт", "piece", "pieces",
+    }:
+        value, unit = 1, sale_ratio
     aliases = {
+        "г": ("g", 1), "кг": ("g", 1000),
+        "мл": ("ml", 1), "л": ("ml", 1000),
+        "шт": ("piece", 1),
         "г": ("g", 1), "g": ("g", 1), "гр": ("g", 1),
         "кг": ("g", 1000), "kg": ("g", 1000),
         "мл": ("ml", 1), "ml": ("ml", 1),
@@ -223,6 +260,8 @@ def _content_amount(product: Mapping[str, Any]) -> tuple[float | None, str | Non
         "шт": ("piece", 1), "piece": ("piece", 1), "pieces": ("piece", 1),
     }
     mapped = aliases.get(str(unit).strip().lower()) if unit is not None else None
+    if value is None and mapped == ("piece", 1):
+        value = 1
     if value is None or mapped is None:
         return None, None
     try:

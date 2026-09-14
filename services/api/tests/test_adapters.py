@@ -346,6 +346,21 @@ def test_product_details_reads_silpo_display_ratio():
     }}, "rice-1") == (500.0, "g")
 
 
+def test_product_details_reads_real_ukrainian_piece_units():
+    from smart_basket.mcp.adapters import product_content_amount
+
+    assert product_content_amount({"product": {
+        "id": "eggs-1",
+        "ratio": "шт",
+        "displayRatio": "10 шт",
+    }}, "eggs-1") == (10.0, "piece")
+    assert product_content_amount({"product": {
+        "id": "onion-1",
+        "ratio": "шт",
+        "displayRatio": "шт",
+    }}, "onion-1") == (1.0, "piece")
+
+
 def test_product_details_reads_silpo_multipack_display_ratio():
     from smart_basket.mcp.adapters import product_content_amount
 

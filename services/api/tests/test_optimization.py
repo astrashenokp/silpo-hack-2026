@@ -196,6 +196,22 @@ def test_already_unresolved_by_rina_is_not_duplicated():
     assert len(result.unresolved_requirements) == 1
 
 
+def test_unresolved_requirements_do_not_hide_an_over_budget_partial_basket():
+    candidates = CandidateResult(
+        candidates=[_oats_candidate()],
+        unresolved_requirements=[
+            UnresolvedRequirement(requirement_id="missing", reason="no match")
+        ],
+    )
+    result = optimize_basket(
+        make_planning_request(5000), _oats_requirement(), candidates, []
+    )
+
+    assert result.selected_products
+    assert result.unresolved_requirements
+    assert result.budget_status == "over_budget"
+
+
 def test_shared_candidate_aggregates_demand_before_rounding():
     candidate = _oats_candidate()
     candidate.requirement_ids = ["breakfast-oats", "snack-oats"]

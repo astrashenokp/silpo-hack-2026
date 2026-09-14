@@ -127,7 +127,7 @@ export function UnresolvedList({ result }: { result: PlanningResult }) {
     <div className="rounded-2xl border border-danger-soft bg-danger-soft/40 p-4">
       <h3 className="text-sm font-semibold text-danger">Не вдалося підібрати позицій: {count}</h3>
       <p className="mt-1 text-xs text-danger">
-        Поки позиції не підібрані, кошик не можна підтвердити як повний.
+        Ці позиції не потраплять у кошик. Решту знайдених товарів Сільпо можна додати окремо.
       </p>
       <details className="mt-2" open={count <= UNRESOLVED_OPEN_LIMIT}>
         <summary className="cursor-pointer text-sm text-muted">Показати позиції</summary>

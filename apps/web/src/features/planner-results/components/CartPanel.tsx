@@ -23,6 +23,7 @@ export function CartPanel({
   onSync,
   onClear,
   syncDisabled,
+  syncDisabledReason,
   syncBusy,
   mode,
   variant = "sidebar",
@@ -34,6 +35,9 @@ export function CartPanel({
   onSync: () => void;
   onClear: () => void;
   syncDisabled: boolean;
+  // A disabled button with no reason reads as broken, not as "nothing to do here" — always say
+  // why when it is disabled for a reason more specific than an empty cart.
+  syncDisabledReason?: string | null;
   syncBusy: boolean;
   mode: "live" | "demo" | "mixed";
   // Narrow screens have no side column, so the same panel is rendered in the page flow.
@@ -102,10 +106,16 @@ export function CartPanel({
           type="button"
           onClick={onSync}
           disabled={syncBusy || syncDisabled}
+          title={!syncBusy && syncDisabled ? (syncDisabledReason ?? undefined) : undefined}
           className="mt-4 h-10 w-full rounded-md border border-[#F89F46] text-[11px] font-medium text-[#C2661B] hover:bg-[#FFF5EC] disabled:cursor-not-allowed disabled:border-[#F8DCC5] disabled:text-[#B99C83]"
         >
           {syncBusy ? "Синхронізація…" : "↥ Синхронізувати з Сільпо"}
         </button>
+        {!syncBusy && syncDisabled && syncDisabledReason && (
+          <p className="mt-1.5 text-center text-[10px] leading-3.5 text-[#8A7357]">
+            {syncDisabledReason}
+          </p>
+        )}
 
         {items.length > 0 && (
           <button

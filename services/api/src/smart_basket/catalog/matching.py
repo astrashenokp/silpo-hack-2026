@@ -44,6 +44,9 @@ def find_product_candidates(ingredients, selected_recurring, context: MatchingCo
     """
     if selected_recurring:
         raise ValueError("Recurring candidate lookup awaits Vika's normalized requirements.")
+    prepare = getattr(context.catalog, "prepare_requirements", None)
+    if prepare is not None:
+        ingredients = prepare(context.session, ingredients)
     merged: dict[str, ProductCandidate] = {}
     for requirement in ingredients:
         seen = set()

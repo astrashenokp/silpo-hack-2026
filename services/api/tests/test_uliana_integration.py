@@ -1,10 +1,76 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from smart_basket.agent import UlianaPlanner
+from smart_basket.agent.orchestrator import cart_confirmable
 from smart_basket.app import create_app
 from smart_basket.demo import DemoCatalog
 from smart_basket.meals.nutrition import build_nutrition_summary
-from smart_basket.schemas import IngredientAmount, IngredientRequirement, Meal, UserContext
+from smart_basket.schemas import (
+    IngredientAmount, IngredientRequirement, Meal, ProductSelection, UserContext,
+)
+
+
+def _product(source, product_id="p1"):
+    return ProductSelection(
+        product_id=product_id, name="Item", requirement_ids=["r1"], recurring_suggestion_ids=[],
+        quantity=1.0, selling_unit="package", unit_price_minor=100, line_total_minor=100,
+        source=source, reason="test", restriction_check="pass",
+    )
+
+
+def _ready_context():
+    return UserContext(preferences=[], restrictions=[], pets=[], history_available=False,
+        cart_context_ready=True, warnings=[])
+
+
+@pytest.mark.parametrize(
+    "data_mode,sources,expected",
+    [
+        ("demo", ["synthetic"], True),
+        # The case this run's fix unblocks: live/mixed meals, still-synthetic products.
+        ("mixed", ["synthetic"], True),
+        ("live", ["silpo"], True),
+        ("mixed", ["silpo"], True),
+        # A genuinely incoherent mix of sources in one basket must still be refused — neither
+        # cart-write path (live or demo) could handle it.
+        ("mixed", ["silpo", "synthetic"], False),
+        ("demo", [], False),
+    ],
+)
+def test_cart_confirmable_depends_on_product_source_not_data_mode(data_mode, sources, expected):
+    products = [_product(source, product_id=f"p{i}") for i, source in enumerate(sources)]
+    assert cart_confirmable(
+        data_mode=data_mode, selected_products=products, budget_status="within_budget",
+        unresolved_requirements=[], context=_ready_context(),
+    ) is expected
+
+
+def test_cart_confirmable_still_requires_budget_completeness_and_cart_context():
+    products = [_product("synthetic")]
+    base = dict(data_mode="demo", selected_products=products, context=_ready_context())
+    assert cart_confirmable(budget_status="within_budget", unresolved_requirements=[], **base)
+    assert not cart_confirmable(budget_status="over_budget", unresolved_requirements=[], **base)
+    assert not cart_confirmable(budget_status="within_budget", unresolved_requirements=["x"], **base)
+    not_ready = _ready_context().model_copy(update={"cart_context_ready": False})
+    assert not cart_confirmable(
+        data_mode="demo", selected_products=products, budget_status="within_budget",
+        unresolved_requirements=[], context=not_ready,
+    )
+
+
+def test_live_cart_can_confirm_found_products_when_other_ingredients_are_unresolved():
+    base = dict(
+        data_mode="mixed",
+        selected_products=[_product("silpo")],
+        unresolved_requirements=["not-found"],
+        context=_ready_context(),
+    )
+    assert cart_confirmable(budget_status="incomplete", **base)
+    assert not cart_confirmable(budget_status="over_budget", **base)
+
+    base["selected_products"] = [_product("synthetic")]
+    assert not cart_confirmable(budget_status="incomplete", **base)
 
 
 def test_uliana_planner_through_api():
@@ -136,7 +202,7 @@ def test_uliana_reports_unsupported_context_restriction():
     assert "wheat-free" in run["error"]["message"]
 
 
-def test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart(monkeypatch):
+def test_uliana_marks_edamam_meals_as_mixed_and_allows_the_demo_cart(monkeypatch):
     def fake_meal_plan(request, effective_context):
         meal = Meal(
             id="edamam-day-1-breakfast-oats",
@@ -202,10 +268,16 @@ def test_uliana_marks_edamam_meals_as_mixed_and_blocks_demo_cart(monkeypatch):
     run = client.get(f"/api/plans/{response.json()['runId']}").json()
     result = run["result"]
 
+    # "Mixed" (live meals, demo catalog) still discloses honestly in the warning text and the
+    # dataMode field; it no longer blocks a complete, in-budget, fully-resolved plan from
+    # reaching the demo cart, since the products backing it are unambiguously synthetic either
+    # way — same as a fully-demo plan. Relaxed 2026-09-14 at Polina's explicit direction once
+    # live Edamam meals became the shipped configuration; see cart_confirmable()'s docstring.
     assert result["dataMode"] == "mixed"
-    assert result["canConfirmCart"] is False
-    assert "cart confirmation is disabled" in " ".join(result["warnings"])
+    assert result["canConfirmCart"] is True
+    assert "Meal data is live or mixed while catalog/cart data remains demo." in result["warnings"]
+    assert "cart confirmation is disabled" not in " ".join(result["warnings"])
     assert client.post(
         "/api/cart/preview",
         json={"runId": result["runId"], "version": result["version"]},
-    ).status_code == 409
+    ).status_code == 200

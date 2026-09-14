@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from copy import deepcopy
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 import anyio
@@ -22,9 +24,130 @@ from smart_basket.mcp.adapters import (
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.schemas import ProductCandidate
 
+from .translation import GeminiIngredientTranslator
+
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class LiveQueryProfile:
+    """A bounded translation plus evidence rule for Silpo's Ukrainian catalog."""
+
+    match_terms: tuple[str, ...]
+    provider_queries: tuple[str, ...]
+    required_name_terms: tuple[str, ...]
+    forbidden_name_terms: tuple[str, ...] = ()
+    grams_per_ml: float | None = None
+    grams_per_piece: float | None = None
+
+
+def _normalized_words(value: str) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", value.casefold(), flags=re.UNICODE).split())
+
+
+# Specific phrases come before broader ingredients. A live hit is accepted only when its display
+# name contains Ukrainian evidence for the ingredient; fuzzy result position alone is not proof.
+LIVE_QUERY_PROFILES = (
+    LiveQueryProfile(("sun dried tomato", "sundried tomato"), ("в'ялені помідори", "томати в'ялені"), ("в ялен", "сушен", "помідор", "томат"), ("пиво",)),
+    LiveQueryProfile(("extra virgin olive oil", "olive oil"), ("олія оливкова", "оливкова олія"), ("оливков",), ("космет", "мило"), 0.91),
+    LiveQueryProfile(("all purpose flour", "all-purpose flour", "wheat flour", "flour"), ("борошно пшеничне", "борошно"), ("борошн",), ("джин", "gin", "пиво", "цукер")),
+    LiveQueryProfile(("parmesan cheese", "parmesan"), ("сир пармезан", "пармезан"), ("пармезан",)),
+    LiveQueryProfile(("arborio rice", "risotto rice"), ("рис арборіо", "рис для різото"), ("арбор", "різото"), ("чипс", "снек")),
+    LiveQueryProfile(("red potato", "red potatoes", "potato", "potatoes"), ("картопля",), ("картоп",), ("чипс", "снек"), None, 180.0),
+    LiveQueryProfile(("chicken broth", "vegetable broth", "fish broth", "beef broth", "broth", "stock"), ("бульйон",), ("бульйон",), ("корм",), 1.0),
+    LiveQueryProfile(("heavy cream", "double cream", "cream"), ("вершки",), ("вершк",), ("крем для", "космет"), 1.0),
+    LiveQueryProfile(("butter",), ("масло вершкове",), ("масло",), ("олія", "космет", "арахіс")),
+    LiveQueryProfile(("chicken",), ("куряче філе", "курка"), ("кур",), ("корм", "приправа", "смаком")),
+    LiveQueryProfile(("tomato", "tomatoes"), ("помідор", "томат"), ("помідор", "томат"), ("пиво", "сік", "соус", "кетчуп"), None, 150.0),
+    LiveQueryProfile(("onion", "onions"), ("цибуля",), ("цибул",), ("приправа", "чипс", "смаком"), None, 150.0),
+    LiveQueryProfile(("garlic",), ("часник",), ("часник",), ("приправа", "соус", "смаком"), None, 60.0),
+    LiveQueryProfile(("milk",), ("молоко",), ("молок",), ("цукер", "шоколад", "соломин", "коктейль"), 1.03),
+    LiveQueryProfile(("salt",), ("сіль кухонна", "сіль"), ("сіль",), ("льодяник", "цукер", "карамел", "ваніл")),
+    LiveQueryProfile(("egg", "eggs"), ("яйця курячі", "яйця"), ("яйц",), ("цукер", "шоколад"), None, 50.0),
+    LiveQueryProfile(("honey",), ("мед натуральний", "мед"), ("мед",), ("напій", "пиво")),
+    LiveQueryProfile(("yeast",), ("дріжджі",), ("дріждж",)),
+    LiveQueryProfile(("sugar",), ("цукор",), ("цукор",), ("цукер", "напій")),
+    LiveQueryProfile(("oat", "oats"), ("вівсяні пластівці", "вівсянка"), ("вівсян",), ("печиво", "батончик")),
+    LiveQueryProfile(("lentil", "lentils"), ("сочевиця", "чечевиця"), ("сочев", "чечев"), ("суп", "снек")),
+    LiveQueryProfile(("rice",), ("крупа рисова", "рис"), ("рис",), ("чипс", "снек", "пудинг", "ірис", "хлібц")),
+    LiveQueryProfile(("basil",), ("базилік свіжий", "базилік"), ("базилік",), ("соус", "приправа")),
+    LiveQueryProfile(("carrot",), ("морква",), ("моркв",), ("сік", "пюре"), None, 100.0),
+    LiveQueryProfile(("lemon",), ("лимон",), ("лимон",), ("напій", "пиво", "цукер"), None, 120.0),
+    LiveQueryProfile(("black pepper", "pepper"), ("перець чорний", "перець"), ("перець",), ("чипс", "соус")),
+    LiveQueryProfile(("paprika",), ("паприка",), ("паприк",), ("чипс", "соус")),
+    LiveQueryProfile(("white wine", "red wine", "wine"), ("вино",), ("вино",), ("оцет",), 0.99),
+    LiveQueryProfile(("vegetable oil", "sunflower oil", "canola oil", "cooking oil", "oil"), ("олія соняшникова", "олія"), ("олія",), ("космет", "мило", "оливков"), 0.92),
+    LiveQueryProfile(("water",), ("вода питна", "вода"), ("вода",), ("аромат", "солодка"), 1.0),
+    LiveQueryProfile(("yogurt", "yoghurt"), ("йогурт натуральний", "йогурт"), ("йогурт",), ("десерт",), 1.03),
+    LiveQueryProfile(("cheese",), ("сир твердий", "сир"), ("сир",), ("сироп", "десерт")),
+    LiveQueryProfile(("pasta", "spaghetti", "noodle", "noodles"), ("макарони", "спагеті"), ("макарон", "спагеті"), ("снек",)),
+    LiveQueryProfile(("bread", "bun", "buns", "roll", "rolls"), ("хліб", "булочка"), ("хліб", "булоч"), ("сухар", "чипс")),
+)
+
+
+EDAMAM_CATEGORY_TERMS = {
+    "vegetables", "canned vegetables", "condiments and sauces", "grains",
+    "cooked grains", "bread rolls and tortillas", "quick breads and pastries",
+    "fruit", "canned fruit", "sugars", "sugar syrups", "dairy", "cheese", "oils",
+    "eggs", "poultry", "meats", "cured meats", "seafood", "plant based protein",
+    "vegan products", "canned soup", "non dairy beverages", "100 juice", "wines",
+    "chocolate", "water",
+}
+
+
+def live_query_profile(query: str) -> LiveQueryProfile | None:
+    normalized = f" {_normalized_words(query)} "
+    for profile in LIVE_QUERY_PROFILES:
+        if any(f" {_normalized_words(term)} " in normalized for term in profile.match_terms):
+            return profile
+    return None
+
+
+def live_product_name_matches(
+    query: str,
+    product_name: str,
+    profile: LiveQueryProfile | None = None,
+) -> bool:
+    """Require lexical evidence instead of trusting fuzzy provider result position."""
+    profile = profile or live_query_profile(query)
+    normalized_name = _normalized_words(product_name)
+    if profile is not None:
+        required = tuple(_normalized_words(term) for term in profile.required_name_terms)
+        forbidden = tuple(_normalized_words(term) for term in profile.forbidden_name_terms)
+        return any(term in normalized_name for term in required) and not any(
+            term in normalized_name for term in forbidden
+        )
+
+    query_words = {
+        word for word in _normalized_words(query).split()
+        if len(word) >= 3 and word not in {"and", "with", "fresh", "dried", "ground"}
+    }
+    return bool(query_words) and any(word in normalized_name for word in query_words)
+
+
+def ingredient_package_amount(
+    profile: LiveQueryProfile | None,
+    quantity: float | None,
+    unit: str | None,
+) -> tuple[float | None, str | None]:
+    """Express liquid volume or piece counts as Edamam ingredient grams."""
+    if (
+        profile is not None
+        and profile.grams_per_ml is not None
+        and quantity is not None
+        and unit == "ml"
+    ):
+        return quantity * profile.grams_per_ml, "g"
+    if (
+        profile is not None
+        and profile.grams_per_piece is not None
+        and quantity is not None
+        and unit == "piece"
+    ):
+        return quantity * profile.grams_per_piece, "g"
+    return quantity, unit
 
 
 def _flatten_strings(value: Any) -> list[str]:
@@ -178,19 +301,15 @@ def _run_async(factory: Callable[[], Awaitable[T]]) -> T:
 
 
 class SessionCatalog:
-    """Use live Silpo reads for connected sessions and preserve the demo fallback."""
+    """Use live Silpo reads for connected sessions and demo only for guests."""
 
-    def __init__(self, demo: DemoCatalog | None = None):
+    def __init__(self, demo: DemoCatalog | None = None, translator=None):
         self.demo = demo or DemoCatalog()
+        self.translator = translator
         self._candidates: dict[tuple[str, str], ProductCandidate] = {}
         self._details: dict[tuple[str, str], Any] = {}
+        self._dynamic_profiles: dict[tuple[str, str], LiveQueryProfile] = {}
         self._reported_unknown_details: set[tuple[str, str]] = set()
-
-    QUERY_ALIASES = {
-        "oats": ("вівсяні пластівці", "вівсянка", "oats"),
-        "rice": ("крупа рисова", "рис", "rice"),
-        "lentils": ("сочевиця", "чечевиця", "lentils"),
-    }
 
     @property
     def products(self):
@@ -200,6 +319,65 @@ class SessionCatalog:
     @staticmethod
     def _live(owner: Any) -> bool:
         return bool(getattr(owner, "silpo_connected", False))
+
+    def _profile(self, owner: Any, query: str) -> LiveQueryProfile | None:
+        return self._dynamic_profiles.get(
+            (owner.id, _normalized_words(query))
+        ) or live_query_profile(query)
+
+    def prepare_requirements(self, owner, requirements):
+        """Translate every unknown live ingredient in one call before catalog lookup."""
+        if not self._live(owner) or not owner.silpo_branch_id:
+            return requirements
+
+        unknown = [
+            requirement for requirement in requirements
+            if live_query_profile(requirement.name) is None
+        ]
+        translations = {}
+        if unknown:
+            try:
+                if self.translator is None:
+                    self.translator = GeminiIngredientTranslator()
+                translations = self.translator.translate(unknown)
+            except Exception as exc:
+                logger.warning(
+                    "Ingredient translation is unavailable; unknown ingredients will use "
+                    "exact-language matching (%s).",
+                    type(exc).__name__,
+                )
+
+        prepared = []
+        for requirement in requirements:
+            translation = translations.get(requirement.id)
+            if translation is not None:
+                profile = LiveQueryProfile(
+                    match_terms=(requirement.name,),
+                    provider_queries=tuple(dict.fromkeys(
+                        query.strip() for query in translation.queries if query.strip()
+                    )),
+                    required_name_terms=tuple(dict.fromkeys(
+                        term.strip() for term in translation.evidence_terms if term.strip()
+                    )),
+                    grams_per_ml=translation.grams_per_ml,
+                    grams_per_piece=translation.grams_per_piece,
+                )
+                self._dynamic_profiles[(owner.id, _normalized_words(requirement.name))] = profile
+            # requirement.name goes first so the dynamic/static profile above is what actually
+            # drives the live search; the ingredient's own category terms (from Edamam, or the
+            # demo-only bucket guesses in meals/edamam.py) are kept after it, not discarded, since
+            # they are what lets _search() fall back to a labelled synthetic candidate when even a
+            # correctly translated live search finds nothing Silpo carries.
+            prepared.append(requirement.model_copy(update={
+                "search_terms": list(dict.fromkeys([requirement.name, *requirement.search_terms])),
+            }))
+
+        logger.info(
+            "Prepared %d live ingredient searches (%d dynamically translated).",
+            len(prepared),
+            len(translations),
+        )
+        return prepared
 
     async def _context(self, owner):
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
@@ -248,8 +426,10 @@ class SessionCatalog:
 
     async def _search_live(self, owner, query: str):
         found: dict[str, ProductCandidate] = {}
+        profile = self._profile(owner, query)
+        provider_queries = profile.provider_queries if profile is not None else (query,)
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
-            for provider_query in self.QUERY_ALIASES.get(query.casefold(), (query,)):
+            for provider_query in provider_queries:
                 result = await search_products(
                     mcp_session,
                     provider_query,
@@ -260,9 +440,10 @@ class SessionCatalog:
                     tool_schemas=owner.silpo_tool_schemas,
                     owner=owner,
                 )
-                for candidate in result.products[:2]:
-                    found.setdefault(candidate.id, candidate)
-            reviewed = list(found.values())[:6]
+                for candidate in result.products[:10]:
+                    if live_product_name_matches(query, candidate.name, profile):
+                        found.setdefault(candidate.id, candidate)
+            reviewed = list(found.values())[:30]
             enriched: list[ProductCandidate] = []
             for candidate in reviewed:
                 with owner.lock:
@@ -284,6 +465,9 @@ class SessionCatalog:
                 self._details[(owner.id, candidate.id)] = details
                 content_quantity, content_unit = product_content_amount(
                     details, candidate.id
+                )
+                content_quantity, content_unit = ingredient_package_amount(
+                    profile, content_quantity, content_unit
                 )
                 if content_quantity is not None:
                     candidate = candidate.model_copy(update={
@@ -307,27 +491,39 @@ class SessionCatalog:
                                 **existing,
                                 **coordinates,
                             }
-        if not enriched:
-            return self.demo.search_products(owner, query)
-
         candidates = []
         for candidate in enriched:
             normalized = candidate.model_copy(update={"restriction_check": "unknown"})
             self._candidates[(owner.id, normalized.id)] = normalized.model_copy(deep=True)
             candidates.append(normalized)
+        if not candidates:
+            # A verified live match beats a guess, but no live match must not mean no product at
+            # all: prepare_requirements() already tried a static profile, then Gemini translation,
+            # for this exact query — genuinely running out of options (out of stock, an ingredient
+            # Silpo just doesn't carry, a translation the evidence check still rejected) should
+            # fall back to a labelled synthetic candidate, the same safety net every other gap in
+            # this catalog already uses, not a silent "Не вдалося підібрати".
+            return self.demo.search_products(owner, query)
         return candidates
 
     async def _search(self, owner, query: str):
         if not owner.silpo_branch_id:
-            # A connected profile may legitimately have no active cart/branch yet. The app is
-            # still a labelled demo, so keep planning usable with transparent synthetic items.
+            # A connected profile may legitimately have no active cart/branch yet. Keep planning
+            # usable with transparent synthetic items until Silpo context is available.
+            return self.demo.search_products(owner, query)
+        if (
+            _normalized_words(query) in EDAMAM_CATEGORY_TERMS
+            and self._profile(owner, query) is None
+        ):
+            # A category such as "grains" is not evidence that an arbitrary result is flour —
+            # go straight to a labelled synthetic candidate instead of an unverified live guess.
             return self.demo.search_products(owner, query)
         try:
             return await self._search_live(owner, query)
         except Exception as exc:
             logger.warning(
                 "Silpo product search is temporarily unavailable for %s; "
-                "using labelled synthetic candidates (%s).",
+                "using a labelled synthetic candidate (%s).",
                 query,
                 type(exc).__name__,
             )
@@ -341,12 +537,13 @@ class SessionCatalog:
     def get_product_details(self, owner, product_id: str):
         if not self._live(owner):
             return self.demo.get_product_details(owner, product_id)
+        # A connected owner's search can still return a demo-fallback candidate (no live match,
+        # empty search, a transient Silpo failure) — those ids only ever live in self.demo, never
+        # in the live cache, so check there before treating a miss as an error.
         candidate = self._candidates.get((owner.id, product_id))
-        if candidate is None and product_id in self.demo.products:
-            return self.demo.get_product_details(owner, product_id)
-        if candidate is None:
-            raise KeyError(f"Silpo product {product_id} is not in the reviewed search results.")
-        return candidate.model_copy(deep=True)
+        if candidate is not None:
+            return candidate.model_copy(deep=True)
+        return self.demo.get_product_details(owner, product_id)
 
     def check_restrictions(self, product, restrictions):
         if not restrictions:

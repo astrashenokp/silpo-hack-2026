@@ -117,10 +117,10 @@ def optimize_basket(
     basket_total = sum(s.line_total_minor for s in selections)
     remaining = request.budget_minor - basket_total
 
-    if unresolved:
-        status = "incomplete"
-    elif remaining < 0:
+    if remaining < 0:
         status = "over_budget"
+    elif unresolved:
+        status = "incomplete"
     else:
         status = "within_budget"
 

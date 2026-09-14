@@ -209,6 +209,7 @@ def test_edamam_settings_are_loaded_only_when_complete(monkeypatch):
         "EDAMAM_MEAL_PLANNER_APP_ID",
         "EDAMAM_MEAL_PLANNER_APP_KEY",
         "EDAMAM_ACCOUNT_USER",
+        "EDAMAM_ACCOUNT_USER_OVERRIDE",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -225,6 +226,11 @@ def test_edamam_settings_are_loaded_only_when_complete(monkeypatch):
     assert settings.app_key == "key"
     assert settings.account_user == "user"
     assert settings.timeout_seconds == 3
+
+    monkeypatch.setenv("EDAMAM_ACCOUNT_USER_OVERRIDE", "deployment-user")
+    settings = EdamamSettings.from_env()
+    assert settings is not None
+    assert settings.account_user == "deployment-user"
 
 
 def test_edamam_settings_reject_invalid_timeout(monkeypatch):
