@@ -242,6 +242,31 @@ def test_edamam_payload_omits_empty_accept_filters():
 
     assert "accept" not in payload["plan"]
     assert "fit" not in payload["plan"]
+    assert all("fit" not in section for section in payload["plan"]["sections"].values())
+
+
+def test_edamam_payload_filters_each_section_by_meal_type():
+    filters = resolve_meal_filters(request(preferences=[]), context())
+    sections = build_edamam_payload(request(preferences=[]), filters)["plan"]["sections"]
+
+    assert sections["Breakfast"]["accept"]["all"] == [{"meal": ["breakfast"]}]
+    for name in ("Lunch", "Dinner"):
+        accept = sections[name]["accept"]["all"]
+        assert {"meal": ["lunch/dinner"]} in accept
+        dishes = next(item["dish"] for item in accept if "dish" in item)
+        assert "main course" in dishes
+        assert not {"desserts", "sweets", "ice cream and custard", "preps"} & set(dishes)
+
+
+def test_edamam_payload_bounds_each_section_around_its_calorie_share():
+    filters = resolve_meal_filters(request(preferences=[]), context())
+    sections = build_edamam_payload(request(preferences=[], calories=3000), filters)["plan"]["sections"]
+
+    for name, share in (("Breakfast", 0.25), ("Lunch", 0.35), ("Dinner", 0.40)):
+        bounds = sections[name]["fit"]["ENERC_KCAL"]
+        assert bounds["min"] < 3000 * share < bounds["max"]
+    # A 1,753 kcal breakfast against a 3,000 kcal day must fall outside the breakfast band.
+    assert sections["Breakfast"]["fit"]["ENERC_KCAL"]["max"] < 1753
 
 
 def test_edamam_client_uses_current_meal_planner_auth_contract(monkeypatch):

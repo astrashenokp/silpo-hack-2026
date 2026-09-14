@@ -678,3 +678,24 @@ assigned defect on record (BUG-026) rather than a silent regression.
   it simply has nothing to add once every ingredient is unresolved.
 - **Demo script updated:** the Silpo-cart segment (2:45–3:30) is marked not to be attempted live
   on the current configuration; `docs/qa/demo-script.md` has the full guidance.
+
+## Run 19 — live Edamam meals made sensible, September 14, 2026
+
+- **Trigger:** with `SMART_BASKET_MEALS_SOURCE=edamam` back on, the live result showed pizza bread
+  for breakfast, a macaron filling for dinner and 4 960 / 5 131 kcal against a 3 000 kcal target,
+  plus ~50 English "No catalog candidates were found." lines.
+- **Expected and unchanged:** the empty basket itself (BUG-026, accepted trade).
+- **Fixed:** BUG-027 (per-section `meal`/`dish` filters and calorie bands in the Edamam request)
+  and BUG-028 (rounded calories; unmatched list summarised, collapsed and translated).
+
+| Check | Result |
+|---|---|
+| Backend suite | ✅ 224/224 (2 new payload tests) |
+| `tsc --noEmit`, `next build` | ✅ clean |
+| Playwright UI suite, local | ✅ 58/58 (new check for the summarised list and rounded calories) |
+| e2e suite, local | ✅ 40/40 |
+| Same request against the real Edamam API | ⏳ not possible before deploy — credentials exist only on Northflank |
+
+**Merge precondition:** `EDAMAM_SYNTHETIC_FALLBACK=true` on Northflank, so that if Edamam cannot
+satisfy the stricter sections the plan falls back instead of failing. After deploy: create a few
+live plans and confirm breakfast/lunch/dinner fit their slot and day totals sit near the target.

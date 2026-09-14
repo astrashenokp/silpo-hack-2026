@@ -71,6 +71,34 @@ test("a supported dietary restriction still produces a complete demo basket", as
   await expect(page.getByRole("button", { name: /Додати все в кошик Сільпо/ })).toBeEnabled();
 });
 
+test("a long unmatched list is summarised in Ukrainian and calories are rounded", async ({ page }) => {
+  // Live Edamam plans leave dozens of ingredients unmatched with fractional calories; the demo
+  // catalog never does, so shape a real API result into that case.
+  await page.route("**/api/plans/*", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const body = await response.json();
+    if (body.result) {
+      body.result.unresolvedRequirements = Array.from({ length: 8 }, (_, index) => ({
+        requirementId: `qa-unmatched-${index}`,
+        reason: "No catalog candidates were found.",
+      }));
+      body.result.mealPlan[0].kcalPerServing = 1753.376;
+    }
+    await route.fulfill({ response, json: body });
+  });
+
+  await createPlan(page);
+  await expect(page.getByRole("heading", { name: "Не вдалося підібрати позицій: 8" })).toBeVisible();
+  const details = page.locator("details", { hasText: "Показати позиції" });
+  await expect(details).not.toHaveAttribute("open", /.*/);
+  await details.getByText("Показати позиції").click();
+  await expect(details.getByText("товар у каталозі не знайдено").first()).toBeVisible();
+  await expect(page.getByText("No catalog candidates were found.")).toHaveCount(0);
+  await expect(page.getByText(/1\s753 ккал\/порція/).first()).toBeVisible();
+  await expect(page.getByText(/1\s753,376/)).toHaveCount(0);
+});
+
 test("recalculation adds the server's next version of the plan", async ({ page }) => {
   await createPlan(page);
   await page.getByRole("button", { name: /Перерахувати кошик/ }).first().click();

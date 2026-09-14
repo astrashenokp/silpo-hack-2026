@@ -31,7 +31,7 @@ export function formatQuantity(value: number, unit: string): string {
 
 export function formatServing(value: number | null): string | null {
   if (value === null) return null;
-  return `${number.format(value)} ккал`;
+  return `${number.format(Math.round(value))} ккал`;
 }
 
 export function formatConfidence(value: number): string {
