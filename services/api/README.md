@@ -50,7 +50,8 @@ Bind only to loopback for this demo. A shared hosted URL is not supplied yet.
 Live Edamam planning should not be presented as verified until the actual account
 fields, attribution rules and data-use permissions are checked. Required server-side names are
 `EDAMAM_MEAL_PLANNER_APP_ID`, `EDAMAM_MEAL_PLANNER_APP_KEY`,
-`EDAMAM_ACCOUNT_USER`, optional `EDAMAM_MEAL_PLANNER_BASE_URL` and
+`EDAMAM_ACCOUNT_USER`, optional `EDAMAM_ACCOUNT_USER_OVERRIDE`,
+`EDAMAM_MEAL_PLANNER_BASE_URL` and
 `EDAMAM_TIMEOUT_SECONDS` and `EDAMAM_SYNTHETIC_FALLBACK`. Keep fallback enabled
 for demos unless the goal is to verify a hard live failure path.
 

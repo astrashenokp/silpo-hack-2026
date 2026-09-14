@@ -42,7 +42,9 @@ class EdamamSettings:
     def from_env(cls) -> "EdamamSettings | None":
         app_id = os.getenv("EDAMAM_MEAL_PLANNER_APP_ID")
         app_key = os.getenv("EDAMAM_MEAL_PLANNER_APP_KEY")
-        account_user = os.getenv("EDAMAM_ACCOUNT_USER")
+        account_user = os.getenv("EDAMAM_ACCOUNT_USER_OVERRIDE") or os.getenv(
+            "EDAMAM_ACCOUNT_USER"
+        )
         if not app_id or not app_key or not account_user:
             return None
         return cls(
