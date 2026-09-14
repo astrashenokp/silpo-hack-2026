@@ -30,10 +30,18 @@ def _objects(value: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _value(payload: Mapping[str, Any], key: str) -> str:
-    value: Any = payload.get(key)
+def _scalar(value: Any) -> Any:
+    # FatSecret wraps some scalar fields as {"value": ...} in JSON responses (seen on
+    # saved_meal_id from saved_meal.create); saved_meal_item.add and
+    # saved_meal_item(s).get.v2 do the same for food_id/serving_id/number_of_units, which
+    # _matches() must unwrap or every write-verification read-back fails.
     if isinstance(value, dict):
-        value = value.get("value")
+        return value.get("value")
+    return value
+
+
+def _value(payload: Mapping[str, Any], key: str) -> str:
+    value = _scalar(payload.get(key))
     if value in (None, ""):
         raise FatSecretClientError(f"FatSecret response omitted {key}.")
     return str(value)
@@ -56,14 +64,14 @@ def _marker(run_id: str, version: int, meal_id: str) -> str:
 
 def _matches(remote: Mapping[str, Any], desired: Any) -> bool:
     try:
-        units_match = abs(float(remote.get("number_of_units")) - desired.number_of_units) <= max(
+        units_match = abs(float(_scalar(remote.get("number_of_units"))) - desired.number_of_units) <= max(
             0.001, abs(desired.number_of_units) * 1e-6,
         )
     except (TypeError, ValueError):
         return False
     return (
-        str(remote.get("food_id")) == desired.food_id
-        and str(remote.get("serving_id")) == desired.serving_id
+        str(_scalar(remote.get("food_id"))) == desired.food_id
+        and str(_scalar(remote.get("serving_id"))) == desired.serving_id
         and units_match
     )
 

@@ -15,6 +15,7 @@ class FakeLiveFatSecret:
         self.persist_before_failure = False
         self.ambiguous_oats = False
         self.needs_core_lentils = False
+        self.wrap_item_fields = False
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
@@ -65,11 +66,13 @@ class FakeLiveFatSecret:
                 "saved_meal_item": list(self.items[parameters["saved_meal_id"]])
             }}
         if method == "saved_meal_item.add":
+            def wrap(value):
+                return {"value": value} if self.wrap_item_fields else value
             remote = {
                 "saved_meal_item_id": str(len(self.items[parameters["saved_meal_id"]]) + 1000),
-                "food_id": parameters["food_id"],
-                "serving_id": parameters["serving_id"],
-                "number_of_units": parameters["number_of_units"],
+                "food_id": wrap(parameters["food_id"]),
+                "serving_id": wrap(parameters["serving_id"]),
+                "number_of_units": wrap(parameters["number_of_units"]),
             }
             should_fail = parameters["food_id"] == self.fail_food_id
             if not should_fail or self.persist_before_failure:
@@ -141,6 +144,28 @@ def test_live_export_scales_writes_reads_back_and_deduplicates(planning_request)
         assert len(provider.meals) == 1
         assert len(provider.items["100"]) == 1
         assert len(session.saved_meals) == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_live_export_verifies_writes_when_fatsecret_wraps_item_scalar_fields(planning_request):
+    # FatSecret's saved_meal_item.add / saved_meal_items.get.v2 can return food_id,
+    # serving_id and number_of_units wrapped as {"value": ...} (the same quirk saved_meal_id
+    # already has to be unwrapped for via _value()); _matches() must unwrap these too, or
+    # every write-verification read-back silently fails against the real API even though it
+    # always passes against a fake that echoes back plain scalars.
+    provider = FakeLiveFatSecret()
+    provider.wrap_item_fields = True
+    _, client, _ = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        preview = make_live_preview(client, plan).json()
+        accepted = client.post("/api/fatsecret/exports/confirm", json={
+            "previewId": preview["previewId"], "idempotencyKey": "wrapped-fields",
+        }).json()
+        result = client.get(f"/api/fatsecret/exports/{accepted['exportId']}").json()
+        assert result["status"] == "success"
+        assert result["meals"][0]["status"] == "saved"
     finally:
         client.__exit__(None, None, None)
 
