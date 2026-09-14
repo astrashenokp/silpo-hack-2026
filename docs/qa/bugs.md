@@ -45,7 +45,8 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #47; retested ✅ live (run 19: same input completed twice, once with a "Jalapeno left out" warning instead of failing) |
 | BUG-030 | Medium | With no calorie target, live Edamam has no calorie floor and breakfast has no dish filter: one plan served a juice for breakfast (197 kcal), a recipe literally titled "Tst" for lunch (83 kcal), ~583 kcal for the day | Sofiia (meal-planning rules) | Open — the demo's golden input sets a calorie target, so not demo-blocking |
 | BUG-031 | High | `cart_confirmable()` and `DemoCartService._check_products` both refused ANY plan whose `dataMode` was "mixed" (live Edamam meals + demo catalog) — even a perfectly complete, in-budget, fully-resolved plan — so the cart could never be confirmed once live Edamam meals shipped, regardless of match quality | Polina, in Uliana's `agent/orchestrator.py` + `cart/service.py` (user-authorised, explicit "post relax this" direction) | Fixed in #50; live ✅ (run 22: 13/13 products, preview 200, confirm 200/success) |
-| BUG-032 | Medium | The CartPanel's "Синхронізувати з Сільпо" button stayed clickable after a plan's cart was already confirmed; clicking it hit 409 `STALE_PLAN`, and the error modal's own "retry" button called the same handler, trapping the user in a repeating "Помилка синхронізації кошика Сільпо" with no way out | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-sync-button-after-confirm`; UI 60/60 |
+| BUG-032 | Medium | The CartPanel's "Синхронізувати з Сільпо" button stayed clickable after a plan's cart was already confirmed; clicking it hit 409 `STALE_PLAN`, and the error modal's own "retry" button called the same handler, trapping the user in a repeating "Помилка синхронізації кошика Сільпо" with no way out | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed in #51; retested live — the disabled state alone gave no reason, extended in BUG-033 |
+| BUG-033 | Low | The now-correctly-disabled Sync button (BUG-032) gave no reason for being disabled — reported live as "кнопка синхронізації не натискається" (the button doesn't respond), reading as broken rather than as intentional | Polina (own files, `CartPanel.tsx` + `page.tsx`) | Fixed on `feature/polina-sync-disabled-reason`; UI 60/60, e2e 40/40 |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -809,3 +810,16 @@ not yet been sent to the owners; Polina shares it with the team.
   for an applied plan.
 - **Tests:** new UI check confirms the cart, then asserts the sync button is disabled and the
   error modal never appears. UI 60/60 (was 58), e2e 40/40, `tsc`/`next build` clean.
+
+## BUG-033 — A correctly-disabled Sync button gave no reason
+
+- **Found in:** live testing right after BUG-032 shipped. A silently disabled button (no visible
+  message, no tooltip) reads as broken, not as "there is nothing to do here right now" —
+  reported as "кнопка синхронізації не натискається!!".
+- **Fix:** `CartPanel` takes an optional `syncDisabledReason` and shows it both as a `title`
+  tooltip and as small text under the button whenever `syncDisabled` is true for a reason more
+  specific than an empty cart. `page.tsx` supplies two concrete reasons: "Кошик уже
+  підтверджено — синхронізувати більше нічого" (a receipt already exists, BUG-032's case) and
+  "Спершу натисніть «Додати все в кошик Сільпо» у плані" (nothing has been added to the panel
+  yet). Purely additive — `syncDisabled`'s own logic is unchanged.
+- **Tests:** UI 60/60, e2e 40/40, `tsc`/`next build` clean.

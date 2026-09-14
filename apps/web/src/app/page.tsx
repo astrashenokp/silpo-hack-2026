@@ -511,6 +511,13 @@ export default function Home() {
       // into this exact handler, so leaving Sync clickable here traps the user in a repeating
       // error with no way out. Nothing is left to sync for an applied plan.
       syncDisabled={!cartPlan || cartItems.length === 0 || cartReceipt !== null}
+      syncDisabledReason={
+        cartReceipt !== null
+          ? "Кошик уже підтверджено — синхронізувати більше нічого."
+          : !cartPlan || cartItems.length === 0
+            ? "Спершу натисніть «Додати все в кошик Сільпо» у плані."
+            : null
+      }
       syncBusy={cartBusy}
       mode={cartPlan?.dataMode ?? dataMode}
     />
