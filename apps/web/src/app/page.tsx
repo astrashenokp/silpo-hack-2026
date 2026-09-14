@@ -506,7 +506,11 @@ export default function Home() {
       storeLabel={accountConnected ? null : "Демо-кошик: справжній акаунт Сільпо не змінюється"}
       onSync={() => cartPlan && void requestPreview(cartPlan)}
       onClear={clearCart}
-      syncDisabled={!cartPlan || cartItems.length === 0}
+      // Once this plan already has a receipt, the server correctly refuses to preview it again
+      // (STALE_PLAN, "already has a cart receipt") — but the modal's own retry button calls back
+      // into this exact handler, so leaving Sync clickable here traps the user in a repeating
+      // error with no way out. Nothing is left to sync for an applied plan.
+      syncDisabled={!cartPlan || cartItems.length === 0 || cartReceipt !== null}
       syncBusy={cartBusy}
       mode={cartPlan?.dataMode ?? dataMode}
     />
