@@ -14,10 +14,12 @@ from smart_basket.catalog.live import (
     restriction_check_from_details,
 )
 from smart_basket.catalog.matching import MatchingContext, find_product_candidates
+from smart_basket.catalog.translation import IngredientTranslation
 from smart_basket.cart.service import normalize_cart_snapshot, snapshot_total
 from smart_basket.core import Session
 from smart_basket.schemas import (
-    IngredientRequirement, ProductCandidate, ProductSearchResponse, UserContext,
+    IngredientRequirement, ProductCandidate, ProductSearchResponse,
+    UserContext,
 )
 
 
@@ -140,6 +142,55 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
         metadata["companyId"] == "company-from-search"
         for metadata in owner.silpo_product_write_metadata.values()
     )
+
+
+@pytest.mark.asyncio
+async def test_live_catalog_does_not_lose_relevant_product_after_first_two_hits(monkeypatch):
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+
+    @asynccontextmanager
+    async def fake_session(storage):
+        yield object()
+
+    async def fake_search(_session, query, branch_id, **kwargs):
+        products = [
+            ProductCandidate(
+                id=f"{query}-{index}",
+                name=("Крупа рисова довгозерниста" if index == 4 else f"Снек #{index}"),
+                requirement_ids=[],
+                price_minor=100 + index,
+                selling_unit="package",
+                quantity_step=1.0,
+                content_quantity=None,
+                content_unit=None,
+                available=True,
+                restriction_check="unknown",
+                regular_price_minor=None,
+                source="silpo",
+                checked_at="2026-09-14T00:00:00+00:00",
+            )
+            for index in range(5)
+        ]
+        return ProductSearchResponse(query=query, products=products, warnings=[])
+
+    async def fake_details(_session, product_id, branch_id, **kwargs):
+        owner.silpo_product_write_metadata[product_id] = {
+            "productId": product_id,
+            "companyId": "company-1",
+            "branchId": branch_id,
+        }
+        return {"product": {"id": product_id, "displayRatio": "500 г"}}
+
+    monkeypatch.setattr("smart_basket.catalog.live.get_mcp_session", fake_session)
+    monkeypatch.setattr("smart_basket.catalog.live.search_products", fake_search)
+    monkeypatch.setattr("smart_basket.catalog.live.get_silpo_product_details", fake_details)
+
+    products = await SessionCatalog()._search(owner, "rice")
+
+    assert len(products) == 2
+    assert all("Крупа рисова" in product.name for product in products)
 
 
 @pytest.mark.asyncio
@@ -274,6 +325,17 @@ def test_known_liquid_packages_convert_to_edamam_grams(query, millilitres, expec
     ) == (expected_grams, "g")
 
 
+@pytest.mark.parametrize(("query", "pieces", "expected_grams"), [
+    ("eggs", 10.0, 500.0),
+    ("onion", 1.0, 150.0),
+    ("tomato", 2.0, 300.0),
+])
+def test_piece_products_convert_to_edamam_grams(query, pieces, expected_grams):
+    assert ingredient_package_amount(
+        live_query_profile(query), pieces, "piece"
+    ) == (expected_grams, "g")
+
+
 @pytest.mark.asyncio
 async def test_live_catalog_does_not_search_generic_edamam_category(monkeypatch):
     owner = Session("owner")
@@ -287,6 +349,45 @@ async def test_live_catalog_does_not_search_generic_edamam_category(monkeypatch)
     monkeypatch.setattr(catalog, "_search_live", should_not_search)
 
     assert await catalog._search(owner, "grains") == []
+
+
+def test_live_catalog_dynamically_translates_every_unknown_ingredient():
+    class FakeTranslator:
+        def translate(self, ingredients):
+            assert [item.name for item in ingredients] == ["shiitake mushrooms"]
+            return {
+                ingredients[0].id: IngredientTranslation(
+                    id=ingredients[0].id,
+                    queries=["гриби шиїтаке", "шиїтаке"],
+                    evidence_terms=["шиїтаке"],
+                    grams_per_piece=20,
+                )
+            }
+
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+    requirement = IngredientRequirement(
+        id="mushroom-1",
+        name="shiitake mushrooms",
+        search_terms=["shiitake mushrooms", "vegetables"],
+        quantity=200.0,
+        unit="g",
+        meal_ids=["meal-1"],
+        restrictions=[],
+    )
+    catalog = SessionCatalog(translator=FakeTranslator())
+
+    prepared = catalog.prepare_requirements(owner, [requirement])
+    profile = catalog._profile(owner, "shiitake mushrooms")
+
+    assert prepared[0].search_terms == ["shiitake mushrooms"]
+    assert profile is not None
+    assert profile.provider_queries == ("гриби шиїтаке", "шиїтаке")
+    assert live_product_name_matches(
+        "shiitake mushrooms", "Гриби шиїтаке свіжі", profile
+    )
+    assert ingredient_package_amount(profile, 4, "piece") == (80, "g")
 
 
 def _make_plan_live(app, client, planning_request):

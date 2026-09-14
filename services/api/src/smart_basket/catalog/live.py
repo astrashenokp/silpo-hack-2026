@@ -24,6 +24,8 @@ from smart_basket.mcp.adapters import (
 from smart_basket.mcp.connection import SessionTokenStorage, get_mcp_session
 from smart_basket.schemas import ProductCandidate
 
+from .translation import GeminiIngredientTranslator
+
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
@@ -38,6 +40,7 @@ class LiveQueryProfile:
     required_name_terms: tuple[str, ...]
     forbidden_name_terms: tuple[str, ...] = ()
     grams_per_ml: float | None = None
+    grams_per_piece: float | None = None
 
 
 def _normalized_words(value: str) -> str:
@@ -52,17 +55,17 @@ LIVE_QUERY_PROFILES = (
     LiveQueryProfile(("all purpose flour", "all-purpose flour", "wheat flour", "flour"), ("борошно пшеничне", "борошно"), ("борошн",), ("джин", "gin", "пиво", "цукер")),
     LiveQueryProfile(("parmesan cheese", "parmesan"), ("сир пармезан", "пармезан"), ("пармезан",)),
     LiveQueryProfile(("arborio rice", "risotto rice"), ("рис арборіо", "рис для різото"), ("арбор", "різото"), ("чипс", "снек")),
-    LiveQueryProfile(("red potato", "red potatoes", "potato", "potatoes"), ("картопля",), ("картоп",), ("чипс", "снек")),
+    LiveQueryProfile(("red potato", "red potatoes", "potato", "potatoes"), ("картопля",), ("картоп",), ("чипс", "снек"), None, 180.0),
     LiveQueryProfile(("chicken broth", "vegetable broth", "fish broth", "beef broth", "broth", "stock"), ("бульйон",), ("бульйон",), ("корм",), 1.0),
     LiveQueryProfile(("heavy cream", "double cream", "cream"), ("вершки",), ("вершк",), ("крем для", "космет"), 1.0),
     LiveQueryProfile(("butter",), ("масло вершкове",), ("масло",), ("олія", "космет", "арахіс")),
     LiveQueryProfile(("chicken",), ("куряче філе", "курка"), ("кур",), ("корм", "приправа", "смаком")),
-    LiveQueryProfile(("tomato", "tomatoes"), ("помідор", "томат"), ("помідор", "томат"), ("пиво", "сік", "соус", "кетчуп")),
-    LiveQueryProfile(("onion", "onions"), ("цибуля",), ("цибул",), ("приправа", "чипс", "смаком")),
-    LiveQueryProfile(("garlic",), ("часник",), ("часник",), ("приправа", "соус", "смаком")),
+    LiveQueryProfile(("tomato", "tomatoes"), ("помідор", "томат"), ("помідор", "томат"), ("пиво", "сік", "соус", "кетчуп"), None, 150.0),
+    LiveQueryProfile(("onion", "onions"), ("цибуля",), ("цибул",), ("приправа", "чипс", "смаком"), None, 150.0),
+    LiveQueryProfile(("garlic",), ("часник",), ("часник",), ("приправа", "соус", "смаком"), None, 60.0),
     LiveQueryProfile(("milk",), ("молоко",), ("молок",), ("цукер", "шоколад", "соломин", "коктейль"), 1.03),
     LiveQueryProfile(("salt",), ("сіль кухонна", "сіль"), ("сіль",), ("льодяник", "цукер", "карамел", "ваніл")),
-    LiveQueryProfile(("egg", "eggs"), ("яйця курячі", "яйця"), ("яйц",), ("цукер", "шоколад")),
+    LiveQueryProfile(("egg", "eggs"), ("яйця курячі", "яйця"), ("яйц",), ("цукер", "шоколад"), None, 50.0),
     LiveQueryProfile(("honey",), ("мед натуральний", "мед"), ("мед",), ("напій", "пиво")),
     LiveQueryProfile(("yeast",), ("дріжджі",), ("дріждж",)),
     LiveQueryProfile(("sugar",), ("цукор",), ("цукор",), ("цукер", "напій")),
@@ -70,8 +73,8 @@ LIVE_QUERY_PROFILES = (
     LiveQueryProfile(("lentil", "lentils"), ("сочевиця", "чечевиця"), ("сочев", "чечев"), ("суп", "снек")),
     LiveQueryProfile(("rice",), ("крупа рисова", "рис"), ("рис",), ("чипс", "снек", "пудинг", "ірис", "хлібц")),
     LiveQueryProfile(("basil",), ("базилік свіжий", "базилік"), ("базилік",), ("соус", "приправа")),
-    LiveQueryProfile(("carrot",), ("морква",), ("моркв",), ("сік", "пюре")),
-    LiveQueryProfile(("lemon",), ("лимон",), ("лимон",), ("напій", "пиво", "цукер")),
+    LiveQueryProfile(("carrot",), ("морква",), ("моркв",), ("сік", "пюре"), None, 100.0),
+    LiveQueryProfile(("lemon",), ("лимон",), ("лимон",), ("напій", "пиво", "цукер"), None, 120.0),
     LiveQueryProfile(("black pepper", "pepper"), ("перець чорний", "перець"), ("перець",), ("чипс", "соус")),
     LiveQueryProfile(("paprika",), ("паприка",), ("паприк",), ("чипс", "соус")),
     LiveQueryProfile(("white wine", "red wine", "wine"), ("вино",), ("вино",), ("оцет",), 0.99),
@@ -102,9 +105,13 @@ def live_query_profile(query: str) -> LiveQueryProfile | None:
     return None
 
 
-def live_product_name_matches(query: str, product_name: str) -> bool:
+def live_product_name_matches(
+    query: str,
+    product_name: str,
+    profile: LiveQueryProfile | None = None,
+) -> bool:
     """Require lexical evidence instead of trusting fuzzy provider result position."""
-    profile = live_query_profile(query)
+    profile = profile or live_query_profile(query)
     normalized_name = _normalized_words(product_name)
     if profile is not None:
         required = tuple(_normalized_words(term) for term in profile.required_name_terms)
@@ -125,7 +132,7 @@ def ingredient_package_amount(
     quantity: float | None,
     unit: str | None,
 ) -> tuple[float | None, str | None]:
-    """Express liquid package volume as ingredient grams when a known density is available."""
+    """Express liquid volume or piece counts as Edamam ingredient grams."""
     if (
         profile is not None
         and profile.grams_per_ml is not None
@@ -133,6 +140,13 @@ def ingredient_package_amount(
         and unit == "ml"
     ):
         return quantity * profile.grams_per_ml, "g"
+    if (
+        profile is not None
+        and profile.grams_per_piece is not None
+        and quantity is not None
+        and unit == "piece"
+    ):
+        return quantity * profile.grams_per_piece, "g"
     return quantity, unit
 
 
@@ -289,10 +303,12 @@ def _run_async(factory: Callable[[], Awaitable[T]]) -> T:
 class SessionCatalog:
     """Use live Silpo reads for connected sessions and demo only for guests."""
 
-    def __init__(self, demo: DemoCatalog | None = None):
+    def __init__(self, demo: DemoCatalog | None = None, translator=None):
         self.demo = demo or DemoCatalog()
+        self.translator = translator
         self._candidates: dict[tuple[str, str], ProductCandidate] = {}
         self._details: dict[tuple[str, str], Any] = {}
+        self._dynamic_profiles: dict[tuple[str, str], LiveQueryProfile] = {}
         self._reported_unknown_details: set[tuple[str, str]] = set()
 
     @property
@@ -303,6 +319,58 @@ class SessionCatalog:
     @staticmethod
     def _live(owner: Any) -> bool:
         return bool(getattr(owner, "silpo_connected", False))
+
+    def _profile(self, owner: Any, query: str) -> LiveQueryProfile | None:
+        return self._dynamic_profiles.get(
+            (owner.id, _normalized_words(query))
+        ) or live_query_profile(query)
+
+    def prepare_requirements(self, owner, requirements):
+        """Translate every unknown live ingredient in one call before catalog lookup."""
+        if not self._live(owner) or not owner.silpo_branch_id:
+            return requirements
+
+        unknown = [
+            requirement for requirement in requirements
+            if live_query_profile(requirement.name) is None
+        ]
+        translations = {}
+        if unknown:
+            try:
+                if self.translator is None:
+                    self.translator = GeminiIngredientTranslator()
+                translations = self.translator.translate(unknown)
+            except Exception as exc:
+                logger.warning(
+                    "Ingredient translation is unavailable; unknown ingredients will use "
+                    "exact-language matching (%s).",
+                    type(exc).__name__,
+                )
+
+        prepared = []
+        for requirement in requirements:
+            translation = translations.get(requirement.id)
+            if translation is not None:
+                profile = LiveQueryProfile(
+                    match_terms=(requirement.name,),
+                    provider_queries=tuple(dict.fromkeys(
+                        query.strip() for query in translation.queries if query.strip()
+                    )),
+                    required_name_terms=tuple(dict.fromkeys(
+                        term.strip() for term in translation.evidence_terms if term.strip()
+                    )),
+                    grams_per_ml=translation.grams_per_ml,
+                    grams_per_piece=translation.grams_per_piece,
+                )
+                self._dynamic_profiles[(owner.id, _normalized_words(requirement.name))] = profile
+            prepared.append(requirement.model_copy(update={"search_terms": [requirement.name]}))
+
+        logger.info(
+            "Prepared %d live ingredient searches (%d dynamically translated).",
+            len(prepared),
+            len(translations),
+        )
+        return prepared
 
     async def _context(self, owner):
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
@@ -351,7 +419,7 @@ class SessionCatalog:
 
     async def _search_live(self, owner, query: str):
         found: dict[str, ProductCandidate] = {}
-        profile = live_query_profile(query)
+        profile = self._profile(owner, query)
         provider_queries = profile.provider_queries if profile is not None else (query,)
         async with get_mcp_session(SessionTokenStorage(owner)) as mcp_session:
             for provider_query in provider_queries:
@@ -365,10 +433,10 @@ class SessionCatalog:
                     tool_schemas=owner.silpo_tool_schemas,
                     owner=owner,
                 )
-                for candidate in result.products[:2]:
-                    if live_product_name_matches(query, candidate.name):
+                for candidate in result.products[:10]:
+                    if live_product_name_matches(query, candidate.name, profile):
                         found.setdefault(candidate.id, candidate)
-            reviewed = list(found.values())[:6]
+            reviewed = list(found.values())[:30]
             enriched: list[ProductCandidate] = []
             for candidate in reviewed:
                 with owner.lock:
@@ -430,7 +498,7 @@ class SessionCatalog:
             return []
         if (
             _normalized_words(query) in EDAMAM_CATEGORY_TERMS
-            and live_query_profile(query) is None
+            and self._profile(owner, query) is None
         ):
             # A category such as "grains" is not evidence that an arbitrary result is flour.
             return []
