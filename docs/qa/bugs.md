@@ -39,10 +39,10 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-024 | Low | `handle_chat_message` catches every interpreter exception and returns one generic `chat_error`, so a rate limit, a network blip and a missing key are indistinguishable to the caller | Uliana | Open |
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 | BUG-025 | Blocker | Edamam Meal Planner returned HTTP 403 for every request, and `EDAMAM_SYNTHETIC_FALLBACK=false` on the live deploy meant this failed every plan for every user — production was fully down | Polina (own file, `services/api/src/smart_basket/meals/edamam.py`) | Fixed in #43; retested ✅ (run 17, live: e2e 40/40, UI 56/56) |
-| BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket is empty on every plan | Sofiia (ingredient search terms) + Rina (catalog matching); scope decision needed | Open — accepted for the submission (decision, Sep 14): realistic recipe names outweigh a working demo basket; `SMART_BASKET_MEALS_SOURCE=edamam` is live, the cart segment is skipped in the recorded demo |
+| BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket was empty on every plan | Polina, in Sofiia's `services/api/src/smart_basket/demo.py` (user-authorised) | Fixed on `feature/polina-edamam-category-catalog`: matching by Edamam's bounded `foodCategory` taxonomy resolves 98% of real live ingredients (115/117, fresh live data, run 20) instead of 0%. The demo-only Silpo-cart segment can go back in the recording |
 | BUG-027 | High | With live Edamam meals, slots got any recipe (a macaron filling as dinner, pizza bread as breakfast) and daily calories landed 65–71% over the target (4 960 / 5 131 kcal vs 3 000) | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #46; live ✅ (run 19: 2 people × 2 days × 2 000 kcal → sensible slots, 2 028 / 1 960 kcal) |
 | BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed in #46; UI ✅ (run 19, 58/58); new strings confirmed in the live bundle |
-| BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed on `feature/polina-edamam-weightless-ingredients`; tests ✅ (226/226); live check pending deploy |
+| BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #47; retested ✅ live (run 19: same input completed twice, once with a "Jalapeno left out" warning instead of failing) |
 | BUG-030 | Medium | With no calorie target, live Edamam has no calorie floor and breakfast has no dish filter: one plan served a juice for breakfast (197 kcal), a recipe literally titled "Tst" for lunch (83 kcal), ~583 kcal for the day | Sofiia (meal-planning rules) | Open — the demo's golden input sets a calorie target, so not demo-blocking |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
@@ -705,3 +705,30 @@ not yet been sent to the owners; Polina shares it with the team.
 - **Fix options for the owner:** send a default per-section calorie band when no target is given
   (or require a target for live Edamam), add a breakfast `dish` filter that excludes `drinks`,
   and drop recipes whose label is implausibly short.
+
+## BUG-026, resolved — category-based matching for live Edamam ingredients
+
+- **Approach:** Edamam tags every ingredient with a `foodCategory` (already carried as the second
+  entry in `search_terms`, see `meals/edamam.py:_search_terms`) — a bounded taxonomy of roughly
+  25 values, unlike ingredient names themselves, which are effectively unlimited. `demo.py` now
+  ships 19 generic, clearly-labeled synthetic products ("Demo poultry, 500 g", "Demo condiments
+  and sauces, 200 g", …) keyed by these category strings, so `find_product_candidates` — unchanged
+  — matches on category exactly the same way it always matched `oats`/`rice`/`lentils`.
+- **Measured, not assumed:** collected real `foodCategory` values across 145 live ingredients (4
+  plans, run 20) before choosing the bucket list, then re-verified against 3 **fresh** live plans
+  the fix had never seen: **115 of 117 real ingredients (98%) now resolve**, up from 0. The two
+  that did not (`fish broth`, `Guacamole`) carried no category from Edamam at all — a residual,
+  honestly-disclosed gap this approach cannot close, not a bug in the fix.
+- **Dietary honesty preserved:** unlike oats/rice/lentils, these category placeholders carry no
+  composition evidence and are deliberately left out of `restriction_labels`, so any requested
+  restriction still fails closed to "unknown" (same as BUG-021) — only unrestricted requirements
+  can select one. Covered by a dedicated test.
+- **Scope:** this fixes the **guest/demo** path only (`SessionCatalog` routes here whenever no
+  Silpo account is connected — this is what every QA run and the planned recording use). A
+  connected real Silpo account still searches the live Ukrainian catalog directly with Edamam's
+  English terms and was not touched; BUG-026's original note about that path likely having the
+  same problem stands.
+- **Tests:** parametrized over every category bucket (each alias resolves), case-insensitivity,
+  restriction fail-closed behaviour, and a realistic 9-ingredient live-shaped set (8/9 resolve,
+  matching the one genuinely uncategorized case). Backend 257/257 (was 226). e2e 40/40, UI 58/58
+  locally.
