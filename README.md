@@ -1,56 +1,177 @@
 # Smart Basket Planner
 
-FIGMA DESIGN: [Silpo hakathon design](https://www.figma.com/design/xhtDg7HHkwiG5lgTIvuOyH/SILPO-HAKATHON?node-id=0-1&t=4lOXEbKxnPZ8370m-1)
+> Автономний AI-планер харчування, який перетворює потреби родини на меню та готовий кошик «Сільпо» в межах заданого бюджету.
 
-A web page where users set a budget, planning period, household size, food preferences and pet needs, then receive a meal plan and a basket of real Silpo products. Forms, buttons, meal cards and product cards are the main interface. Optional text input supports the structured controls.
+[🚀 Відкрити задеплоєний застосунок](https://p01--web--2n7f5yvrbnqy.code.run) · [🎨 Переглянути дизайн у Figma](https://www.figma.com/design/xhtDg7HHkwiG5lgTIvuOyH/SILPO-HAKATHON?node-id=0-1&t=4lOXEbKxnPZ8370m-1)
 
-**Confirmed stack: Next.js frontend + Python backend and AI modules.** The frontend communicates with the Python HTTP API using JSON. MCP, Edamam, agent orchestration and budget calculations run in Python. See [architecture and folder ownership](docs/WORKFLOW.md#confirmed-stack-and-planned-folders).
+## Про проєкт
 
-**Confirmed integrations: Edamam + FatSecret + Silpo MCP.** Edamam helps create the menu; FatSecret saves selected meals to the connected user's account; Silpo MCP supplies products and cart actions. Start with [the combined workflow and additional role tasks](docs/FATSECRET.md). The initial FatSecret scope is reusable Saved Meals for one personal portion, with explicit preview/confirmation.
+Планування харчування — це не лише вибір рецептів. Потрібно врахувати кількість людей, період, калорійність, харчові вподобання та обмеження, перерахувати інгредієнти на потрібну кількість порцій, знайти товари, врахувати фасування і не перевищити бюджет.
 
-## Start here
+**Smart Basket Planner** бере цей багатокроковий процес на себе. Користувач задає параметри, а агент:
 
-1. Read [the product scope](docs/PRODUCT.md).
-2. Open your personal instructions below.
-3. Check [dates and dependencies](docs/TIMELINE.md) and [how to deliver your work](docs/WORKFLOW.md).
-4. Developers: use [the shared contracts](docs/CONTRACTS.md) to start independently with mock data.
+1. перевіряє запит і доступний контекст гостя;
+2. формує меню на основі рецептів Edamam;
+3. масштабує порції та нормалізує інгредієнти;
+4. знаходить відповідні товари;
+5. розраховує кількість упаковок і повну вартість;
+6. оптимізує пропозицію під бюджет;
+7. показує точні зміни перед додаванням у кошик;
+8. виконує дію лише після підтвердження користувача.
 
-| Role | Owner | Deliverable | Instructions | Deadline |
-|---|---|---|---|---|
-| 1 — Product Design | Katia (Катя) | Complete Figma design and design handoff | [Katia](docs/roles/01-katia-design.md) | September 6–7 |
-| 2.1 — Frontend | Ksiusha (Ксюша) | Page shell, input form, profile, planner launch | [Ksiusha](docs/roles/02-1-ksiusha-frontend.md) | September 11 |
-| 2.2 — Frontend | Alina (Аліна) | Progress, meals, products, basket UI | [Alina](docs/roles/02-2-alina-frontend.md) | September 11 |
-| 3.1 — Backend | Arina (Аріна) | MCP connection, authentication, read adapters | [Arina](docs/roles/03-1-arina-backend.md) | September 11 |
-| 3.2 — Backend | Rina (Ріна) | Product matching, HTTP API, cart actions | [Rina](docs/roles/03-2-rina-backend.md) | September 11 |
-| 4.1 — AI | Uliana (Уляна) | Agent workflow and module orchestration | [Uliana](docs/roles/04-1-uliana-ai.md) | September 11 |
-| 4.2 — AI | Sofiia (Софія) | Edamam, meals, calories, ingredients | [Sofiia](docs/roles/04-2-sofiia-ai.md) | September 11 |
-| 4.3 — AI | Vika (Віка) | Recurring purchases and budget optimization | [Vika](docs/roles/04-3-vika-ai.md) | September 11 |
-| 5 — Integration | Polina (Поліна) | Final integration, QA, deployment, stable demo | [Polina](docs/roles/05-polina-integration.md) | September 13; starts September 12 |
+Результат — не текстова порада, а структурований план харчування і підготовлений до перевірки кошик.
 
-**September 14, 2026: record the final video and submit the entry.** Internal dates use Kyiv time. Katia supplies draft designs on September 6 and final designs on September 7. Everyone else except Polina delivers complete modules by September 11. **Polina does no project work before September 12.** Developers must prepare compatible modules and handoffs themselves; they remain available for fixes on September 12–13.
+## Чим це відрізняється від Машрума Геннадійовича
 
-## Shared guides
+У застосунку «Сільпо» вже є AI-помічник для покупок — **Машрум Геннадійович**. Тому наша мета полягала не у створенні ще одного чату з LLM.
 
-- [Product](docs/PRODUCT.md): features, buttons, MVP boundaries and demo input.
-- [Timeline](docs/TIMELINE.md): independent work, dependencies and dated handoffs.
-- [Workflow](docs/WORKFLOW.md): proposed folders, ownership, PRs and completion rules.
-- [Contracts](docs/CONTRACTS.md): shared inputs, outputs and calculation rules.
-- [Integrations and sources](docs/INTEGRATIONS.md): MCP, Edamam and source clarifications.
-- [Edamam + FatSecret](docs/FATSECRET.md): saving meals, account connection, per-role additions, September 8–11 handoffs and contract v0.2 additions.
-- [QA and video](docs/QA_DEMO.md): acceptance scenarios and submission checklist.
-- [Team status](docs/STATUS.md): update your own row.
-- [Handoff template](docs/templates/HANDOFF.md): copy to `docs/handoffs/<name>.md` when delivering.
+**Машрум допомагає користувачу під час діалогу. Smart Basket Planner виконує повний спеціалізований сценарій планування.**
 
-## Repository status
+Агент отримує ціль і набір обмежень — бюджет, кількість днів і людей, калорійність та харчові потреби — після чого самостійно проходить шлях від меню до кошика. У перспективі цей сценарій може запускатися безпосередньо з розмови з Машрумом: користувач формулює задачу, а Smart Basket Planner виконує її у фоновому режимі.
 
-Rina's **Python demo API is implemented** with product matching, cart
-preview/confirmation and FatSecret export outcomes. Sofiia's meal-planning module
-now supplies synthetic meals/ingredients through Uliana's pipeline and includes
-an Edamam selection/recipe mapper for the credential-gated live check. The
-Next.js frontend in `apps/web` can run against the demo API and display the
-completed planning result. Start with the [backend launch guide](services/api/README.md),
-[web launch guide](apps/web/README.md), [synthetic examples](fixtures/README.md)
-and [Rina's handoff](docs/handoffs/rina.md). Live provider modules remain
-credential-gated. No external credentials are required for the demo.
+## Основні можливості
 
-Names, roles, the Next.js + Python stack, final deadlines and Polina's start date come from the team's current request. Intermediate milestones, folder layout and contract v0.2 are working defaults introduced by this guide. Rina, Ksiusha and Uliana finalize the remaining setup details without waiting for Polina.
+- планування меню на 1–7 днів для 1–6 людей;
+- цільова калорійність на одну людину на день;
+- харчові вподобання та жорсткі дієтичні обмеження;
+- введення потреб домашніх тварин та їх аналіз разом з історією покупок;
+- аналіз історії покупок для підключеного акаунта;
+- розрахунок порцій, інгредієнтів, фасування і кількості упаковок;
+- підбір та оптимізація товарів у межах бюджету;
+- прозорий статус виконання кожного етапу агентом;
+- попередній перегляд і підтвердження змін у кошику;
+- перерахунок плану після зміни бюджету;
+- збереження вибраних страв у FatSecret;
+- гостьовий режим без історії та персональних даних.
+
+## Agent flow
+
+```text
+Запит користувача
+        ↓
+Контекст профілю та доступність історії
+        ↓
+Формування меню й розрахунок порцій
+        ↓
+Нормалізація та агрегація інгредієнтів
+        ↓
+Пошук і перевірка товарів
+        ↓
+Оптимізація кошика під бюджет
+        ↓
+Готовий план і попередній перегляд
+        ↓
+Явне підтвердження користувача
+        ↓
+Додавання товарів і перевірка результату
+```
+
+AI керує процесом і працює з наміром користувача. Критичні операції — грошові розрахунки, округлення упаковок, перевірка обмежень та підтвердження кошика — виконуються окремими детермінованими модулями. Модель не може вигадати товар, ціну або успішне виконання операції.
+
+## Інтеграції
+
+### MCP «Сільпо»
+
+Офіційний MCP «Сільпо» функціонально з'єднує планування з екосистемою магазину.
+
+| MCP tool | Для чого використовується |
+|---|---|
+| `silpo_get_my_profile` | отримання доступного профілю гостя |
+| `silpo_get_my_family` | отримання сімейного контексту та даних про тварин |
+| `silpo_get_my_food_restrictions` | отримання збережених харчових обмежень |
+| `silpo_get_my_online_orders` | читання історії онлайн-замовлень |
+| `silpo_get_my_offline_orders` | читання історії офлайн-покупок |
+| `silpo_find_products_batch` | пошук товарів для групи інгредієнтів |
+| `silpo_get_product_details` | перевірка ціни, доступності, фасування та деталей товару |
+| `silpo_get_my_shopping_cart` | отримання контексту поточного кошика |
+| `silpo_get_shopping_cart_by_id` | читання вмісту кошика та перевірка результату |
+| `silpo_add_or_update_cart_products` | додавання підтверджених користувачем товарів |
+
+### Edamam
+
+Edamam є джерелом рецептів, інгредієнтів і нутрієнтних даних. Адаптер розподіляє рецепти за прийомами їжі, масштабує їх на потрібну кількість людей і зберігає посилання та атрибуцію джерела.
+
+### FatSecret
+
+Користувач може вибрати страву, переглянути склад однієї персональної порції та після окремого підтвердження зберегти її у FatSecret як Saved Meal. Ця операція незалежна від додавання товарів у кошик «Сільпо».
+
+### Gemini
+
+Мовна модель інтерпретує повідомлення у чаті та перетворює підтримувані наміри — наприклад, зміну бюджету або прохання здешевити план — на контрольований повторний запуск планувальника.
+
+## Архітектура
+
+```text
+Next.js + TypeScript
+        ↓ HTTP / JSON
+FastAPI + Pydantic
+        ↓
+Agent Orchestrator
+   ├── Edamam — меню та нутрієнти
+   ├── Silpo MCP — профіль, історія, каталог і кошик
+   ├── Optimizer — фасування, ціни та бюджет
+   ├── Gemini — інтерпретація чат-команд
+   └── FatSecret — збереження вибраних страв
+```
+
+Основний стек:
+
+- **Frontend:** Next.js, React, TypeScript, Tailwind CSS;
+- **Backend:** Python, FastAPI, Pydantic;
+- **AI та планування:** агентний оркестратор, Gemini, Edamam;
+- **Інтеграції:** офіційний MCP «Сільпо», FatSecret OAuth;
+- **Тестування:** Pytest, Playwright, Schemathesis, Lighthouse;
+- **Розгортання:** Docker, Docker Compose, Northflank.
+
+## Команда та внесок
+
+| Учасниця | Напрям | Внесок у проєкт |
+|---|---|---|
+| **Катерина Хомініч** | Product Design | Розробила концепцію користувацького шляху та Figma-дизайн: форму параметрів, результати планування, кошик, стани підключення, підтвердження і ключові сценарії продукту. |
+| **Ксенія Гуназа** | Frontend — форма та запуск плану | Реалізувала Next.js-оболонку, форму бюджету, періоду, кількості людей, калорійності, вподобань, обмежень і тварин; валідацію, контекст профілю, запуск плану, polling прогресу, обробку сесій та адаптивність. |
+| **Аліна Паращій** | Frontend — результати та кошик | Реалізувала відображення прогресу, меню, нутрієнтів, інгредієнтів, товарів і бюджету; спільний smart-cart, попередній перегляд і підтвердження кошика, стани помилок, перерахунок та UI збереження страв у FatSecret. |
+| **Аріна Хмель** | Backend — MCP gateway | Побудувала з'єднання з офіційним MCP «Сільпо», OAuth-межу та адаптери для профілю, сім'ї, обмежень, історії покупок, каталогу, акцій, улюблених товарів і поточного кошика; додала нормалізацію та обробку помилок. |
+| **Ріната Абдурахімова** | Backend — API, каталог і cart actions | Реалізувала FastAPI-контракти, пошук і зіставлення товарів, нормалізацію фасування, інтеграцію live-каталогу, preview/confirm flow кошика, перевірку цін і стану, idempotency та read-back; також реалізувала FatSecret OAuth, matching і експорт Saved Meals. |
+| **Уляна Танчук** | AI orchestration | Побудувала наскрізний agent workflow від запиту до `PlanningResult`, підключила контекст, історію, меню, matching та optimizer, реалізувала події прогресу, чат-інтерпретацію, перерахунок бюджету і контрольоване перепланування. |
+| **Софія Пруцька** | AI — meal planning | Реалізувала модуль планування харчування та інтеграцію Edamam: фільтри вподобань і обмежень, розподіл калорій, масштабування порцій, макронутрієнти, нормалізацію й агрегацію інгредієнтів, джерела рецептів та fallback-сценарій. |
+| **Вікторія Гладка** | AI — optimization | Реалізувала аналіз регулярних покупок і бюджетний optimizer: визначення повторюваних потреб, порівняння кандидатів, округлення за фасуванням, уникнення подвійного врахування та формування кошика в межах бюджету. |
+| **Поліна Астрашенок** | Integration, QA та Release | Об'єднала frontend, backend і зовнішні інтеграції; налаштувала CI, Docker і публічний деплой на Northflank; створила e2e, UI, contract, accessibility, load і security перевірки; провела live-верифікацію MCP, Edamam, Gemini та FatSecret і виправила критичні інтеграційні дефекти перед релізом. |
+
+## Швидкий локальний запуск
+
+Потрібні Node.js і Python 3.11+.
+
+У корені репозиторію виконайте:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1
+```
+
+Після запуску відкрийте [http://localhost:3000](http://localhost:3000). Для зупинки сервісів:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Stop
+```
+
+Запуск із повною перевіркою:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/run-local.ps1 -Test
+```
+
+Детальні інструкції: [локальний запуск і deployment](deploy/README.md), [Backend API](services/api/README.md), [UI-тести](tests/ui/README.md), [E2E-тести](tests/e2e/README.md).
+
+## Документація
+
+- [Опис продукту](docs/PRODUCT.md)
+- [Архітектура та командний процес](docs/WORKFLOW.md)
+- [Контракти між модулями](docs/CONTRACTS.md)
+- [Інтеграції](docs/INTEGRATIONS.md)
+- [QA та демосценарії](docs/QA_DEMO.md)
+- [Результати тестування](docs/qa/test-results.md)
+- [Сценарій відеопітчу](docs/qa/demo-script.md)
+- [Deployment runbook](deploy/README.md)
+
+---
+
+**Smart Basket Planner — від потреби родини до прорахованого і контрольованого кошика.**
