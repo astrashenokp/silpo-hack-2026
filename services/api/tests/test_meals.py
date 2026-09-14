@@ -351,6 +351,43 @@ def test_edamam_mapping_rejects_incomplete_selection():
         collect_assignments({"selection": [{"sections": {"Breakfast": {}}}]})
 
 
+def _map_with_breakfast(detail):
+    return map_edamam_plan_response(
+        response=_edamam_selection_response(days=1),
+        recipe_details={
+            "recipe:breakfast": detail,
+            "recipe:lunch": _recipe_detail("Lunch rice", "https://recipes.test/rice"),
+            "recipe:dinner": _recipe_detail("Dinner lentils", "https://recipes.test/lentils"),
+        },
+        request_model=request(days=1, people=2, preferences=[]),
+        filters=resolve_meal_filters(request(preferences=[]), context()),
+    )
+
+
+def test_edamam_ingredient_without_gram_weight_is_left_out_not_fatal():
+    detail = _recipe_detail("Breakfast oats", "https://recipes.test/oats")
+    detail["recipe"]["ingredients"].append(
+        {"foodId": "food-salt", "food": "salt", "foodCategory": "Condiments and sauces",
+         "weight": 0, "text": "salt to taste"}
+    )
+
+    result = _map_with_breakfast(detail)
+
+    breakfast = result["meals"][0]
+    assert [amount.name for amount in breakfast.ingredient_amounts] == ["Dry oats", "Dry rice"]
+    assert "salt" not in [ingredient.name for ingredient in result["ingredients"]]
+    assert any("salt" in warning and "gram weight" in warning for warning in result["warnings"])
+
+
+def test_edamam_recipe_without_any_weighed_ingredient_still_fails():
+    detail = _recipe_detail("Water", "https://recipes.test/water")
+    for ingredient in detail["recipe"]["ingredients"]:
+        ingredient["weight"] = 0
+
+    with pytest.raises(EdamamUnavailable):
+        _map_with_breakfast(detail)
+
+
 def test_build_meal_plan_can_return_mapped_edamam_meals(monkeypatch):
     class FakeClient:
         def __init__(self, settings):
