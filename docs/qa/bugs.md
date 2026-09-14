@@ -40,8 +40,10 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 | BUG-025 | Blocker | Edamam Meal Planner returned HTTP 403 for every request, and `EDAMAM_SYNTHETIC_FALLBACK=false` on the live deploy meant this failed every plan for every user — production was fully down | Polina (own file, `services/api/src/smart_basket/meals/edamam.py`) | Fixed in #43; retested ✅ (run 17, live: e2e 40/40, UI 56/56) |
 | BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket is empty on every plan | Sofiia (ingredient search terms) + Rina (catalog matching); scope decision needed | Open — accepted for the submission (decision, Sep 14): realistic recipe names outweigh a working demo basket; `SMART_BASKET_MEALS_SOURCE=edamam` is live, the cart segment is skipped in the recorded demo |
-| BUG-027 | High | With live Edamam meals, slots got any recipe (a macaron filling as dinner, pizza bread as breakfast) and daily calories landed 65–71% over the target (4 960 / 5 131 kcal vs 3 000) | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed on `feature/polina-edamam-meal-slots`; tests ✅ (run 19); **live check pending deploy** |
-| BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed on `feature/polina-edamam-meal-slots`; UI ✅ (run 19, 58/58) |
+| BUG-027 | High | With live Edamam meals, slots got any recipe (a macaron filling as dinner, pizza bread as breakfast) and daily calories landed 65–71% over the target (4 960 / 5 131 kcal vs 3 000) | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #46; live ✅ (run 19: 2 people × 2 days × 2 000 kcal → sensible slots, 2 028 / 1 960 kcal) |
+| BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed in #46; UI ✅ (run 19, 58/58); new strings confirmed in the live bundle |
+| BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed on `feature/polina-edamam-weightless-ingredients`; tests ✅ (226/226); live check pending deploy |
+| BUG-030 | Medium | With no calorie target, live Edamam has no calorie floor and breakfast has no dish filter: one plan served a juice for breakfast (197 kcal), a recipe literally titled "Tst" for lunch (83 kcal), ~583 kcal for the day | Sofiia (meal-planning rules) | Open — the demo's golden input sets a calorie target, so not demo-blocking |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -669,3 +671,37 @@ not yet been sent to the owners; Polina shares it with the team.
 - **Tests:** new UI check shapes a real API result into 8 unmatched items with 1 753.376 kcal and
   asserts the count heading, a collapsed list, the Ukrainian reason, no English reason text and
   "1 753 ккал/порція". UI 58/58 (desktop + Pixel 7).
+
+## BUG-029 — One ingredient without a gram weight failed the whole live plan
+
+- **Found in:** run 19, live, right after #46 deployed. `POST /api/plans` with 1 person, 1 day and
+  a 3 000 kcal target ended `failed` twice in a row with
+  `{"code":"UPSTREAM_UNAVAILABLE","message":"Edamam ingredient is missing gram weight; conversion is unresolved."}`.
+  It failed instead of falling back, which also shows `EDAMAM_SYNTHETIC_FALLBACK` was still
+  `false` on the deploy at that moment.
+- **Where:** `services/api/src/smart_basket/meals/edamam.py`, `_ingredient_amount` raised
+  `EdamamUnavailable` for any ingredient whose `weight` was missing or zero. Edamam recipes often
+  carry such items ("salt to taste", water), so one of them aborted every meal of the plan.
+- **Honest note on cause:** a latent defect, but #46 is what exposed it for this input — the new
+  per-section filters made Edamam choose different recipes. The same input completed before #46
+  (with the pizza-bread breakfast BUG-027 describes).
+- **Fix:** an ingredient without a positive gram weight is left out of shopping quantities and
+  named in a plan warning ("… ingredient(s) without a gram weight left out of shopping quantities
+  (salt)"). A recipe with no weighed ingredient at all still fails, since nothing could be bought
+  for it.
+- **Tests:** two new backend tests (a zero-weight "salt to taste" is skipped with a warning and the
+  plan maps; a recipe whose every ingredient lacks weight still raises). Backend 226/226.
+
+## BUG-030 — Without a calorie target, live Edamam picks near-empty or junk meals
+
+- **Found in:** run 19, live. 1 person, 1 day, no calorie target: breakfast "Orange Turmeric
+  Immunity Boosting Juice" (197 kcal), lunch a recipe titled "Tst" (83 kcal), dinner a quiche
+  (303 kcal) — about 583 kcal for the whole day.
+- **Why:** `build_edamam_payload` only sends calorie fits when a target is given, and Breakfast is
+  filtered by `meal: breakfast` alone (no `dish` filter), so drinks qualify. Edamam's public
+  recipe data also contains test-like entries such as "Tst" that pass the lunch filters.
+- **Impact:** Medium, not demo-blocking — the golden demo input sets 2 000 kcal. Visible to anyone
+  who leaves the calorie field empty.
+- **Fix options for the owner:** send a default per-section calorie band when no target is given
+  (or require a target for live Edamam), add a breakfast `dish` filter that excludes `drinks`,
+  and drop recipes whose label is implausibly short.

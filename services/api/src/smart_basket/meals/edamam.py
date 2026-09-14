@@ -250,10 +250,16 @@ def map_edamam_plan_response(
         ingredients = recipe.get("ingredients")
         if not isinstance(ingredients, list) or not ingredients:
             raise EdamamUnavailable(f"Recipe {assignment.uri} has no ingredient list.")
+        title = str(recipe.get("label") or assignment.link_title or "Edamam recipe")
+        weightless: list[str] = []
         for index, ingredient in enumerate(ingredients, start=1):
             amount = _ingredient_amount(ingredient, scale)
-            ingredient_id = _ingredient_id(ingredient, index)
             ingredient_name = _ingredient_name(ingredient)
+            if amount is None:
+                # Items like "salt to taste" carry no gram weight and cannot be bought by quantity.
+                weightless.append(ingredient_name)
+                continue
+            ingredient_id = _ingredient_id(ingredient, index)
             ingredient_ids.append(ingredient_id)
             amounts.append(
                 IngredientAmount(
@@ -275,13 +281,21 @@ def map_edamam_plan_response(
             total["quantity"] += amount
             total["meal_ids"].append(meal_id)
 
+        if not amounts:
+            raise EdamamUnavailable(f"Recipe {assignment.uri} has no ingredient with a gram weight.")
+        if weightless:
+            warnings.append(
+                f"{title}: {len(weightless)} ingredient(s) without a gram weight left out of shopping "
+                f"quantities ({', '.join(weightless)})."
+            )
+
         calories = _positive_float(recipe.get("calories"))
         meals.append(
             Meal(
                 id=meal_id,
                 day=assignment.day,
                 slot=assignment.slot,
-                title=str(recipe.get("label") or assignment.link_title or "Edamam recipe"),
+                title=title,
                 servings=request_model.people,
                 kcal_per_serving=(calories / yield_count) if calories is not None else None,
                 macros_per_serving=_recipe_macros_per_serving(recipe, yield_count),
@@ -350,11 +364,9 @@ def _extract_recipe(detail: dict) -> dict:
     raise EdamamUnavailable("Edamam recipe detail did not contain a recipe object.")
 
 
-def _ingredient_amount(ingredient: dict, scale: float) -> float:
+def _ingredient_amount(ingredient: dict, scale: float) -> float | None:
     weight = _positive_float(ingredient.get("weight"))
-    if weight is None:
-        raise EdamamUnavailable("Edamam ingredient is missing gram weight; conversion is unresolved.")
-    return weight * scale
+    return weight * scale if weight is not None else None
 
 
 def _ingredient_id(ingredient: dict, index: int) -> str:

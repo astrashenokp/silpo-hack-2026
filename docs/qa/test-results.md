@@ -699,3 +699,19 @@ assigned defect on record (BUG-026) rather than a silent regression.
 **Merge precondition:** `EDAMAM_SYNTHETIC_FALLBACK=true` on Northflank, so that if Edamam cannot
 satisfy the stricter sections the plan falls back instead of failing. After deploy: create a few
 live plans and confirm breakfast/lunch/dinner fit their slot and day totals sit near the target.
+
+### Run 19, continued — live results after #46 deployed
+
+`main` @ `af99b36`, CI 5/5, new strings confirmed in the live bundle. Full UI/e2e suites were not
+re-run against the live URL on purpose: with Edamam meals on they fail on the demo-basket checks
+(BUG-026, accepted) and would burn Edamam quota on dozens of plans; both passed in CI on this
+commit.
+
+| Live plan | Result |
+|---|---|
+| 2 people × 2 days × 2 000 kcal | ✅ breakfasts: buns, breakfast casserole; lunches: roasted chicken, risotto; dinners: moqueca, gnocchi. Day totals 2 028 kcal (+1%) and 1 960 kcal (−2%) — BUG-027 confirmed fixed live |
+| 1 person × 1 day × 3 000 kcal | ❌ `failed` twice: "Edamam ingredient is missing gram weight" — **BUG-029**, a regression for this input exposed by #46; no fallback, so `EDAMAM_SYNTHETIC_FALLBACK` was still `false` |
+| 1 person × 1 day, no calorie target | ⚠️ completed, but a juice for breakfast, a recipe titled "Tst" for lunch, ~583 kcal/day — **BUG-030**, open (Sofiia) |
+
+BUG-029 fixed on `feature/polina-edamam-weightless-ingredients` (backend 226/226); live re-check
+of the 3 000 kcal plan pending that deploy.
