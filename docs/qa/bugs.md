@@ -40,6 +40,8 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-022 | Medium | "Скасувати" in the cart preview leaves the plan marked as handed over: the add button stays disabled telling the user to confirm in a window that was just closed, and a failed receipt does the same | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-qa-run15`; retested ✅ (run 15, UI 46/46) |
 | BUG-025 | Blocker | Edamam Meal Planner returned HTTP 403 for every request, and `EDAMAM_SYNTHETIC_FALLBACK=false` on the live deploy meant this failed every plan for every user — production was fully down | Polina (own file, `services/api/src/smart_basket/meals/edamam.py`) | Fixed in #43; retested ✅ (run 17, live: e2e 40/40, UI 56/56) |
 | BUG-026 | High | Live Edamam's English ingredient names (`chicken`, `red potatoes`, …) never match the catalog's vocabulary, so the basket is empty on every plan | Sofiia (ingredient search terms) + Rina (catalog matching); scope decision needed | Open — accepted for the submission (decision, Sep 14): realistic recipe names outweigh a working demo basket; `SMART_BASKET_MEALS_SOURCE=edamam` is live, the cart segment is skipped in the recorded demo |
+| BUG-027 | High | With live Edamam meals, slots got any recipe (a macaron filling as dinner, pizza bread as breakfast) and daily calories landed 65–71% over the target (4 960 / 5 131 kcal vs 3 000) | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed on `feature/polina-edamam-meal-slots`; tests ✅ (run 19); **live check pending deploy** |
+| BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed on `feature/polina-edamam-meal-slots`; UI ✅ (run 19, 58/58) |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -627,3 +629,43 @@ not yet been sent to the owners; Polina shares it with the team.
   terms need either a translation step (English → Ukrainian) before hitting Silpo, or a
   broader/fuzzier catalog search than exact `QUERY_ALIASES` lookups. Sofiia and Rina to decide
   which side owns the mapping.
+
+## BUG-027 — Live Edamam ignored meal slots and calorie targets
+
+- **Found in:** run 19, the live site right after `SMART_BASKET_MEALS_SOURCE=edamam` went back on.
+  A 2-day plan with a 3 000 kcal target served "Pepperoni Pull-Apart Pizza Bread" for breakfast
+  (1 753 kcal per serving), "Pizza Margherita" for lunch and "White Chocolate Ganache Macaron
+  Filling" for dinner; day totals were 4 960 and 5 131 kcal.
+- **Where:** `services/api/src/smart_basket/meals/edamam.py`, `build_edamam_payload`. Every
+  section was sent empty (`"Breakfast": {}, "Lunch": {}, "Dinner": {}`); only a plan-level
+  calorie fit was set. The per-slot targets (25/35/40 %) were already computed in
+  `nutrition.py` for display but never sent to Edamam.
+- **Expected:** Edamam's documented meal-planner contract filters each section with
+  `accept.all: [{"meal": [...]}, {"dish": [...]}]` and can bound it with its own `fit`.
+- **Fix:** Breakfast accepts `meal: breakfast`; Lunch and Dinner accept `meal: lunch/dinner`
+  and main-meal dishes only (`main course`, `salad`, `soup`, `pasta`, `pizza`, `sandwiches`,
+  `seafood` — no desserts, sweets, ice cream or preps). Each section gets an `ENERC_KCAL` fit
+  around its share of the daily target, ±35 % so a slot stays satisfiable; the ±10 % plan-level
+  fit still bounds the day. Values taken from Edamam's documented enums.
+- **Tests:** two new backend tests (per-section meal/dish filters; per-section calorie bands,
+  including that a 1 753 kcal breakfast falls outside the band for a 3 000 kcal day). Backend
+  224/224.
+- **Not verifiable locally:** the Edamam credentials exist only on Northflank, so the new
+  request shape cannot be tried against the real API before deploy. If Edamam cannot satisfy a
+  stricter section, `collect_assignments` raises `EdamamUnavailable`; with
+  `EDAMAM_SYNTHETIC_FALLBACK=false` that fails the plan outright. Set it to `true` before
+  merging, then check a few live plans.
+
+## BUG-028 — Unrounded calories and an English wall of unmatched ingredients
+
+- **Found in:** run 19, same live plan.
+- **Where:** `apps/web/src/lib/format.ts` (`formatServing` kept up to 3 decimals) and
+  `apps/web/src/features/planner-results/components/ProposedBasket.tsx` (`UnresolvedList`
+  printed every requirement with the raw English API reason).
+- **Fix:** calories per serving are rounded to whole kcal. The unmatched block now leads with a
+  count ("Не вдалося підібрати позицій: N") and the confirmation note; the list sits in a
+  `<details>` that opens by default only for five items or fewer, and known API reasons are
+  translated (unknown ones still shown verbatim, nothing hidden).
+- **Tests:** new UI check shapes a real API result into 8 unmatched items with 1 753.376 kcal and
+  asserts the count heading, a collapsed list, the Ukrainian reason, no English reason text and
+  "1 753 ккал/порція". UI 58/58 (desktop + Pixel 7).

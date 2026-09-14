@@ -102,25 +102,46 @@ export function SubstitutionsList({ result }: { result: PlanningResult }) {
   );
 }
 
+const UNRESOLVED_REASON: Record<string, string> = {
+  "No catalog candidates were found.": "товар у каталозі не знайдено",
+  "Catalog candidates were found, but none are currently available.":
+    "товари знайдено, але зараз вони недоступні",
+};
+
+function unresolvedReason(reason: string): string {
+  if (UNRESOLVED_REASON[reason]) return UNRESOLVED_REASON[reason];
+  if (reason.startsWith("No candidate passed dietary verification")) {
+    return "склад товарів не підтверджено для обраних обмежень";
+  }
+  return reason;
+}
+
+// A plan can leave dozens of ingredients unmatched; listing them all by default buries the result.
+const UNRESOLVED_OPEN_LIMIT = 5;
+
 export function UnresolvedList({ result }: { result: PlanningResult }) {
-  if (result.unresolvedRequirements.length === 0) return null;
+  const count = result.unresolvedRequirements.length;
+  if (count === 0) return null;
   const names = new Map(result.ingredients.map((ingredient) => [ingredient.id, ingredient.name]));
   return (
     <div className="rounded-2xl border border-danger-soft bg-danger-soft/40 p-4">
-      <h3 className="mb-2 text-sm font-semibold text-danger">Не вдалося підібрати</h3>
-      <ul className="space-y-1 text-sm text-muted">
-        {result.unresolvedRequirements.map((item) => (
-          <li key={item.requirementId}>
-            <span className="font-medium text-foreground">
-              {names.get(item.requirementId) ?? item.requirementId}
-            </span>
-            : {item.reason}
-          </li>
-        ))}
-      </ul>
-      <p className="mt-2 text-xs text-danger">
+      <h3 className="text-sm font-semibold text-danger">Не вдалося підібрати позицій: {count}</h3>
+      <p className="mt-1 text-xs text-danger">
         Поки позиції не підібрані, кошик не можна підтвердити як повний.
       </p>
+      <details className="mt-2" open={count <= UNRESOLVED_OPEN_LIMIT}>
+        <summary className="cursor-pointer text-sm text-muted">Показати позиції</summary>
+        <ul className="mt-2 space-y-1 text-sm text-muted">
+          {result.unresolvedRequirements.map((item) => (
+            <li key={item.requirementId}>
+              <span className="font-medium text-foreground">
+                {names.get(item.requirementId) ?? item.requirementId}
+              </span>
+              : {unresolvedReason(item.reason)}
+            </li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

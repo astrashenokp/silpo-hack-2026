@@ -54,14 +54,42 @@ class EdamamSettings:
         )
 
 
+# Values come from Edamam's meal-planner enums. An empty section lets Edamam put any recipe,
+# desserts and dish components included, into any slot.
+MAIN_MEAL_DISHES = ["main course", "salad", "soup", "pasta", "pizza", "sandwiches", "seafood"]
+EDAMAM_SECTIONS = (
+    ("Breakfast", "breakfast", ["breakfast"], None),
+    ("Lunch", "lunch", ["lunch/dinner"], MAIN_MEAL_DISHES),
+    ("Dinner", "dinner", ["lunch/dinner"], MAIN_MEAL_DISHES),
+)
+# Wider than the daily band so each slot stays satisfiable; the plan-level fit still bounds the day.
+SECTION_CALORIE_TOLERANCE_PCT = 0.35
+
+
+def _edamam_section(slot: str, meal_types: list[str], dishes: list[str] | None, calories) -> dict:
+    accept: list[dict] = [{"meal": list(meal_types)}]
+    if dishes:
+        accept.append({"dish": list(dishes)})
+    section: dict = {"accept": {"all": accept}}
+    target = calorie_target_for_slot(calories, slot)
+    if target is not None:
+        section["fit"] = {
+            "ENERC_KCAL": {
+                "min": int(target.target_kcal_per_serving * (1 - SECTION_CALORIE_TOLERANCE_PCT)),
+                "max": int(target.target_kcal_per_serving * (1 + SECTION_CALORIE_TOLERANCE_PCT)),
+            }
+        }
+    return section
+
+
 def build_edamam_payload(request_model, filters) -> dict:
+    calories = request_model.calories_per_person_per_day
     payload: dict = {
         "size": request_model.days,
         "plan": {
             "sections": {
-                "Breakfast": {},
-                "Lunch": {},
-                "Dinner": {},
+                name: _edamam_section(slot, meal_types, dishes, calories)
+                for name, slot, meal_types, dishes in EDAMAM_SECTIONS
             },
         },
     }
