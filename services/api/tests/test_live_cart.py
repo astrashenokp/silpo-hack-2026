@@ -8,6 +8,9 @@ from smart_basket.catalog.live import (
     _field_paths,
     _package_signals,
     _run_async,
+    ingredient_package_amount,
+    live_query_profile,
+    live_product_name_matches,
     restriction_check_from_details,
 )
 from smart_basket.catalog.matching import MatchingContext, find_product_candidates
@@ -128,8 +131,8 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
     monkeypatch.setattr("smart_basket.catalog.live.get_silpo_product_details", fake_details)
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert queries == ["крупа рисова", "рис", "rice"]
-    assert len(products) == 3
+    assert queries == ["крупа рисова", "рис"]
+    assert len(products) == 2
     assert all(product.restriction_check == "unknown" for product in products)
     assert all(product.content_quantity == 500 for product in products)
     assert all(product.content_unit == "g" for product in products)
@@ -140,17 +143,16 @@ async def test_live_catalog_uses_localized_aliases_and_passes_owner(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_connected_catalog_without_cart_branch_uses_labelled_demo_candidates():
+async def test_connected_catalog_without_cart_branch_does_not_mix_demo_candidates():
     owner = Session("owner")
     owner.silpo_connected = True
 
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert products
-    assert all(product.source == "synthetic" for product in products)
+    assert products == []
 
 
-def test_connected_matching_can_read_details_for_labelled_demo_fallback():
+def test_connected_matching_without_live_context_stays_unresolved():
     owner = Session("owner")
     owner.silpo_connected = True
     catalog = SessionCatalog()
@@ -163,9 +165,8 @@ def test_connected_matching_can_read_details_for_labelled_demo_fallback():
         [requirement], [], MatchingContext(owner, catalog, catalog.check_restrictions),
     )
 
-    assert result.unresolved_requirements == []
-    assert result.candidates
-    assert all(candidate.source == "synthetic" for candidate in result.candidates)
+    assert result.unresolved_requirements
+    assert result.candidates == []
 
 
 def test_connected_catalog_reuses_context_and_history_loaded_for_the_form():
@@ -202,7 +203,7 @@ def test_live_history_failure_uses_empty_demo_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_live_search_failure_uses_labelled_demo_candidates(monkeypatch):
+async def test_live_search_failure_does_not_mix_demo_candidates(monkeypatch):
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -215,12 +216,11 @@ async def test_live_search_failure_uses_labelled_demo_candidates(monkeypatch):
 
     products = await catalog._search(owner, "rice")
 
-    assert products
-    assert all(product.source == "synthetic" for product in products)
+    assert products == []
 
 
 @pytest.mark.asyncio
-async def test_empty_live_search_uses_labelled_demo_candidates(monkeypatch):
+async def test_empty_live_search_does_not_mix_demo_candidates(monkeypatch):
     owner = Session("owner")
     owner.silpo_connected = True
     owner.silpo_branch_id = "branch-1"
@@ -237,8 +237,56 @@ async def test_empty_live_search_uses_labelled_demo_candidates(monkeypatch):
 
     products = await SessionCatalog()._search(owner, "rice")
 
-    assert products
-    assert all(product.source == "synthetic" for product in products)
+    assert products == []
+
+
+@pytest.mark.parametrize(("query", "product_name"), [
+    ("all purpose flour", "Tanqueray Flor de Sevilla Gin"),
+    ("tomato", "Пиво Underwood Red Tomato"),
+    ("salt", "Льодяник Fizi Vanilla salt"),
+    ("milk", "Цукерки-соломинки Quick Milk"),
+])
+def test_live_name_evidence_rejects_observed_fuzzy_false_positives(query, product_name):
+    assert not live_product_name_matches(query, product_name)
+
+
+@pytest.mark.parametrize(("query", "product_name"), [
+    ("all purpose flour", "Борошно пшеничне Зерновита 1 кг"),
+    ("tomato", "Помідор рожевий ваговий"),
+    ("salt", "Сіль кухонна кам'яна 1 кг"),
+    ("milk", "Молоко Селянське 2,5% 900 г"),
+    ("onion", "Цибуля ріпчаста вагова"),
+    ("extra virgin olive oil", "Олія оливкова Extra Virgin 500 мл"),
+])
+def test_live_name_evidence_accepts_relevant_silpo_products(query, product_name):
+    assert live_product_name_matches(query, product_name)
+
+
+@pytest.mark.parametrize(("query", "millilitres", "expected_grams"), [
+    ("extra virgin olive oil", 500.0, 455.0),
+    ("milk", 900.0, 927.0),
+    ("white wine", 750.0, 742.5),
+    ("water", 1000.0, 1000.0),
+])
+def test_known_liquid_packages_convert_to_edamam_grams(query, millilitres, expected_grams):
+    assert ingredient_package_amount(
+        live_query_profile(query), millilitres, "ml"
+    ) == (expected_grams, "g")
+
+
+@pytest.mark.asyncio
+async def test_live_catalog_does_not_search_generic_edamam_category(monkeypatch):
+    owner = Session("owner")
+    owner.silpo_connected = True
+    owner.silpo_branch_id = "branch-1"
+
+    async def should_not_search(*args, **kwargs):
+        raise AssertionError("generic category must not reach Silpo search")
+
+    catalog = SessionCatalog()
+    monkeypatch.setattr(catalog, "_search_live", should_not_search)
+
+    assert await catalog._search(owner, "grains") == []
 
 
 def _make_plan_live(app, client, planning_request):
