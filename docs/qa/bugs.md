@@ -44,7 +44,8 @@ not yet been sent to the owners; Polina shares it with the team.
 | BUG-028 | Medium | Meal calories shown unrounded ("1 753,376 ккал/порція"), and a live Edamam plan dumps ~50 identical English lines "No catalog candidates were found." across the result | Polina (`apps/web/src/lib/format.ts`, `ProposedBasket.tsx`) | Fixed in #46; UI ✅ (run 19, 58/58); new strings confirmed in the live bundle |
 | BUG-029 | High | A live Edamam plan failed outright when any selected recipe had an ingredient without a gram weight (e.g. "salt to taste"): 1 person × 1 day × 3 000 kcal failed twice with "Edamam ingredient is missing gram weight" | Polina, in Sofiia's `services/api/src/smart_basket/meals/edamam.py` (user-authorised) | Fixed in #47; retested ✅ live (run 19: same input completed twice, once with a "Jalapeno left out" warning instead of failing) |
 | BUG-030 | Medium | With no calorie target, live Edamam has no calorie floor and breakfast has no dish filter: one plan served a juice for breakfast (197 kcal), a recipe literally titled "Tst" for lunch (83 kcal), ~583 kcal for the day | Sofiia (meal-planning rules) | Open — the demo's golden input sets a calorie target, so not demo-blocking |
-| BUG-031 | High | `cart_confirmable()` and `DemoCartService._check_products` both refused ANY plan whose `dataMode` was "mixed" (live Edamam meals + demo catalog) — even a perfectly complete, in-budget, fully-resolved plan — so the cart could never be confirmed once live Edamam meals shipped, regardless of match quality | Polina, in Uliana's `agent/orchestrator.py` + `cart/service.py` (user-authorised, explicit "post relax this" direction) | Fixed on `feature/polina-mixed-demo-cart-confirm`; tests 275/275; live check pending deploy |
+| BUG-031 | High | `cart_confirmable()` and `DemoCartService._check_products` both refused ANY plan whose `dataMode` was "mixed" (live Edamam meals + demo catalog) — even a perfectly complete, in-budget, fully-resolved plan — so the cart could never be confirmed once live Edamam meals shipped, regardless of match quality | Polina, in Uliana's `agent/orchestrator.py` + `cart/service.py` (user-authorised, explicit "post relax this" direction) | Fixed in #50; live ✅ (run 22: 13/13 products, preview 200, confirm 200/success) |
+| BUG-032 | Medium | The CartPanel's "Синхронізувати з Сільпо" button stayed clickable after a plan's cart was already confirmed; clicking it hit 409 `STALE_PLAN`, and the error modal's own "retry" button called the same handler, trapping the user in a repeating "Помилка синхронізації кошика Сільпо" with no way out | Polina (own file, `apps/web/src/app/page.tsx`) | Fixed on `feature/polina-sync-button-after-confirm`; UI 60/60 |
 
 ## BUG-001 — Backend cannot be installed or tested from a clean checkout
 
@@ -790,3 +791,21 @@ not yet been sent to the owners; Polina shares it with the team.
   unit test of `cart_confirmable()` covering demo, mixed+synthetic, live, mixed+live, a
   genuinely incoherent source mix (still refused), and an empty selection (still refused); plus
   budget/unresolved/cart-context-ready edge cases. Backend 275/275 (was 268).
+
+## BUG-032 — Sync button kept failing after the cart was already confirmed
+
+- **Found in:** run 22, live, right after BUG-031's fix let the very first confirm-to-cart
+  succeed end to end. Reproduced immediately after: preview → confirm (200, success) → sync
+  again on the same plan → 409 `STALE_PLAN`, `"This proposal already has a cart receipt; review
+  that outcome."`
+- **Where:** `apps/web/src/app/page.tsx`, the `cartPanel()` builder. `syncDisabled` only checked
+  `!cartPlan || cartItems.length === 0` — nothing accounted for the plan already having a
+  receipt. The resulting error modal's retry button (`onRetry={handleRetrySync}`) calls
+  `requestPreview(cartPlan)` again when there is no open preview, i.e. the exact same call that
+  just failed — so retrying could never succeed, only repeat the same error.
+- **Fix:** `syncDisabled` also checks `cartReceipt !== null` — once a plan's cart is confirmed,
+  the sync control disables, matching the main "Додати все в кошик Сільпо" button's existing
+  behaviour (disabled via `added` since BUG-022). Nothing is lost: there is nothing left to sync
+  for an applied plan.
+- **Tests:** new UI check confirms the cart, then asserts the sync button is disabled and the
+  error modal never appears. UI 60/60 (was 58), e2e 40/40, `tsc`/`next build` clean.

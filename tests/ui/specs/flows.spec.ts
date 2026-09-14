@@ -276,6 +276,21 @@ test("the cart preview from the API can be confirmed", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
 });
 
+// A confirmed plan has nothing left to sync — the server correctly refuses a second preview
+// (STALE_PLAN), and that error's own retry button calls the same sync handler, so leaving the
+// button clickable trapped the user in a repeating "Помилка синхронізації кошика" with no way
+// out. Confirming must disable it.
+test("the sync control is disabled after the cart is confirmed, not left to fail again", async ({ page }) => {
+  await createPlan(page);
+  const dialog = await addToCart(page);
+  await dialog.getByRole("button", { name: "Підтвердити додавання" }).click();
+  await expect(page.getByRole("heading", { name: "Результат синхронізації" })).toBeVisible();
+  await expect(
+    page.locator("button:visible", { hasText: "Синхронізувати з Сільпо" }),
+  ).toBeDisabled(QUICK);
+  await expect(page.getByRole("heading", { name: "Помилка синхронізації кошика Сільпо" })).toHaveCount(0);
+});
+
 // BUG-022: dismissing the preview confirms nothing, so the plan must not stay "handed over".
 test("cancelling the cart preview lets the plan be added again", async ({ page }) => {
   await createPlan(page);
