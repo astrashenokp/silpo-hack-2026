@@ -5,6 +5,7 @@ import pytest
 
 from conftest import create_plan
 from smart_basket.catalog.live import (
+    LiveQueryProfile,
     SessionCatalog,
     _field_paths,
     _package_signals,
@@ -332,6 +333,11 @@ async def test_empty_live_search_does_not_mix_demo_candidates(monkeypatch):
     ("tomato", "Пиво Underwood Red Tomato"),
     ("salt", "Льодяник Fizi Vanilla salt"),
     ("milk", "Цукерки-соломинки Quick Milk"),
+    ("fish broth", "Вермішель Мівіна зі смаком курячого бульйону"),
+    ("fish broth", "Бульйон курячий швидкорозчинний"),
+    ("chicken broth", "Бульйон овочевий органічний"),
+    ("lemon", "Мармелад зі смаком коли та лимона"),
+    ("tomato", "Соус томатний до пасти"),
 ])
 def test_live_name_evidence_rejects_observed_fuzzy_false_positives(query, product_name):
     assert not live_product_name_matches(query, product_name)
@@ -344,9 +350,43 @@ def test_live_name_evidence_rejects_observed_fuzzy_false_positives(query, produc
     ("milk", "Молоко Селянське 2,5% 900 г"),
     ("onion", "Цибуля ріпчаста вагова"),
     ("extra virgin olive oil", "Олія оливкова Extra Virgin 500 мл"),
+    ("fish broth", "Бульйон рибний концентрований"),
+    ("chicken broth", "Бульйон курячий органічний"),
+    ("vegetable broth", "Овочевий бульйон сухий"),
+    ("beef broth", "Бульйон яловичий концентрований"),
 ])
 def test_live_name_evidence_accepts_relevant_silpo_products(query, product_name):
     assert live_product_name_matches(query, product_name)
+
+
+def test_specific_broth_profiles_use_targeted_silpo_queries():
+    fish = live_query_profile("fish broth")
+    chicken = live_query_profile("chicken stock")
+
+    assert fish is not None
+    assert fish.provider_queries == ("рибний бульйон", "бульйон рибний")
+    assert chicken is not None
+    assert chicken.provider_queries == ("курячий бульйон", "бульйон курячий")
+
+
+def test_compound_ingredient_does_not_reuse_a_broader_static_profile():
+    assert live_query_profile("wine") is not None
+    assert live_query_profile("fresh lemon") is live_query_profile("lemon")
+    assert live_query_profile("dry oats") is live_query_profile("oats")
+    assert live_query_profile("wine vinegar") is None
+    assert live_query_profile("lemon juice") is None
+
+
+def test_dynamic_compound_profile_requires_all_semantic_evidence():
+    profile = LiveQueryProfile(
+        match_terms=("wine vinegar",),
+        provider_queries=("оцет винний", "винний оцет"),
+        required_name_terms=("оцет", "винн"),
+        require_all_name_terms=True,
+    )
+
+    assert live_product_name_matches("wine vinegar", "Оцет винний 6%", profile)
+    assert not live_product_name_matches("wine vinegar", "Вино Aznauri червоне", profile)
 
 
 @pytest.mark.parametrize(("query", "millilitres", "expected_grams"), [

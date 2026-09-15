@@ -42,10 +42,28 @@ class LiveQueryProfile:
     forbidden_name_terms: tuple[str, ...] = ()
     grams_per_ml: float | None = None
     grams_per_piece: float | None = None
+    require_all_name_terms: bool = False
 
 
 def _normalized_words(value: str) -> str:
     return " ".join(re.sub(r"[^\w]+", " ", value.casefold(), flags=re.UNICODE).split())
+
+
+QUERY_PREPARATION_WORDS = {
+    "fresh", "dry", "dried", "raw", "cooked", "boiled", "steamed", "baked",
+    "ground", "chopped", "sliced", "diced", "minced", "frozen", "canned",
+    "boneless", "skinless", "large", "medium", "small",
+}
+
+# These words usually mean that the matching ingredient is only a flavour or a component of a
+# different grocery product. They are allowed only when the requested profile itself names that
+# product form. This is a general guard against lemon marmalade, tomato beer, milk sweets, etc.
+MISLEADING_PRODUCT_TERMS = (
+    "зі смаком", "смаком", "ароматом", "мармелад", "цукер", "льодяник", "жуйк",
+    "чипс", "снек", "печиво", "шоколад", "батончик", "морозиво", "десерт",
+    "напій", "пиво", "чай", "кава", "йогурт", "соус", "кетчуп", "приправа",
+    "вермішел", "локшин", "корм", "космет",
+)
 
 
 # Specific phrases come before broader ingredients. A live hit is accepted only when its display
@@ -57,7 +75,13 @@ LIVE_QUERY_PROFILES = (
     LiveQueryProfile(("parmesan cheese", "parmesan"), ("сир пармезан", "пармезан"), ("пармезан",)),
     LiveQueryProfile(("arborio rice", "risotto rice"), ("рис арборіо", "рис для різото"), ("арбор", "різото"), ("чипс", "снек")),
     LiveQueryProfile(("red potato", "red potatoes", "potato", "potatoes"), ("картопля",), ("картоп",), ("чипс", "снек"), None, 180.0),
-    LiveQueryProfile(("chicken broth", "vegetable broth", "fish broth", "beef broth", "broth", "stock"), ("бульйон",), ("бульйон",), ("корм",), 1.0),
+    # Broth type is essential evidence: Silpo's fuzzy search can otherwise return chicken-flavour
+    # instant noodles for fish broth merely because both product names contain "бульйон".
+    LiveQueryProfile(("fish broth", "fish stock"), ("рибний бульйон", "бульйон рибний"), ("рибн", "риб'яч", "риб’яч"), ("куряч", "ялович", "говяж", "овоч", "смаком", "вермішел", "локшин", "мівіна", "корм"), 1.0),
+    LiveQueryProfile(("chicken broth", "chicken stock"), ("курячий бульйон", "бульйон курячий"), ("куряч", "курк"), ("рибн", "риб'яч", "риб’яч", "ялович", "говяж", "овоч", "смаком", "вермішел", "локшин", "мівіна", "корм"), 1.0),
+    LiveQueryProfile(("vegetable broth", "vegetable stock"), ("овочевий бульйон", "бульйон овочевий"), ("овоч",), ("рибн", "риб'яч", "риб’яч", "куряч", "ялович", "говяж", "смаком", "вермішел", "локшин", "мівіна", "корм"), 1.0),
+    LiveQueryProfile(("beef broth", "beef stock"), ("яловичий бульйон", "бульйон яловичий"), ("ялович", "говяж"), ("рибн", "риб'яч", "риб’яч", "куряч", "овоч", "смаком", "вермішел", "локшин", "мівіна", "корм"), 1.0),
+    LiveQueryProfile(("broth", "stock"), ("бульйон",), ("бульйон",), ("смаком", "вермішел", "локшин", "мівіна", "корм"), 1.0),
     LiveQueryProfile(("heavy cream", "double cream", "cream"), ("вершки",), ("вершк",), ("крем для", "космет"), 1.0),
     LiveQueryProfile(("butter",), ("масло вершкове",), ("масло",), ("олія", "космет", "арахіс")),
     LiveQueryProfile(("chicken",), ("куряче філе", "курка"), ("кур",), ("корм", "приправа", "смаком")),
@@ -99,11 +123,23 @@ EDAMAM_CATEGORY_TERMS = {
 
 
 def live_query_profile(query: str) -> LiveQueryProfile | None:
-    normalized = f" {_normalized_words(query)} "
+    def semantic_key(value: str) -> tuple[str, ...]:
+        return tuple(
+            word for word in _normalized_words(value).split()
+            if word not in QUERY_PREPARATION_WORDS
+        )
+
+    query_key = semantic_key(query)
+    matches: list[tuple[int, LiveQueryProfile]] = []
     for profile in LIVE_QUERY_PROFILES:
-        if any(f" {_normalized_words(term)} " in normalized for term in profile.match_terms):
-            return profile
-    return None
+        specificity = max(
+            (len(_normalized_words(term).split()) for term in profile.match_terms
+             if semantic_key(term) == query_key),
+            default=0,
+        )
+        if specificity:
+            matches.append((specificity, profile))
+    return max(matches, key=lambda item: item[0])[1] if matches else None
 
 
 def live_product_name_matches(
@@ -117,8 +153,22 @@ def live_product_name_matches(
     if profile is not None:
         required = tuple(_normalized_words(term) for term in profile.required_name_terms)
         forbidden = tuple(_normalized_words(term) for term in profile.forbidden_name_terms)
-        return any(term in normalized_name for term in required) and not any(
-            term in normalized_name for term in forbidden
+        profile_language = " ".join(_normalized_words(term) for term in (
+            *profile.provider_queries, *profile.required_name_terms,
+        ))
+        misleading = tuple(_normalized_words(term) for term in MISLEADING_PRODUCT_TERMS)
+        required_match = (
+            all(term in normalized_name for term in required)
+            if profile.require_all_name_terms
+            else any(term in normalized_name for term in required)
+        )
+        return (
+            required_match
+            and not any(term in normalized_name for term in forbidden)
+            and not any(
+                term in normalized_name and term not in profile_language
+                for term in misleading
+            )
         )
 
     query_words = {
@@ -362,6 +412,7 @@ class SessionCatalog:
                     )),
                     grams_per_ml=translation.grams_per_ml,
                     grams_per_piece=translation.grams_per_piece,
+                    require_all_name_terms=True,
                 )
                 self._dynamic_profiles[(owner.id, _normalized_words(requirement.name))] = profile
             # requirement.name goes first so the dynamic/static profile above is what actually

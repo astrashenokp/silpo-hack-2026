@@ -40,7 +40,9 @@ Translate every grocery ingredient below from English into concise Ukrainian sea
 the Silpo supermarket catalog. Return exactly one object for every input id and never omit an id.
 For each ingredient provide 1-3 queries, most exact first, without quantities, brands or recipe
 instructions. evidence_terms must be 1-5 Ukrainian words or stable word stems that must occur in
-the title of a genuinely matching product. Do not transliterate English. Do not replace an
+the title of a genuinely matching product. Every evidence_terms element is mandatory and must be
+present at the same time; put spelling or word-order alternatives in queries instead of listing
+them as separate evidence terms. Do not transliterate English. Do not replace an
 ingredient with its broad category. Example: flour -> queries ["борошно пшеничне", "борошно"],
 evidence_terms ["борошн"]. If the ingredient is a liquid, provide its normal grams_per_ml density.
 If it is commonly sold by piece, provide a conservative average grams_per_piece. Otherwise return
