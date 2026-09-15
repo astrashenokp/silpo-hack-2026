@@ -199,7 +199,18 @@ async def match_live_personal_portion(
             matches = []
             for candidate in _food_results(search)[:5]:
                 if not _servings(candidate):
-                    details = await call("food.get.v5", {"food_id": candidate.get("food_id")})
+                    # Basic FatSecret applications support the unversioned food.get method, while
+                    # v5 may return provider code 10 (Unknown method). Search v1 intentionally
+                    # returns no servings, so retrying details with the basic method is required
+                    # before a real ingredient can be matched.
+                    try:
+                        details = await call(
+                            "food.get.v5", {"food_id": candidate.get("food_id")}
+                        )
+                    except Exception:
+                        details = await call(
+                            "food.get", {"food_id": candidate.get("food_id")}
+                        )
                     detailed = details.get("food")
                     if isinstance(detailed, dict):
                         candidate = detailed

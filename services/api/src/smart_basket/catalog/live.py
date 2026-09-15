@@ -17,6 +17,7 @@ from smart_basket.mcp.adapters import (
     get_product_details as get_silpo_product_details,
     get_purchase_history,
     get_user_context,
+    normalize_purchase_history,
     product_content_amount,
     product_write_metadata,
     search_products,
@@ -414,15 +415,32 @@ class SessionCatalog:
         with owner.lock:
             cached = deepcopy(owner.silpo_purchase_history)
         if cached is not None:
-            return cached
+            return self._normalized_history(cached)
         try:
-            return _run_async(lambda: self._history(owner))
+            return self._normalized_history(_run_async(lambda: self._history(owner)))
         except Exception as exc:
             logger.warning(
                 "Silpo purchase history is temporarily unavailable; using empty history (%s).",
                 type(exc).__name__,
             )
             return self.demo.get_purchase_history(owner)
+
+    @staticmethod
+    def _normalized_history(history):
+        """Return only Vika-compatible purchase rows from the provider's order payload."""
+        if not history:
+            return []
+        # get_user_context() caches raw Silpo orders because the same read also determines
+        # historyAvailable. Vika's recurrence analyzer consumes flattened Purchase rows; passing
+        # raw orders through used to fail the entire plan as soon as a real account had history.
+        if all(
+            isinstance(item, dict)
+            and {"receiptId", "purchasedAt", "name", "category", "quantity", "unit"}
+            <= item.keys()
+            for item in history
+        ):
+            return deepcopy(history)
+        return normalize_purchase_history(history).purchases
 
     async def _search_live(self, owner, query: str):
         found: dict[str, ProductCandidate] = {}
@@ -496,38 +514,29 @@ class SessionCatalog:
             normalized = candidate.model_copy(update={"restriction_check": "unknown"})
             self._candidates[(owner.id, normalized.id)] = normalized.model_copy(deep=True)
             candidates.append(normalized)
-        if not candidates:
-            # A verified live match beats a guess, but no live match must not mean no product at
-            # all: prepare_requirements() already tried a static profile, then Gemini translation,
-            # for this exact query — genuinely running out of options (out of stock, an ingredient
-            # Silpo just doesn't carry, a translation the evidence check still rejected) should
-            # fall back to a labelled synthetic candidate, the same safety net every other gap in
-            # this catalog already uses, not a silent "Не вдалося підібрати".
-            return self.demo.search_products(owner, query)
         return candidates
 
     async def _search(self, owner, query: str):
         if not owner.silpo_branch_id:
-            # A connected profile may legitimately have no active cart/branch yet. Keep planning
-            # usable with transparent synthetic items until Silpo context is available.
-            return self.demo.search_products(owner, query)
+            # A connected session must never receive synthetic product IDs: those cannot be
+            # written to the user's real Silpo cart. Leave the requirement unresolved instead.
+            return []
         if (
             _normalized_words(query) in EDAMAM_CATEGORY_TERMS
             and self._profile(owner, query) is None
         ):
-            # A category such as "grains" is not evidence that an arbitrary result is flour —
-            # go straight to a labelled synthetic candidate instead of an unverified live guess.
-            return self.demo.search_products(owner, query)
+            # A category such as "grains" is not evidence that an arbitrary result is flour.
+            return []
         try:
             return await self._search_live(owner, query)
         except Exception as exc:
             logger.warning(
                 "Silpo product search is temporarily unavailable for %s; "
-                "using a labelled synthetic candidate (%s).",
+                "leaving the ingredient unresolved (%s).",
                 query,
                 type(exc).__name__,
             )
-            return self.demo.search_products(owner, query)
+            return []
 
     def search_products(self, owner, query: str):
         if not self._live(owner):
@@ -537,13 +546,10 @@ class SessionCatalog:
     def get_product_details(self, owner, product_id: str):
         if not self._live(owner):
             return self.demo.get_product_details(owner, product_id)
-        # A connected owner's search can still return a demo-fallback candidate (no live match,
-        # empty search, a transient Silpo failure) — those ids only ever live in self.demo, never
-        # in the live cache, so check there before treating a miss as an error.
         candidate = self._candidates.get((owner.id, product_id))
-        if candidate is not None:
-            return candidate.model_copy(deep=True)
-        return self.demo.get_product_details(owner, product_id)
+        if candidate is None:
+            raise KeyError(f"Silpo product {product_id} is not in the reviewed search results.")
+        return candidate.model_copy(deep=True)
 
     def check_restrictions(self, product, restrictions):
         if not restrictions:

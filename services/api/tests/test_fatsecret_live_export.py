@@ -16,11 +16,14 @@ class FakeLiveFatSecret:
         self.ambiguous_oats = False
         self.needs_core_lentils = False
         self.wrap_item_fields = False
+        self.basic_scope_only = False
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
         self.calls.append((method, parameters))
         if method == "foods.search.v5":
+            if self.basic_scope_only:
+                raise FatSecretClientError("Unknown method", provider_code=10)
             name = parameters["search_expression"]
             food_id = {
                 "Dry oats": "10", "Dry rice": "20", "Dry lentils": "30", "lentils": "30",
@@ -50,6 +53,33 @@ class FakeLiveFatSecret:
             if isinstance(foods, list):
                 foods[1]["servings"]["serving"]["serving_id"] = "1100"
             return {"foods_search": {"results": {"food": foods}}}
+        if method == "foods.search":
+            assert self.basic_scope_only
+            name = parameters["search_expression"]
+            return {"foods": {"food": {
+                "food_id": "10",
+                "food_name": name,
+                "food_type": "Generic",
+            }}}
+        if method == "food.get.v5":
+            assert self.basic_scope_only
+            raise FatSecretClientError("Unknown method", provider_code=10)
+        if method == "food.get":
+            assert self.basic_scope_only
+            return {"food": {
+                "food_id": parameters["food_id"],
+                "food_name": "Dry oats",
+                "food_type": "Generic",
+                "servings": {"serving": {
+                    "serving_id": "1000",
+                    "serving_description": "100 g dry",
+                    "metric_serving_amount": "100",
+                    "metric_serving_unit": "g",
+                    "number_of_units": "100",
+                    "measurement_description": "g",
+                    "calories": "380",
+                }},
+            }}
         if method == "saved_meals.get.v2":
             return {"saved_meals": {"saved_meal": list(self.meals)}}
         if method == "saved_meal.create":
@@ -144,6 +174,21 @@ def test_live_export_scales_writes_reads_back_and_deduplicates(planning_request)
         assert len(provider.meals) == 1
         assert len(provider.items["100"]) == 1
         assert len(session.saved_meals) == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_basic_fatsecret_scope_uses_unversioned_food_details(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.basic_scope_only = True
+    _, client, _ = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        preview = make_live_preview(client, plan).json()
+
+        assert preview["canConfirm"] is True
+        assert preview["meals"][0]["unresolved"] == []
+        assert ("food.get", {"food_id": "10"}) in provider.calls
     finally:
         client.__exit__(None, None, None)
 
