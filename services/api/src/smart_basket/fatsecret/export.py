@@ -139,6 +139,11 @@ class FatSecretExportService:
                 "Review every FatSecret food and serving match before confirming.",
                 "Saved Meals represent one personal portion and do not create diary entries.",
             ]
+            if any(meal.unresolved for meal in matched):
+                warnings.append(
+                    "Unmatched ingredients will be skipped; each saved meal contains only the "
+                    "reviewed FatSecret matches shown above."
+                )
             live = True
         else:
             matched = [match_personal_portion(meals[meal_id], force_unmatched=scenario == "unmatched")
@@ -154,7 +159,10 @@ class FatSecretExportService:
             version=plan.version,
             account_label=account_label or "Connected FatSecret account",
             expires_at=expires(),
-            can_confirm=not any(meal.unresolved for meal in matched),
+            # A partially matched recipe is still useful and mirrors the reviewed-partial Silpo
+            # basket flow. Never create an empty Saved Meal: every selected meal must retain at
+            # least one verified food/serving match.
+            can_confirm=all(meal.items for meal in matched),
             meals=matched,
             warnings=warnings,
         )
@@ -182,14 +190,26 @@ class FatSecretExportService:
             ):
                 raise ApiError("STALE_ACCOUNT", "FatSecret connection changed. Create and review a new preview.")
             if not preview.can_confirm:
-                raise ApiError("UNRESOLVED_FOODS", "Select only completely matched meals in a new preview.")
+                raise ApiError(
+                    "UNRESOLVED_FOODS",
+                    "Each selected meal needs at least one matched FatSecret ingredient.",
+                )
 
             identity = (
                 "live" if record.live else "demo",
                 record.connection_revision,
                 preview.run_id,
                 preview.version,
-                tuple(sorted(meal.meal_id for meal in preview.meals)),
+                tuple(sorted(
+                    (
+                        meal.meal_id,
+                        tuple(sorted(
+                            (item.ingredient_id, item.food_id, item.serving_id)
+                            for item in meal.items
+                        )),
+                    )
+                    for meal in preview.meals
+                )),
             )
             existing_id = session.export_operations.get(identity)
             if existing_id:
@@ -260,6 +280,7 @@ class FatSecretExportService:
 
     async def _execute_live(self, operation: FatSecretExport, record: PreviewRecord, session: Any) -> None:
         preview = record.preview
+        operation.warnings = []
 
         async def call(method: str, parameters: Mapping[str, object] | None = None):
             return await self.oauth.delegated_call(session, method, parameters)
@@ -314,7 +335,19 @@ class FatSecretExportService:
                 complete = all(any(_matches(remote, item) for remote in verified) for item in preview_meal.items)
                 if complete:
                     outcome.status = "already_saved" if existed and not missing else "saved"
-                    outcome.message = "Saved Meal and all items verified by FatSecret read-back."
+                    skipped = len(preview_meal.unresolved)
+                    outcome.message = (
+                        "Saved Meal and all matched items verified by FatSecret read-back."
+                        if not skipped
+                        else (
+                            "Saved Meal and all matched items verified by FatSecret read-back; "
+                            f"{skipped} unmatched ingredient(s) were skipped."
+                        )
+                    )
+                    if skipped:
+                        operation.warnings.append(
+                            f"{preview_meal.title}: skipped {skipped} unmatched ingredient(s)."
+                        )
                 else:
                     outcome.status = "partial" if saved_meal_id else "failed"
                     outcome.message = "Saved Meal exists, but one or more items could not be verified."

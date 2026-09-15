@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from conftest import create_plan
 from smart_basket.app import create_app
 from smart_basket.fatsecret.client import FatSecretClientError
+from smart_basket.schemas import IngredientAmount
 from test_api import owner, reference
 
 
@@ -17,6 +18,7 @@ class FakeLiveFatSecret:
         self.needs_core_lentils = False
         self.wrap_item_fields = False
         self.basic_scope_only = False
+        self.unmatched_names = set()
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
@@ -25,6 +27,8 @@ class FakeLiveFatSecret:
             if self.basic_scope_only:
                 raise FatSecretClientError("Unknown method", provider_code=10)
             name = parameters["search_expression"]
+            if name in self.unmatched_names:
+                return {"foods_search": {"results": {"food": []}}}
             food_id = {
                 "Dry oats": "10", "Dry rice": "20", "Dry lentils": "30", "lentils": "30",
             }[name]
@@ -189,6 +193,42 @@ def test_basic_fatsecret_scope_uses_unversioned_food_details(planning_request):
         assert preview["canConfirm"] is True
         assert preview["meals"][0]["unresolved"] == []
         assert ("food.get", {"food_id": "10"}) in provider.calls
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_live_export_skips_unmatched_ingredients_but_saves_reviewed_matches(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.unmatched_names.add("Mystery powder")
+    _, client, session = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        session.runs[plan["runId"]].result.meal_plan[0].ingredient_amounts.append(
+            IngredientAmount(
+                ingredient_id="mystery-powder",
+                name="Mystery powder",
+                quantity=20,
+                unit="g",
+            )
+        )
+
+        preview = make_live_preview(client, plan).json()
+        assert preview["canConfirm"] is True
+        assert len(preview["meals"][0]["items"]) == 1
+        assert [item["ingredientId"] for item in preview["meals"][0]["unresolved"]] == [
+            "mystery-powder"
+        ]
+        assert any("will be skipped" in warning for warning in preview["warnings"])
+
+        accepted = client.post("/api/fatsecret/exports/confirm", json={
+            "previewId": preview["previewId"],
+            "idempotencyKey": "skip-unmatched",
+        }).json()
+        result = client.get(f"/api/fatsecret/exports/{accepted['exportId']}").json()
+        assert result["status"] == "success"
+        assert result["meals"][0]["status"] == "saved"
+        assert "1 unmatched ingredient(s) were skipped" in result["meals"][0]["message"]
+        assert len(provider.items["100"]) == 1
     finally:
         client.__exit__(None, None, None)
 

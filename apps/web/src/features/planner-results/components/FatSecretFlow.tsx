@@ -34,18 +34,20 @@ export function FatSecretPreviewModal({
 
       <ul className="mt-4 space-y-3">
         {preview.meals.map((meal) => {
-          const blocked = meal.unresolved.length > 0;
+          const hasUnresolved = meal.unresolved.length > 0;
+          const blocked = meal.items.length === 0;
           return (
             <li key={meal.mealId} className="rounded-xl border border-line p-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-medium">{meal.title}</p>
                   <p className="mt-0.5 text-xs text-muted">
-                    Калорійність: план {meal.sourceKcalPerServing ?? "—"} ккал · FatSecret{" "}
+                    Калорійність: план {meal.sourceKcalPerServing ?? "—"} ккал · FatSecret
+                    {hasUnresolved ? " (лише знайдені інгредієнти)" : ""}{" "}
                     {meal.fatsecretKcalPerServing ?? "—"} ккал
                   </p>
                 </div>
-                {blocked && <StatusBadge status="pending" />}
+                {hasUnresolved && <StatusBadge status={blocked ? "pending" : "partial"} />}
               </div>
 
               {meal.items.length > 0 && (
@@ -61,7 +63,7 @@ export function FatSecretPreviewModal({
                 </ul>
               )}
 
-              {blocked && (
+              {hasUnresolved && (
                 <div className="mt-2 space-y-2">
                   {meal.unresolved.map((unresolved) => (
                     <div
@@ -109,13 +111,17 @@ export function FatSecretPreviewModal({
                         </div>
                       ) : (
                         <p className="mt-1">
-                          FatSecret не повернув сумісних варіантів. Цю страву поки зберегти не можна.
+                          {blocked
+                            ? "FatSecret не повернув сумісних варіантів. Для збереження страви потрібен хоча б один знайдений інгредієнт."
+                            : "FatSecret не повернув сумісних варіантів. Цей інгредієнт буде пропущено."}
                         </p>
                       )}
                     </div>
                   ))}
                   <p className="text-xs text-warn-text">
-                    Підтвердження стане доступним, коли всі інгредієнти буде зіставлено.
+                    {blocked
+                      ? "Підтвердження стане доступним, коли буде зіставлено хоча б один інгредієнт."
+                      : "Незнайдені інгредієнти буде пропущено; у FatSecret збережуться лише показані вище відповідності."}
                   </p>
                 </div>
               )}
