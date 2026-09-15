@@ -195,7 +195,6 @@ async def match_live_personal_portion(
     kcal_complete = True
 
     for amount in meal.ingredient_amounts:
-        personal_quantity = amount.quantity / meal.servings
         async def compatible_candidates(
             search_expression: str,
         ) -> list[tuple[dict[str, Any], dict[str, Any], float, float]]:
@@ -239,6 +238,7 @@ async def match_live_personal_portion(
             return matches
 
         try:
+            personal_quantity = amount.quantity / meal.servings
             compatible = await compatible_candidates(amount.name)
             requested = (selections or {}).get(amount.ingredient_id)
             food, reason = (
@@ -254,70 +254,71 @@ async def match_live_personal_portion(
                     for entry in compatible
                 }.values())
                 food, reason = _select_food(amount.name, [entry[0] for entry in compatible])
+
+            candidate_models = []
+            for candidate, serving, number_of_units, base_units in compatible:
+                calories = _float(serving.get("calories"))
+                candidate_models.append(FatSecretCandidate(
+                    food_id=str(candidate["food_id"]),
+                    serving_id=str(serving["serving_id"]),
+                    matched_name=str(candidate.get("food_name") or amount.name),
+                    number_of_units=number_of_units,
+                    calories=calories * number_of_units / base_units if calories else None,
+                ))
+
+            chosen = next((entry for entry in compatible if requested and (
+                str(entry[0].get("food_id")), str(entry[1].get("serving_id"))
+            ) == requested), None)
+            if requested and chosen is None:
+                unresolved.append(UnresolvedFood(
+                    ingredient_id=amount.ingredient_id,
+                    reason="The selected FatSecret food/serving is no longer available for this ingredient.",
+                    candidates=candidate_models,
+                ))
+                continue
+
+            if requested and chosen:
+                food, reason = chosen[0], None
+            if food is None:
+                unresolved.append(UnresolvedFood(
+                    ingredient_id=amount.ingredient_id,
+                    reason=reason or "Food is unresolved.",
+                    candidates=candidate_models,
+                ))
+                continue
+            selected = (
+                (chosen[1], chosen[2], chosen[3])
+                if requested and chosen
+                else _select_serving(amount.name, amount.unit, personal_quantity, _servings(food))
+            )
+            if selected is None:
+                unresolved.append(UnresolvedFood(
+                    ingredient_id=amount.ingredient_id,
+                    reason=f"No verified {amount.unit} serving is available for this FatSecret food.",
+                ))
+                continue
+            serving, number_of_units, base_units = selected
+            calories = _float(serving.get("calories"))
+            item = FatSecretItem(
+                ingredient_id=amount.ingredient_id,
+                food_id=str(food["food_id"]),
+                serving_id=str(serving["serving_id"]),
+                matched_name=str(food.get("food_name") or amount.name),
+                number_of_units=number_of_units,
+                source_quantity=personal_quantity,
+                source_unit=amount.unit,
+            )
+            items.append(item)
+            if calories is None:
+                kcal_complete = False
+            else:
+                total_kcal += calories * number_of_units / base_units
         except Exception as exc:
             unresolved.append(UnresolvedFood(
                 ingredient_id=amount.ingredient_id,
                 reason=_lookup_failure_reason(exc),
             ))
             continue
-
-        candidate_models = []
-        for candidate, serving, number_of_units, base_units in compatible:
-            calories = _float(serving.get("calories"))
-            candidate_models.append(FatSecretCandidate(
-                food_id=str(candidate["food_id"]),
-                serving_id=str(serving["serving_id"]),
-                matched_name=str(candidate.get("food_name") or amount.name),
-                number_of_units=number_of_units,
-                calories=calories * number_of_units / base_units if calories else None,
-            ))
-
-        chosen = next((entry for entry in compatible if requested and (
-            str(entry[0].get("food_id")), str(entry[1].get("serving_id"))
-        ) == requested), None)
-        if requested and chosen is None:
-            unresolved.append(UnresolvedFood(
-                ingredient_id=amount.ingredient_id,
-                reason="The selected FatSecret food/serving is no longer available for this ingredient.",
-                candidates=candidate_models,
-            ))
-            continue
-
-        if requested and chosen:
-            food, reason = chosen[0], None
-        if food is None:
-            unresolved.append(UnresolvedFood(
-                ingredient_id=amount.ingredient_id,
-                reason=reason or "Food is unresolved.",
-                candidates=candidate_models,
-            ))
-            continue
-        selected = (
-            (chosen[1], chosen[2], chosen[3])
-            if requested and chosen
-            else _select_serving(amount.name, amount.unit, personal_quantity, _servings(food))
-        )
-        if selected is None:
-            unresolved.append(UnresolvedFood(
-                ingredient_id=amount.ingredient_id,
-                reason=f"No verified {amount.unit} serving is available for this FatSecret food.",
-            ))
-            continue
-        serving, number_of_units, base_units = selected
-        calories = _float(serving.get("calories"))
-        if calories is None:
-            kcal_complete = False
-        else:
-            total_kcal += calories * number_of_units / base_units
-        items.append(FatSecretItem(
-            ingredient_id=amount.ingredient_id,
-            food_id=str(food["food_id"]),
-            serving_id=str(serving["serving_id"]),
-            matched_name=str(food.get("food_name") or amount.name),
-            number_of_units=number_of_units,
-            source_quantity=personal_quantity,
-            source_unit=amount.unit,
-        ))
 
     if not meal.ingredient_amounts:
         unresolved.append(UnresolvedFood(ingredient_id="unknown", reason="Meal has no ingredient quantities."))

@@ -20,6 +20,7 @@ class FakeLiveFatSecret:
         self.basic_scope_only = False
         self.unmatched_names = set()
         self.lookup_failure_names = set()
+        self.malformed_names = set()
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
@@ -34,6 +35,7 @@ class FakeLiveFatSecret:
                 return {"foods_search": {"results": {"food": []}}}
             food_id = {
                 "Dry oats": "10", "Dry rice": "20", "Dry lentils": "30", "lentils": "30",
+                "Malformed provider food": "40",
             }[name]
             def food(candidate_id, candidate_name):
                 return {
@@ -59,6 +61,8 @@ class FakeLiveFatSecret:
             )
             if isinstance(foods, list):
                 foods[1]["servings"]["serving"]["serving_id"] = "1100"
+            if name in self.malformed_names:
+                foods.pop("food_id", None)
             return {"foods_search": {"results": {"food": foods}}}
         if method == "foods.search":
             name = parameters["search_expression"]
@@ -262,6 +266,34 @@ def test_preview_skips_one_ingredient_when_fatsecret_lookup_itself_fails(plannin
         unresolved = preview["meals"][0]["unresolved"]
         assert [item["ingredientId"] for item in unresolved] == ["provider-failure"]
         assert "provider code 999" in unresolved[0]["reason"]
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_preview_skips_malformed_fatsecret_food_instead_of_returning_500(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.malformed_names.add("Malformed provider food")
+    _, client, session = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        session.runs[plan["runId"]].result.meal_plan[0].ingredient_amounts.append(
+            IngredientAmount(
+                ingredient_id="malformed-provider-food",
+                name="Malformed provider food",
+                quantity=20,
+                unit="g",
+            )
+        )
+
+        response = make_live_preview(client, plan)
+
+        assert response.status_code == 200
+        preview = response.json()
+        assert preview["canConfirm"] is True
+        assert len(preview["meals"][0]["items"]) == 1
+        assert [item["ingredientId"] for item in preview["meals"][0]["unresolved"]] == [
+            "malformed-provider-food"
+        ]
     finally:
         client.__exit__(None, None, None)
 
