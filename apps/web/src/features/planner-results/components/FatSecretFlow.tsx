@@ -180,7 +180,8 @@ export function FatSecretOutcomeView({ exportResult }: { exportResult: FatSecret
       </ul>
       {exportResult.status === "partial" && (
         <p className="mt-3 rounded-lg bg-warn-bg p-2 text-xs text-warn-text">
-          Деякі страви не збереглися. Повторіть збереження лише для невдалих страв.
+          Деякі страви створено, але їхній склад не вдалося повністю перевірити у FatSecret.
+          Перед повторним збереженням перевірте Saved Meals у своєму акаунті.
         </p>
       )}
       {exportResult.warnings.map((warning) => (

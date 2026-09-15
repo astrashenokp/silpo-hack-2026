@@ -21,6 +21,9 @@ class FakeLiveFatSecret:
         self.unmatched_names = set()
         self.lookup_failure_names = set()
         self.malformed_names = set()
+        self.basic_saved_item_scope_only = False
+        self.fail_item_reads_after = None
+        self.item_read_count = 0
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
@@ -104,7 +107,12 @@ class FakeLiveFatSecret:
             })
             self.items[saved_id] = []
             return {"saved_meal_id": {"value": saved_id}}
-        if method == "saved_meal_items.get.v2":
+        if method == "saved_meal_items.get.v2" and self.basic_saved_item_scope_only:
+            raise FatSecretClientError("Unknown method", provider_code=10)
+        if method in {"saved_meal_items.get.v2", "saved_meal_items.get"}:
+            self.item_read_count += 1
+            if self.fail_item_reads_after is not None and self.item_read_count > self.fail_item_reads_after:
+                raise FatSecretClientError("temporary read-back failure", provider_code=999)
             return {"saved_meal_items": {
                 "saved_meal_item": list(self.items[parameters["saved_meal_id"]])
             }}
@@ -333,6 +341,47 @@ def test_uncertain_item_write_is_reconciled_without_duplicate(planning_request):
         }).json()
         result = client.get(f"/api/fatsecret/exports/{accepted['exportId']}").json()
         assert result["status"] == "success"
+        assert len(provider.items["100"]) == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_saved_item_read_uses_basic_method_when_v2_is_unavailable(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.basic_saved_item_scope_only = True
+    _, client, _ = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        preview = make_live_preview(client, plan).json()
+        accepted = client.post("/api/fatsecret/exports/confirm", json={
+            "previewId": preview["previewId"], "idempotencyKey": "basic-saved-items",
+        }).json()
+
+        result = client.get(f"/api/fatsecret/exports/{accepted['exportId']}").json()
+
+        assert result["status"] == "success"
+        assert any(method == "saved_meal_items.get" for method, _ in provider.calls)
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_created_meal_is_partial_when_final_read_back_fails(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.fail_item_reads_after = 1
+    _, client, _ = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        preview = make_live_preview(client, plan).json()
+        accepted = client.post("/api/fatsecret/exports/confirm", json={
+            "previewId": preview["previewId"], "idempotencyKey": "read-back-failure",
+        }).json()
+
+        result = client.get(f"/api/fatsecret/exports/{accepted['exportId']}").json()
+
+        assert result["status"] == "partial"
+        assert result["meals"][0]["status"] == "partial"
+        assert result["meals"][0]["savedMealId"] == "100"
+        assert "was created in FatSecret" in result["meals"][0]["message"]
         assert len(provider.items["100"]) == 1
     finally:
         client.__exit__(None, None, None)

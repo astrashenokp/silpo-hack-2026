@@ -377,7 +377,16 @@ class FatSecretExportService:
         return None
 
     async def _read_items(self, call: Any, saved_meal_id: str) -> list[dict[str, Any]]:
-        payload = await call("saved_meal_items.get.v2", {"saved_meal_id": saved_meal_id})
+        parameters = {"saved_meal_id": saved_meal_id}
+        try:
+            payload = await call("saved_meal_items.get.v2", parameters)
+        except FatSecretClientError as exc:
+            # Some delegated FatSecret applications expose the legacy profile method but
+            # reject v2 with provider code 10 (Unknown method). Both response shapes are
+            # already normalized by _saved_items(), so the basic method is a safe fallback.
+            if exc.provider_code != 10:
+                raise
+            payload = await call("saved_meal_items.get", parameters)
         return _saved_items(payload)
 
     @staticmethod
@@ -404,14 +413,21 @@ class FatSecretExportService:
         code: str = "EXPORT_FAILED",
         retryable: bool = False,
     ) -> None:
+        for meal in operation.meals:
+            if meal.status == "pending":
+                if meal.saved_meal_id:
+                    meal.status = "partial"
+                    meal.message = (
+                        "Saved Meal was created in FatSecret, but its items could not be "
+                        "verified by read-back."
+                    )
+                else:
+                    meal.status = "failed"
+                    meal.message = "Export stopped before this meal was created and verified."
         operation.status = "partial" if any(
             meal.status in {"saved", "already_saved", "partial"} for meal in operation.meals
         ) else "failed"
         operation.error = Error(code=code, message=message, retryable=retryable)
-        for meal in operation.meals:
-            if meal.status == "pending":
-                meal.status = "failed"
-                meal.message = "Export stopped before this meal was verified."
 
 
 # Backwards-compatible name for imports outside the application factory.
