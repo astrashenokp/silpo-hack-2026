@@ -6,6 +6,8 @@ import re
 from difflib import SequenceMatcher
 from typing import Any, Awaitable, Callable, Mapping
 
+from smart_basket.fatsecret.auth import FatSecretOAuthError
+from smart_basket.fatsecret.client import FatSecretClientError
 from smart_basket.schemas import (
     FatSecretCandidate,
     FatSecretItem,
@@ -133,6 +135,18 @@ def _float(value: Any) -> float | None:
     return result if result > 0 else None
 
 
+def _lookup_failure_reason(exc: Exception) -> str:
+    """Keep account failures actionable; downgrade one food lookup failure to unresolved."""
+    if isinstance(exc, FatSecretOAuthError) or (
+        isinstance(exc, FatSecretClientError) and exc.provider_code == 9
+    ):
+        raise exc
+    if isinstance(exc, FatSecretClientError):
+        code = f" (provider code {exc.provider_code})" if exc.provider_code is not None else ""
+        return f"FatSecret lookup failed temporarily{code}: {exc}"
+    return "FatSecret lookup failed temporarily for this ingredient."
+
+
 def _select_serving(
     source_name: str,
     source_unit: str,
@@ -224,21 +238,28 @@ async def match_live_personal_portion(
                     matches.append((candidate, serving, number_of_units, base_units))
             return matches
 
-        compatible = await compatible_candidates(amount.name)
-        requested = (selections or {}).get(amount.ingredient_id)
-        food, reason = (
-            _select_food(amount.name, [entry[0] for entry in compatible])
-            if not requested
-            else (None, None)
-        )
-        fallback_expression = _fallback_search_expression(amount.name)
-        if not requested and food is None and fallback_expression:
-            compatible.extend(await compatible_candidates(fallback_expression))
-            compatible = list({
-                (str(entry[0].get("food_id")), str(entry[1].get("serving_id"))): entry
-                for entry in compatible
-            }.values())
-            food, reason = _select_food(amount.name, [entry[0] for entry in compatible])
+        try:
+            compatible = await compatible_candidates(amount.name)
+            requested = (selections or {}).get(amount.ingredient_id)
+            food, reason = (
+                _select_food(amount.name, [entry[0] for entry in compatible])
+                if not requested
+                else (None, None)
+            )
+            fallback_expression = _fallback_search_expression(amount.name)
+            if not requested and food is None and fallback_expression:
+                compatible.extend(await compatible_candidates(fallback_expression))
+                compatible = list({
+                    (str(entry[0].get("food_id")), str(entry[1].get("serving_id"))): entry
+                    for entry in compatible
+                }.values())
+                food, reason = _select_food(amount.name, [entry[0] for entry in compatible])
+        except Exception as exc:
+            unresolved.append(UnresolvedFood(
+                ingredient_id=amount.ingredient_id,
+                reason=_lookup_failure_reason(exc),
+            ))
+            continue
 
         candidate_models = []
         for candidate, serving, number_of_units, base_units in compatible:

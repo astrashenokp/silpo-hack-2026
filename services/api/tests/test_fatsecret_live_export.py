@@ -19,14 +19,17 @@ class FakeLiveFatSecret:
         self.wrap_item_fields = False
         self.basic_scope_only = False
         self.unmatched_names = set()
+        self.lookup_failure_names = set()
 
     async def delegated_call(self, session, method, parameters=None):
         parameters = dict(parameters or {})
         self.calls.append((method, parameters))
         if method == "foods.search.v5":
+            name = parameters["search_expression"]
+            if name in self.lookup_failure_names:
+                raise FatSecretClientError("temporary provider failure", provider_code=999)
             if self.basic_scope_only:
                 raise FatSecretClientError("Unknown method", provider_code=10)
-            name = parameters["search_expression"]
             if name in self.unmatched_names:
                 return {"foods_search": {"results": {"food": []}}}
             food_id = {
@@ -58,8 +61,10 @@ class FakeLiveFatSecret:
                 foods[1]["servings"]["serving"]["serving_id"] = "1100"
             return {"foods_search": {"results": {"food": foods}}}
         if method == "foods.search":
-            assert self.basic_scope_only
             name = parameters["search_expression"]
+            if name in self.lookup_failure_names:
+                raise FatSecretClientError("temporary provider failure", provider_code=999)
+            assert self.basic_scope_only
             return {"foods": {"food": {
                 "food_id": "10",
                 "food_name": name,
@@ -229,6 +234,34 @@ def test_live_export_skips_unmatched_ingredients_but_saves_reviewed_matches(plan
         assert result["meals"][0]["status"] == "saved"
         assert "1 unmatched ingredient(s) were skipped" in result["meals"][0]["message"]
         assert len(provider.items["100"]) == 1
+    finally:
+        client.__exit__(None, None, None)
+
+
+def test_preview_skips_one_ingredient_when_fatsecret_lookup_itself_fails(planning_request):
+    provider = FakeLiveFatSecret()
+    provider.lookup_failure_names.add("Provider failure powder")
+    _, client, session = connected_app(provider)
+    try:
+        plan = create_plan(client, planning_request)
+        session.runs[plan["runId"]].result.meal_plan[0].ingredient_amounts.append(
+            IngredientAmount(
+                ingredient_id="provider-failure",
+                name="Provider failure powder",
+                quantity=20,
+                unit="g",
+            )
+        )
+
+        response = make_live_preview(client, plan)
+
+        assert response.status_code == 200
+        preview = response.json()
+        assert preview["canConfirm"] is True
+        assert len(preview["meals"][0]["items"]) == 1
+        unresolved = preview["meals"][0]["unresolved"]
+        assert [item["ingredientId"] for item in unresolved] == ["provider-failure"]
+        assert "provider code 999" in unresolved[0]["reason"]
     finally:
         client.__exit__(None, None, None)
 
